@@ -1,0 +1,91 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+.env
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Secrets and sensitive files
+*.json
+!pubspec.json
+!package.json
+!analysis_options.yaml
+!firebase.json
+!deno.json
+!tsconfig.json
+!package-lock.json
+!pubspec.lock
+
+# Firebase
+.firebaserc
+firebase-debug.log
+firebase-debug.*.log
+
+# Service account keys
+*serviceAccountKey*.json
+*firebase-adminsdk*.json
+*admin-sdk*.json
+
+# Environment files
+.env*
+!.env.example
+
+# Test files with potential secrets
+test_*.js
+test_*.sh
+send_fcm_test.js
+keep_function_warm.js
+
+# Node modules
+node_modules/
+
+# Debug logs
+*.log
+pglite-debug.log
+
+# Cursor IDE
+.cursor/
+
+# Temporary files
+*.tmp
+*.temp

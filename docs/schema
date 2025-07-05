@@ -1,0 +1,119 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.action (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  symptomclass bigint,
+  actionstring text,
+  CONSTRAINT action_pkey PRIMARY KEY (id),
+  CONSTRAINT action_symptomclass_fkey FOREIGN KEY (symptomclass) REFERENCES public.symptomclass(id)
+);
+CREATE TABLE public.crewmembers (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  crew bigint,
+  crewmember text,
+  CONSTRAINT crewmembers_pkey PRIMARY KEY (id),
+  CONSTRAINT crewmembers_crew_fkey FOREIGN KEY (crew) REFERENCES public.crews(id),
+  CONSTRAINT crewmembers_crewmember_fkey1 FOREIGN KEY (crewmember) REFERENCES public.users(supabase_id),
+  CONSTRAINT crewmembers_crewmember_fkey FOREIGN KEY (crewmember) REFERENCES public.users(supabase_id)
+);
+CREATE TABLE public.crews (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  event bigint,
+  crew_chief text,
+  crew_type bigint,
+  display_style USER-DEFINED,
+  CONSTRAINT crews_pkey PRIMARY KEY (id),
+  CONSTRAINT crew_event_fkey FOREIGN KEY (event) REFERENCES public.events(id),
+  CONSTRAINT crew_crewtype_fkey FOREIGN KEY (crew_type) REFERENCES public.crews(id),
+  CONSTRAINT crews_crew_chief_fkey FOREIGN KEY (crew_chief) REFERENCES public.users(supabase_id)
+);
+CREATE TABLE public.crewtypes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  crewtype text,
+  CONSTRAINT crewtypes_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.events (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  organizer text,
+  city text,
+  state text,
+  startdatetime timestamp with time zone,
+  enddatetime timestamp with time zone,
+  stripnumbering USER-DEFINED,
+  count integer,
+  name text,
+  CONSTRAINT events_pkey PRIMARY KEY (id),
+  CONSTRAINT events_organizer_fkey FOREIGN KEY (organizer) REFERENCES public.users(supabase_id)
+);
+CREATE TABLE public.messages (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  crew bigint,
+  author text,
+  message text,
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_crew_fkey FOREIGN KEY (crew) REFERENCES public.crews(id),
+  CONSTRAINT messages_author_fkey FOREIGN KEY (author) REFERENCES public.users(supabase_id)
+);
+CREATE TABLE public.oldproblemsymptom (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  problem bigint,
+  oldsymptom bigint,
+  changedby text,
+  changedat timestamp with time zone,
+  CONSTRAINT oldproblemsymptom_pkey PRIMARY KEY (id),
+  CONSTRAINT oldproblemsymptom_oldsymptom_fkey FOREIGN KEY (oldsymptom) REFERENCES public.symptom(id),
+  CONSTRAINT oldproblemsymptom_problem_fkey FOREIGN KEY (problem) REFERENCES public.problem(id),
+  CONSTRAINT oldproblemsymptom_changedby_fkey FOREIGN KEY (changedby) REFERENCES public.users(supabase_id)
+);
+CREATE TABLE public.pending_users (
+  email text NOT NULL,
+  firstname text NOT NULL,
+  lastname text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  phone_number text NOT NULL,
+  CONSTRAINT pending_users_pkey PRIMARY KEY (email)
+);
+CREATE TABLE public.problem (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  event bigint,
+  crew bigint,
+  originator text,
+  strip text,
+  symptom bigint,
+  startdatetime timestamp with time zone,
+  action bigint,
+  actionby text,
+  enddatetime timestamp with time zone,
+  CONSTRAINT problem_pkey PRIMARY KEY (id),
+  CONSTRAINT problem_crew_fkey FOREIGN KEY (crew) REFERENCES public.crews(id),
+  CONSTRAINT problem_symptom_fkey FOREIGN KEY (symptom) REFERENCES public.symptom(id),
+  CONSTRAINT problem_originator_fkey FOREIGN KEY (originator) REFERENCES public.users(supabase_id),
+  CONSTRAINT problem_action_fkey FOREIGN KEY (action) REFERENCES public.action(id),
+  CONSTRAINT problem_actionby_fkey FOREIGN KEY (actionby) REFERENCES public.users(supabase_id),
+  CONSTRAINT problem_event_fkey FOREIGN KEY (event) REFERENCES public.events(id)
+);
+CREATE TABLE public.symptom (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  symptomclass bigint,
+  symptomstring text,
+  CONSTRAINT symptom_pkey PRIMARY KEY (id),
+  CONSTRAINT symptom_symptomclass_fkey FOREIGN KEY (symptomclass) REFERENCES public.symptomclass(id)
+);
+CREATE TABLE public.symptomclass (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  symptomclassstring text,
+  crewType bigint,
+  CONSTRAINT symptomclass_pkey PRIMARY KEY (id),
+  CONSTRAINT symptomclass_crewType_fkey FOREIGN KEY (crewType) REFERENCES public.crewtypes(id)
+);
+CREATE TABLE public.users (
+  supabase_id text NOT NULL DEFAULT ''::text,
+  firstname text,
+  lastname text,
+  phonenbr text,
+  superuser boolean DEFAULT false,
+  organizer boolean DEFAULT false,
+  CONSTRAINT users_pkey PRIMARY KEY (supabase_id)
+);
