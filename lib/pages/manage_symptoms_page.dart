@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/debug_utils.dart';
 
 class ManageSymptomsPage extends StatefulWidget {
   const ManageSymptomsPage({super.key});
@@ -25,6 +26,8 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   bool _isAddSymptomClassMode = false;
   bool _isAddSymptomMode = false;
   bool _isAddActionMode = false;
+  String? _error;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -48,10 +51,15 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         setState(() {
           _crewTypes = List<Map<String, dynamic>>.from(crewTypesResponse);
           _symptomClasses = List<Map<String, dynamic>>.from(symptomClassesResponse);
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // Error loading data
+      debugLogError('Error loading data', e);
+      setState(() {
+        _error = 'Failed to load data: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -65,10 +73,15 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       if (mounted) {
         setState(() {
           _actions = List<Map<String, dynamic>>.from(response);
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // Error loading actions
+      debugLogError('Error loading actions', e);
+      setState(() {
+        _error = 'Failed to load actions: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -136,7 +149,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         });
       }
     } catch (e) {
-      // Error loading symptoms
+      debugLogError('Error loading symptoms', e);
+      setState(() {
+        _error = 'Failed to load symptoms: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -272,7 +289,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                           // Stay in add mode, do not select the new crew type
                         });
                       } catch (e) {
-                        // Error adding crew type
+                        debugLogError('Error adding crew type', e);
+                        setState(() {
+                          _error = 'Failed to add crew type: $e';
+                          _isLoading = false;
+                        });
                       }
                     } : null,
                     child: Text(_isAddCrewTypeMode ? 'Add' : 'Update'),
@@ -304,7 +325,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             _symptomClassNameController.clear();
                           });
                         } catch (e) {
-                          // Error deleting crew type
+                          debugLogError('Error deleting crew type', e);
+                          setState(() {
+                            _error = 'Failed to delete crew type: $e';
+                            _isLoading = false;
+                          });
                         }
                       }
                     } : null,
@@ -365,7 +390,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             // Stay in add mode, do not select the new class
                           });
                         } catch (e) {
-                          // Error adding symptom class
+                          debugLogError('Error adding symptom class', e);
+                          setState(() {
+                            _error = 'Failed to add symptom class: $e';
+                            _isLoading = false;
+                          });
                         }
                       } : canUpdateSymptomClass ? () async {
                         final name = _symptomClassNameController.text.trim();
@@ -379,7 +408,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             _symptomClassNameController.text = name;
                           });
                         } catch (e) {
-                          // Error updating symptom class
+                          debugLogError('Error updating symptom class', e);
+                          setState(() {
+                            _error = 'Failed to update symptom class: $e';
+                            _isLoading = false;
+                          });
                         }
                       } : null,
                       child: Text(_isAddSymptomClassMode ? 'Add' : 'Update'),
@@ -408,7 +441,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               _isAddSymptomClassMode = false;
                             });
                           } catch (e) {
-                            // Error deleting symptom class
+                            debugLogError('Error deleting symptom class', e);
+                            setState(() {
+                              _error = 'Failed to delete symptom class: $e';
+                              _isLoading = false;
+                            });
                           }
                         }
                       } : null,
@@ -462,7 +499,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             // Stay in add mode, do not select the new symptom
                           });
                         } catch (e) {
-                          // Error adding symptom
+                          debugLogError('Error creating symptom', e);
+                          setState(() {
+                            _error = 'Failed to create symptom: $e';
+                            _isLoading = false;
+                          });
                         }
                       } : canUpdateSymptom ? () async {
                         final name = _symptomNameController.text.trim();
@@ -476,7 +517,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             _symptomNameController.text = name;
                           });
                         } catch (e) {
-                          // Error updating symptom
+                          debugLogError('Error updating symptom', e);
+                          setState(() {
+                            _error = 'Failed to update symptom: $e';
+                            _isLoading = false;
+                          });
                         }
                       } : null,
                       child: Text(_isAddSymptomMode ? 'Add' : 'Update'),
@@ -505,7 +550,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               _isAddSymptomMode = false;
                             });
                           } catch (e) {
-                            // Error deleting symptom
+                            debugLogError('Error deleting symptom', e);
+                            setState(() {
+                              _error = 'Failed to delete symptom: $e';
+                              _isLoading = false;
+                            });
                           }
                         }
                       } : null,
@@ -565,7 +614,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               // Stay in add mode, do not select the new action
                             });
                           } catch (e) {
-                            // Error adding action
+                            debugLogError('Error creating action', e);
+                            setState(() {
+                              _error = 'Failed to create action: $e';
+                              _isLoading = false;
+                            });
                           }
                         } : canUpdateAction ? () async {
                           final name = _actionNameController.text.trim();
@@ -579,7 +632,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               _actionNameController.text = name;
                             });
                           } catch (e) {
-                            // Error updating action
+                            debugLogError('Error updating action', e);
+                            setState(() {
+                              _error = 'Failed to update action: $e';
+                              _isLoading = false;
+                            });
                           }
                         } : null,
                         child: Text(_isAddActionMode ? 'Add' : 'Update'),
@@ -608,7 +665,11 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                                 _isAddActionMode = false;
                               });
                             } catch (e) {
-                              // Error deleting action
+                              debugLogError('Error deleting action', e);
+                              setState(() {
+                                _error = 'Failed to delete action: $e';
+                                _isLoading = false;
+                              });
                             }
                           }
                         } : null,

@@ -4,6 +4,7 @@ import 'package:stripcall/routes.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/event.dart';
 import '../../widgets/settings_menu.dart';
+import '../../utils/debug_utils.dart';
 
 abstract class EventsRepository {
   Future<List<Event>> fetchEvents(String userId);
@@ -69,6 +70,7 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
         _isLoading = false;
       });
     } catch (e) {
+      debugLogError('Error loading events', e);
       if (!mounted) return;
       setState(() {
         _error = 'Failed to load events: $e';

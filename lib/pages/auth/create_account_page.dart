@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+import '../../utils/debug_utils.dart';
 
 class CreateAccountPage extends StatefulWidget {
   const CreateAccountPage({super.key});
@@ -19,6 +20,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   final _passwordController = TextEditingController();
   Timer? _verificationTimer;
   bool _isLoading = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -107,7 +109,11 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 'lastname': lastName,
               });
         } catch (dbError) {
-          // Database error - user might already exist
+          debugLogError('Database error during account creation', dbError);
+          setState(() {
+            _error = dbError.toString();
+            _isLoading = false;
+          });
         }
 
         if (mounted) {
@@ -115,11 +121,11 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         }
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      debugLogError('Error creating account', e);
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 

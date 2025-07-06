@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../models/crew_message.dart';
 import '../services/notification_service.dart';
+import '../utils/debug_utils.dart';
 
 class CrewMessageWindow extends StatefulWidget {
   final int crewId;
@@ -63,7 +64,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         });
       }
     } catch (e) {
-      // Error loading read message IDs
+      debugLogError('Error loading read message IDs', e);
     }
   }
 
@@ -78,7 +79,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         });
       }
     } catch (e) {
-      // Error marking messages as read
+      debugLogError('Error marking messages as read', e);
     }
   }
 
@@ -103,12 +104,10 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         _markMessagesAsRead(); // Mark messages as read when viewed
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      // Error loading crew messages
+      debugLogError('Error loading messages', e);
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -146,7 +145,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         _scrollToBottom();
       }
     } catch (e) {
-      // Error checking for new crew messages
+      debugLogError('Error checking for new crew messages', e);
     }
   }
 
@@ -212,6 +211,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
       );
 
     } catch (e) {
+      debugLogError('Error sending message', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to send message: $e')),

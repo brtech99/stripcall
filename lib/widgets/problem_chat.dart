@@ -30,6 +30,8 @@ class _ProblemChatState extends State<ProblemChat> {
   final Map<String, String> _userNameCache = {};
   String? _crewDisplayStyle;
   List<Map<String, dynamic>> _messages = [];
+  String? _error;
+  bool _isLoading = false;
   
   @override
   void initState() {
@@ -57,6 +59,10 @@ class _ProblemChatState extends State<ProblemChat> {
       }
     } catch (e) {
       debugLogError('Error loading messages', e);
+      setState(() {
+        _error = 'Failed to load messages: $e';
+        _isLoading = false;
+      });
     }
   }
   

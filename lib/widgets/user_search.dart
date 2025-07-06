@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
+import '../utils/debug_utils.dart';
 
 class UserSearchField extends StatefulWidget {
   final String label;
@@ -50,7 +51,7 @@ class _UserSearchFieldState extends State<UserSearchField> {
         });
       }
     } catch (e) {
-      // Error loading initial user
+      debugLogError('Error loading initial user', e);
     }
   }
 
@@ -81,12 +82,11 @@ class _UserSearchFieldState extends State<UserSearchField> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _filteredUsers = [];
-          _isLoading = false;
-        });
-      }
+      debugLogError('Error searching users', e);
+      setState(() {
+        _filteredUsers = [];
+        _isLoading = false;
+      });
     }
   }
 

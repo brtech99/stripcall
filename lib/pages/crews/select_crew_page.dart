@@ -6,6 +6,7 @@ import '../../models/crew_type.dart';
 import '../../models/event.dart';
 import '../../widgets/settings_menu.dart';
 import '../../utils/auth_helpers.dart';
+import '../../utils/debug_utils.dart';
 
 class SelectCrewPage extends StatefulWidget {
   const SelectCrewPage({super.key});
@@ -64,12 +65,11 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load crews: $e';
-          _isLoading = false;
-        });
-      }
+      debugLogError('Error loading crews', e);
+      setState(() {
+        _error = 'Failed to load crews: $e';
+        _isLoading = false;
+      });
     }
   }
 

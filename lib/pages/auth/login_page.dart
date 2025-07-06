@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
+import '../../utils/debug_utils.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -37,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       context.go(Routes.selectEvent);
     } catch (e) {
-      debugPrint('Error logging in: $e');
+      debugLogError('Error during login', e);
       if (!mounted) return;
       setState(() {
         _error = 'Invalid credentials';

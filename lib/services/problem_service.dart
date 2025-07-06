@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/problem_with_details.dart';
 import 'notification_service.dart';
+import '../utils/debug_utils.dart';
 
 class ProblemService {
   static final ProblemService _instance = ProblemService._internal();
@@ -47,6 +48,7 @@ class ProblemService {
               problems.add(problem);
             }
           } catch (e) {
+            debugLogError('Error parsing problem', e);
             // Error parsing problem
           }
         }
@@ -54,6 +56,7 @@ class ProblemService {
       
       return problems;
     } catch (e) {
+      debugLogError('Failed to load problems', e);
       throw Exception('Failed to load problems: $e');
     }
   }
@@ -124,6 +127,7 @@ class ProblemService {
         includeReporter: false, // Don't include responder for "on my way" notifications
       );
     } catch (e) {
+      debugLogError('Error updating status (goOnMyWay)', e);
       if (e.toString().contains('duplicate key') || e.toString().contains('UNIQUE')) {
         throw Exception('You are already en route');
       }

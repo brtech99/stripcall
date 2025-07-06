@@ -4,6 +4,7 @@ import 'name_finder_dialog.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew_member.dart';
 import '../../widgets/settings_menu.dart';
+import '../../utils/debug_utils.dart';
 
 class ManageCrewPage extends StatefulWidget {
   final String crewId;
@@ -57,7 +58,11 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         });
       }
     } catch (e) {
-      // Error loading crew chief
+      debugLogError('Error loading crew chief', e);
+      setState(() {
+        _error = 'Failed to load crew chief: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -111,12 +116,11 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load crew members: $e';
-          _isLoading = false;
-        });
-      }
+      debugLogError('Error loading crew members', e);
+      setState(() {
+        _error = 'Failed to load crew members: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -142,6 +146,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
           _loadCrewMembers();
         }
       } catch (e) {
+        debugLogError('Error saving crew', e);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -169,6 +174,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         _loadCrewMembers();
       }
     } catch (e) {
+      debugLogError('Error removing crew member', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

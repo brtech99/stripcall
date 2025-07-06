@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/notification_service.dart';
+import '../../utils/debug_utils.dart';
 
 class NewProblemDialog extends StatefulWidget {
   final int eventId;
@@ -61,6 +62,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         }
       }
     } catch (e) {
+      debugLogError('Failed to load crews', e);
       if (mounted) {
         setState(() {
           _error = 'Failed to load crews: $e';
@@ -134,7 +136,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         });
       }
     } catch (e) {
-      // Error loading symptom classes
+      debugLogError('Failed to load symptom classes', e);
     }
   }
 
@@ -214,6 +216,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
+      debugLogError('Failed to create problem', e);
       if (!mounted) return;
       setState(() {
         _error = 'Failed to create problem: $e';

@@ -6,6 +6,7 @@ import '../../routes.dart';
 import '../../widgets/app_menu.dart';
 import '../../widgets/settings_menu.dart';
 import '../../models/event.dart';
+import '../../utils/debug_utils.dart';
 
 class SelectEventPage extends StatefulWidget {
   const SelectEventPage({super.key});
@@ -105,6 +106,7 @@ class _SelectEventPageState extends State<SelectEventPage> {
         });
       }
     } catch (e) {
+      debugLogError('Error navigating to problems', e);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error navigating to problems: $e')),

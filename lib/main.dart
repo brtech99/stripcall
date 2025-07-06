@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'router.dart';
 import 'services/notification_service.dart';
+import 'utils/debug_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,13 +23,13 @@ void main() async {
   try {
     await Firebase.initializeApp();
   } catch (e) {
-    // Firebase initialization failed, but we can continue without it
+    debugLogError('Firebase initialization failed, but we can continue without it', e);
   }
 
   try {
     await NotificationService().initialize();
   } catch (e) {
-    // Notification service initialization failed, but we can continue without it
+    debugLogError('Notification service initialization failed, but we can continue without it', e);
   }
 
   runApp(const MyApp());

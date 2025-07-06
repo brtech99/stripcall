@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
+import 'debug_utils.dart';
 
 /// Get the current authenticated user from the database
 Future<app_models.User?> getCurrentUser() async {
@@ -18,6 +19,7 @@ Future<app_models.User?> getCurrentUser() async {
     }
     return null;
   } catch (e) {
+    debugLogError('Error getting current user', e);
     return null;
   }
 }
@@ -27,6 +29,7 @@ Future<bool> isSuperUser() async {
     final user = await getCurrentUser();
     return user?.isSuperUser == true;
   } catch (e) {
+    debugLogError('Error checking super user status', e);
     return false;
   }
 }
@@ -46,6 +49,7 @@ Future<bool> isOrganizer() async {
     
     return response.isNotEmpty;
   } catch (e) {
+    debugLogError('Error checking user permissions', e);
     return false;
   }
 }
@@ -65,6 +69,7 @@ Future<bool> isCrewChief() async {
     
     return response.isNotEmpty;
   } catch (e) {
+    debugLogError('Error checking user permissions for crew', e);
     return false;
   }
 } 

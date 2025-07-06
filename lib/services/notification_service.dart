@@ -30,7 +30,7 @@ class NotificationService {
       try {
         await Firebase.initializeApp();
       } catch (e) {
-        // Firebase not available, continue with local notifications only
+        debugLogError('Firebase not available, continue with local notifications only', e);
         _isInitialized = true;
         return;
       }
@@ -57,7 +57,7 @@ class NotificationService {
             // Provisional permission granted
           }
         } catch (e) {
-          // Continue without FCM permissions
+          debugLogError('Continue without FCM permissions', e);
         }
       }
 
@@ -65,7 +65,7 @@ class NotificationService {
       try {
         _fcmToken = await _firebaseMessaging.getToken();
       } catch (e) {
-        // Continue without FCM token
+        debugLogError('Continue without FCM token', e);
       }
 
       // Listen for token refresh
@@ -101,7 +101,7 @@ class NotificationService {
       try {
         FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
       } catch (e) {
-        // Continue without background message handling
+        debugLogError('Continue without background message handling', e);
       }
 
       // Handle notification taps when app is opened from background
@@ -110,7 +110,7 @@ class NotificationService {
           // TODO: Navigate to specific problem or screen based on message data
         });
       } catch (e) {
-        // Continue without message opened handling
+        debugLogError('Continue without message opened handling', e);
       }
 
       // Clean up device tokens and save current user's token
@@ -165,7 +165,7 @@ class NotificationService {
           await androidPlugin.createNotificationChannel(androidChannel);
         }
       } catch (e) {
-        // Error creating Android notification channel
+        debugLogError('Error creating Android notification channel', e);
       }
       
       // Request permissions explicitly for iOS
@@ -181,10 +181,10 @@ class NotificationService {
           );
         }
       } catch (e) {
-        // Continue without iOS permissions
+        debugLogError('Continue without iOS permissions', e);
       }
     } catch (e) {
-      // Continue without local notifications
+      debugLogError('Continue without local notifications', e);
     }
   }
 
@@ -254,7 +254,7 @@ class NotificationService {
       }
       
     } catch (e) {
-      // Error saving FCM token to database
+      debugLogError('Error saving FCM token to database', e);
     }
   }
 
@@ -339,6 +339,7 @@ class NotificationService {
         problemId: problemId,
       );
     } catch (e) {
+      debugLogError('Error sending new problem notification', e);
       return false;
     }
   }
@@ -376,6 +377,7 @@ class NotificationService {
         problemId: problemId,
       );
     } catch (e) {
+      debugLogError('Error sending problem resolved notification', e);
       return false;
     }
   }
@@ -414,6 +416,7 @@ class NotificationService {
         problemId: problemId,
       );
     } catch (e) {
+      debugLogError('Error sending new message notification', e);
       return false;
     }
   }

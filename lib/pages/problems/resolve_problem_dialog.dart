@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/notification_service.dart';
+import '../../utils/debug_utils.dart';
 
 class ResolveProblemDialog extends StatefulWidget {
   final int problemId;
@@ -84,6 +85,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
         });
       }
     } catch (e) {
+      debugLogError('Failed to load problem data', e);
       if (mounted) {
         setState(() {
           _error = 'Failed to load problem data: $e';
@@ -161,6 +163,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
+      debugLogError('Failed to resolve problem', e);
       if (!mounted) return;
       setState(() {
         _error = 'Failed to resolve problem: $e';

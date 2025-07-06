@@ -6,6 +6,7 @@ import '../../widgets/crew_message_window.dart';
 import '../../widgets/problem_card.dart';
 import '../../models/problem_with_details.dart';
 import '../../services/problem_service.dart';
+import '../../utils/debug_utils.dart';
 
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
@@ -82,6 +83,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _checkForNewMessages(latestProblemTime);
       await _checkForResolvedProblems(latestProblemTime);
     } catch (e) {
+      debugLogError('Error checking for updates', e);
       // Error checking for updates
     }
   }
@@ -111,6 +113,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         }
       }
     } catch (e) {
+      debugLogError('Error checking for new problems', e);
       // Error checking for new problems
     }
   }
@@ -133,6 +136,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         }
       }
     } catch (e) {
+      debugLogError('Error checking for new messages', e);
       // Error checking for new messages
     }
   }
@@ -178,6 +182,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         });
       }
     } catch (e) {
+      debugLogError('Error checking for resolved problems', e);
       // Continue working even if this fails
     }
   }

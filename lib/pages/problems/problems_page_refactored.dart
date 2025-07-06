@@ -8,6 +8,7 @@ import '../../models/problem_with_details.dart';
 import '../../services/problem_service.dart';
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
+import '../../utils/debug_utils.dart';
 
 class ProblemsPage extends StatefulWidget {
   final int eventId;
@@ -81,7 +82,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _checkForNewMessages(latestProblemTime);
       await _checkForResolvedProblems(latestProblemTime);
     } catch (e) {
-      // Error checking for updates
+      debugLogError('Error checking for updates', e);
     }
   }
 
@@ -110,7 +111,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         }
       }
     } catch (e) {
-      // Error checking for new problems
+      debugLogError('Error checking for new problems', e);
     }
   }
 
@@ -132,7 +133,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         }
       }
     } catch (e) {
-      // Error checking for new messages
+      debugLogError('Error checking for new messages', e);
     }
   }
 
@@ -177,7 +178,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         });
       }
     } catch (e) {
-      // Continue working even if this fails
+      debugLogError('Error checking for resolved problems', e);
     }
   }
 
@@ -276,7 +277,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         }
       }
     } catch (e) {
-      // Error loading crew info
+      debugLogError('Error loading crew info', e);
     }
   }
 
@@ -302,6 +303,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         await _loadResponders();
       }
     } catch (e) {
+      debugLogError('Failed to load problems', e);
       if (mounted) {
         setState(() {
           _error = 'Failed to load problems: $e';
@@ -320,7 +322,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         });
       }
     } catch (e) {
-      // Error loading responders
+      debugLogError('Error loading responders', e);
     }
   }
 

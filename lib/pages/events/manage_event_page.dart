@@ -7,6 +7,7 @@ import '../../models/event.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew.dart';
 import '../../models/crew_type.dart';
+import '../../utils/debug_utils.dart';
 
 class ManageEventPage extends StatefulWidget {
   final Event? event;  // null for new event, populated for editing
@@ -92,12 +93,11 @@ class _ManageEventPageState extends State<ManageEventPage> {
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load crews/types: $e';
-          _isLoading = false;
-        });
-      }
+      debugLogError('Error loading event details', e);
+      setState(() {
+        _error = 'Failed to load event details: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -123,16 +123,11 @@ class _ManageEventPageState extends State<ManageEventPage> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update event: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      debugLogError('Error saving event', e);
+      setState(() {
+        _error = 'Failed to save event: $e';
+        _isLoading = false;
+      });
     }
   }
 

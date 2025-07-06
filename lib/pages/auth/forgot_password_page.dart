@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
+import '../../utils/debug_utils.dart';
 
 enum ForgotPasswordStep {
   enterEmail,
@@ -149,10 +150,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           break;
       }
     } on AuthException catch (e) {
+      debugLogError('AuthException during password reset', e);
       setState(() {
         _error = e.message;
       });
     } catch (e) {
+      debugLogError('Error during password reset', e);
       setState(() {
         _error = e.toString();
       });
