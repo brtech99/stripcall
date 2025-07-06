@@ -22,7 +22,6 @@ class CrewMember {
         userData = app_models.User.fromJson(json['crewmember'] as Map<String, dynamic>);
       }
     } catch (e) {
-      print('Error parsing user data in CrewMember: $e');
       userData = null;
     }
 

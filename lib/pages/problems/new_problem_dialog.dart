@@ -44,34 +44,16 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
 
   Future<void> _loadCrews() async {
     try {
-      print('Loading crews for event ID: ${widget.eventId}');
-      
-      // First, let's see what crews exist for this event
-      final basicResponse = await Supabase.instance.client
-          .from('crews')
-          .select('*')
-          .eq('event', widget.eventId);
-      
-      print('Basic crew response: $basicResponse');
-      
-      // Now try the join query
       final response = await Supabase.instance.client
           .from('crews')
           .select('id, crewtype:crewtypes(crewtype)')
           .eq('event', widget.eventId);
       
-      print('Crew response with join: $response');
-      
       if (mounted) {
         setState(() {
           _crews = List<Map<String, dynamic>>.from(response);
         });
-        print('Crews loaded: ${_crews.length}');
-        for (final crew in _crews) {
-          print('Crew: $crew');
-        }
         
-        // If no crews found, show an error
         if (_crews.isEmpty) {
           setState(() {
             _error = 'No crews are available for this event. Please contact the event organizer.';
@@ -79,8 +61,6 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         }
       }
     } catch (e) {
-      debugPrint('Error loading crews: $e');
-      print('Error loading crews: $e');
       if (mounted) {
         setState(() {
           _error = 'Failed to load crews: $e';
@@ -103,24 +83,14 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading event info: $e');
+      // Error loading event info
     }
   }
 
   Future<void> _loadSymptomClasses() async {
     try {
-      print('Loading symptom classes for crew type: ${widget.crewType}');
-      
-      // First, let's see what symptom classes exist
-      final basicResponse = await Supabase.instance.client
-          .from('symptomclass')
-          .select('*');
-      
-      print('Basic symptom classes: $basicResponse');
-      
       // Now try the filtered query - use the same pattern as problems_page.dart
       if (widget.crewType == null) {
-        print('No crew type provided, loading all symptom classes');
         final response = await Supabase.instance.client
             .from('symptomclass')
             .select('id, symptomclassstring')
@@ -141,10 +111,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
           .eq('crewtype', widget.crewType!)
           .maybeSingle();
       
-      print('Crew type response: $crewTypeResponse');
-      
       if (crewTypeResponse == null) {
-        print('No crew type found for: ${widget.crewType}');
         if (mounted) {
           setState(() {
             _symptomClasses = [];
@@ -154,37 +121,26 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       }
       
       final crewTypeId = crewTypeResponse['id'] as int;
-      print('Crew type ID: $crewTypeId');
       
-      final response = await Supabase.instance.client
+      final symptomClassesResponse = await Supabase.instance.client
           .from('symptomclass')
           .select('id, symptomclassstring')
           .eq('crewType', crewTypeId)
           .order('symptomclassstring');
       
-      print('Filtered symptom classes: $response');
-      
       if (mounted) {
         setState(() {
-          _symptomClasses = List<Map<String, dynamic>>.from(response);
+          _symptomClasses = List<Map<String, dynamic>>.from(symptomClassesResponse);
         });
-        print('Symptom classes loaded: ${_symptomClasses.length}');
-        for (final sc in _symptomClasses) {
-          print('Symptom class: $sc');
-        }
       }
     } catch (e) {
-      debugPrint('Error loading symptom classes: $e');
-      print('Error loading symptom classes: $e');
+      // Error loading symptom classes
     }
   }
 
   Future<void> _loadSymptoms() async {
     try {
-      print('Loading symptoms for symptom class: ${_selectedSymptomClass}');
-      
       if (_selectedSymptomClass == null) {
-        print('No symptom class selected');
         if (mounted) {
           setState(() {
             _symptoms = [];
@@ -193,34 +149,19 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         return;
       }
       
-      // First, let's see what symptoms exist
-      final basicResponse = await Supabase.instance.client
-          .from('symptom')
-          .select('*');
-      
-      print('Basic symptoms: $basicResponse');
-      
-      // Now try the filtered query - use the same pattern as problems_page.dart
       final response = await Supabase.instance.client
           .from('symptom')
           .select('id, symptomstring')
           .eq('symptomclass', _selectedSymptomClass!)
           .order('symptomstring');
       
-      print('Filtered symptoms: $response');
-      
       if (mounted) {
         setState(() {
           _symptoms = List<Map<String, dynamic>>.from(response);
         });
-        print('Symptoms loaded: ${_symptoms.length}');
-        for (final s in _symptoms) {
-          print('Symptom: $s');
-        }
       }
     } catch (e) {
-      debugPrint('Error loading symptoms: $e');
-      print('Error loading symptoms: $e');
+      // Error loading symptoms
     }
   }
 
@@ -255,15 +196,6 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         (s) => s['id'].toString() == _selectedSymptom,
         orElse: () => {'symptomstring': 'Unknown'},
       )['symptomstring'] as String;
-
-      // Get originator name
-      final userResponse = await Supabase.instance.client
-          .from('users')
-          .select('firstname, lastname')
-          .eq('supabase_id', userId)
-          .single();
-      
-      final originatorName = '${userResponse['firstname']} ${userResponse['lastname']}';
 
       // Send notification using Edge Function
       await NotificationService().sendCrewNotification(
@@ -336,7 +268,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedPod == podLetter
                       ? Theme.of(context).colorScheme.primary
@@ -361,7 +293,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   onSelected: (selected) {
                     setState(() {
                       _selectedStripNumber = stripNum;
-                      _selectedStrip = '${_selectedPod}$stripNum';
+                      _selectedStrip = '$_selectedPod$stripNum';
                     });
                   },
                   showCheckmark: false,
@@ -369,7 +301,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   backgroundColor: Theme.of(context).colorScheme.surface,
-                  selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                  selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                   side: BorderSide(
                     color: _selectedStripNumber == stripNum
                         ? Theme.of(context).colorScheme.primary
@@ -411,7 +343,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedStrip == stripNumber
                       ? Theme.of(context).colorScheme.primary
@@ -552,9 +484,9 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       ),
       actionsPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       actions: [
-        ButtonBar(
+        OverflowBar(
           alignment: MainAxisAlignment.end,
-          buttonPadding: EdgeInsets.symmetric(horizontal: 4),
+          spacing: 4,
           children: [
             TextButton(
               onPressed: _isLoading ? null : () => Navigator.of(context).pop(),

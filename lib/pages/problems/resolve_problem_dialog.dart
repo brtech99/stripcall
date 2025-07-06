@@ -42,63 +42,53 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
 
   Future<void> _loadProblemAndActions() async {
     try {
-      // First, get the problem to find its symptom ID
+      // First, get the problem details
       final problemResponse = await Supabase.instance.client
           .from('problem')
           .select('symptom')
           .eq('id', widget.problemId)
           .single();
-      
+
       final symptomId = problemResponse['symptom'] as int?;
-      
-      if (mounted) {
-        setState(() {
-          _problemSymptomId = symptomId;
-        });
-      }
-      
-      // Now load actions for this specific symptom
+      _problemSymptomId = symptomId;
+
+      // Now get actions filtered by symptom
+      List<Map<String, dynamic>> actionsResponse;
       if (symptomId != null) {
-        final actionsResponse = await Supabase.instance.client
-            .from('action')
-            .select('id, actionstring')
-            .eq('symptom', symptomId)
-            .order('actionstring');
-        
-        if (mounted) {
-          setState(() {
-            _actions = List<Map<String, dynamic>>.from(actionsResponse);
-          });
+        try {
+          // Try to get actions filtered by symptom
+          actionsResponse = await Supabase.instance.client
+              .from('action')
+              .select('*')
+              .eq('symptom', symptomId)
+              .order('actionstring');
+        } catch (e) {
+          // If filtering by symptom fails, get all actions
+          actionsResponse = await Supabase.instance.client
+              .from('action')
+              .select('*')
+              .order('actionstring');
         }
       } else {
-        // If no symptom found, load all actions as fallback
-        final actionsResponse = await Supabase.instance.client
+        // If no symptom ID, get all actions
+        actionsResponse = await Supabase.instance.client
             .from('action')
-            .select('id, actionstring')
+            .select('*')
             .order('actionstring');
-        
-        if (mounted) {
-          setState(() {
-            _actions = List<Map<String, dynamic>>.from(actionsResponse);
-          });
-        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _actions = List<Map<String, dynamic>>.from(actionsResponse);
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      debugPrint('Error loading problem and actions: $e');
-      // Fallback: load all actions if there's an error
-      try {
-        final actionsResponse = await Supabase.instance.client
-            .from('action')
-            .select('id, actionstring')
-            .order('actionstring');
-        
-        if (mounted) {
-          setState(() {
-            _actions = List<Map<String, dynamic>>.from(actionsResponse);
-          });
-        }
-      } catch (fallbackError) {
-        debugPrint('Error in fallback action loading: $fallbackError');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load problem data: $e';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -153,7 +143,6 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       final resolution = actionResponse['actionstring'] as String;
       final strip = problemResponse['strip'] as String;
       final crewId = problemResponse['crew'].toString();
-      final symptom = problemResponse['symptom']?['symptomstring'] as String? ?? 'Unknown';
 
       await NotificationService().sendCrewNotification(
         title: 'Problem Resolved',
@@ -182,78 +171,110 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Resolve Problem'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Resolve Problem',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            _error!,
+                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          ),
+                        ),
+                      if (_problemSymptomId != null) ...[
+                        Text(
+                          'Available resolutions for this problem (${_actions.length} found)',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedAction,
+                          decoration: const InputDecoration(
+                            labelText: 'Resolution',
+                          ),
+                          menuMaxHeight: 200,
+                          isExpanded: true,
+                          items: _actions.isEmpty 
+                            ? [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('No Resolutions Available'),
+                                ),
+                              ]
+                            : _actions.map((action) {
+                                return DropdownMenuItem(
+                                  value: action['id'].toString(),
+                                  child: Text(
+                                    action['actionstring'],
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                  ),
+                                );
+                              }).toList(),
+                          onChanged: _actions.isEmpty ? null : (value) {
+                            setState(() => _selectedAction = value);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes (Optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            if (_problemSymptomId != null) ...[
-              Text(
-                'Available resolutions for this problem (${_actions.length} found)',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _isLoading ? null : _submitAction,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Resolve'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
             ],
-            DropdownButtonFormField<String>(
-              value: _selectedAction,
-              decoration: const InputDecoration(
-                labelText: 'Resolution',
-              ),
-              items: _actions.isEmpty 
-                ? [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('No resolutions available for this problem'),
-                    ),
-                  ]
-                : _actions.map((action) {
-                    return DropdownMenuItem(
-                      value: action['id'].toString(),
-                      child: Text(action['actionstring']),
-                    );
-                  }).toList(),
-              onChanged: _actions.isEmpty ? null : (value) {
-                setState(() => _selectedAction = value);
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (Optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: _isLoading ? null : _submitAction,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Resolve'),
-        ),
-      ],
     );
   }
 } 

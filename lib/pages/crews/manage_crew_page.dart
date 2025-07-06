@@ -57,7 +57,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         });
       }
     } catch (e) {
-      print('Error loading crew chief: $e');
+      // Error loading crew chief
     }
   }
 
@@ -209,7 +209,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                        color: Theme.of(context).colorScheme.surfaceVariant,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         child: Row(
                           children: [
                             Text(

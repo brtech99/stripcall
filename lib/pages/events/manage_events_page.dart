@@ -77,19 +77,6 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
     }
   }
 
-  void _handleLogout() async {
-    try {
-      await Supabase.instance.client.auth.signOut();
-      if (!mounted) return;
-      context.go(Routes.login);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to logout: $e')),
-      );
-    }
-  }
-
   String _getOrganizerName(Event event) {
     // Check if we have organizer data from the join
     if (event.organizer != null) {

@@ -195,7 +195,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           _loadCrewsAndTypes();
         }
       } catch (e) {
-        if (!mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to add crew: $e'),
@@ -227,7 +227,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           _loadCrewsAndTypes();
         }
       } catch (e) {
-        if (!mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to update crew: $e'),
@@ -253,7 +253,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         _loadCrewsAndTypes();
       }
     } catch (e) {
-      if (!mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete crew: $e'),

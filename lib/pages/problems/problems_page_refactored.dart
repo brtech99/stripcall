@@ -6,7 +6,6 @@ import '../../widgets/crew_message_window.dart';
 import '../../widgets/problem_card.dart';
 import '../../models/problem_with_details.dart';
 import '../../services/problem_service.dart';
-
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
 
@@ -564,17 +563,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
               ),
-              dropdownColor: Theme.of(context).colorScheme.surface,
               items: _allCrews.map((crew) {
                 final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
                 return DropdownMenuItem(
                   value: crew['id'] as int,
-                  child: Text(
-                    crewType,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
+                  child: Text(crewType),
                 );
               }).toList(),
               onChanged: (value) {
@@ -619,7 +612,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                               : 'No problems reported yet'),
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80), // Add bottom padding for bottom app bar
+                            padding: const EdgeInsets.all(8),
                             itemCount: _problems.length,
                             itemBuilder: (context, index) {
                               final problem = _problems[index];
@@ -670,37 +663,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomAppBar(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
-            children: [
-              // Add Problem Button
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showNewProblemDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Report Problem'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Refresh Button
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _isLoading = true;
-                  });
-                  _loadProblems();
-                },
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
-              ),
-            ],
-          ),
-        ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showNewProblemDialog,
+        child: const Icon(Icons.add),
       ),
     );
   }

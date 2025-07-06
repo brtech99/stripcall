@@ -100,33 +100,38 @@ class _EventDialogState extends State<EventDialog> {
 
     try {
       final eventData = {
-        'name': _nameController.text,
-        'city': _locationController.text,
-        'state': _descriptionController.text,
+        'name': _nameController.text.trim(),
+        'city': _locationController.text.trim(),
+        'state': _descriptionController.text.trim(),
         'startdatetime': _startDate!.toIso8601String(),
         'enddatetime': _endDate!.toIso8601String(),
       };
 
-      if (_isNewEvent) {
-        await Supabase.instance.client
-            .from('events')
-            .insert(eventData);
+      if (widget.event == null) {
+        // Creating new event
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          eventData['organizer'] = userId;
+        }
+        await Supabase.instance.client.from('events').insert(eventData);
       } else {
+        // Updating existing event
         await Supabase.instance.client
             .from('events')
             .update(eventData)
             .eq('id', widget.event!.id);
       }
 
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
-      debugPrint('Error saving event: $e');
-      if (!mounted) return;
-      setState(() {
-        _error = 'Failed to save event';
-        _isSaving = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to save event: $e';
+          _isSaving = false;
+        });
+      }
     }
   }
 

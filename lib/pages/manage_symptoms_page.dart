@@ -29,20 +29,21 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   @override
   void initState() {
     super.initState();
-    _loadCrewTypesAndClasses();
+    _loadData();
     _loadActions();
   }
 
-  Future<void> _loadCrewTypesAndClasses() async {
+  Future<void> _loadData() async {
     try {
       final crewTypesResponse = await Supabase.instance.client
           .from('crewtypes')
-          .select('id, crewtype')
+          .select()
           .order('crewtype');
       final symptomClassesResponse = await Supabase.instance.client
-          .from('symptomclass')
-          .select('id, symptomclassstring, crewType')
-          .order('symptomclassstring');
+          .from('symptom_classes')
+          .select()
+          .order('symptomclass');
+
       if (mounted) {
         setState(() {
           _crewTypes = List<Map<String, dynamic>>.from(crewTypesResponse);
@@ -50,38 +51,24 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading crew types or symptom classes: $e');
+      // Error loading data
     }
   }
 
   Future<void> _loadActions() async {
     try {
-      // If a symptom is selected, filter actions by that symptom
-      if (_selectedSymptomId != null && !_isAddSymptomMode) {
-        final response = await Supabase.instance.client
-            .from('action')
-            .select('id, actionstring')
-            .eq('symptom', int.parse(_selectedSymptomId!))
-            .order('actionstring');
-        if (mounted) {
-          setState(() {
-            _actions = List<Map<String, dynamic>>.from(response);
-          });
-        }
-      } else {
-        // Load all actions if no symptom is selected
-        final response = await Supabase.instance.client
-            .from('action')
-            .select('id, actionstring')
-            .order('actionstring');
-        if (mounted) {
-          setState(() {
-            _actions = List<Map<String, dynamic>>.from(response);
-          });
-        }
+      final response = await Supabase.instance.client
+          .from('actions')
+          .select()
+          .order('actionstring');
+
+      if (mounted) {
+        setState(() {
+          _actions = List<Map<String, dynamic>>.from(response);
+        });
       }
     } catch (e) {
-      debugPrint('Error loading actions: $e');
+      // Error loading actions
     }
   }
 
@@ -149,7 +136,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading symptoms: $e');
+      // Error loading symptoms
     }
   }
 
@@ -278,14 +265,14 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                       if (name.isEmpty) return;
                       try {
                         await Supabase.instance.client.from('crewtypes').insert({'crewtype': name});
-                        await _loadCrewTypesAndClasses();
+                        await _loadData();
                         setState(() {
                           _isAddCrewTypeMode = true;
                           _crewTypeNameController.clear();
                           // Stay in add mode, do not select the new crew type
                         });
                       } catch (e) {
-                        debugPrint('Error adding crew type: $e');
+                        // Error adding crew type
                       }
                     } : null,
                     child: Text(_isAddCrewTypeMode ? 'Add' : 'Update'),
@@ -307,7 +294,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                       if (confirmed == true) {
                         try {
                           await Supabase.instance.client.from('crewtypes').delete().eq('id', int.parse(_selectedCrewTypeId!));
-                          await _loadCrewTypesAndClasses();
+                          await _loadData();
                           setState(() {
                             _selectedCrewTypeId = null;
                             _crewTypeNameController.clear();
@@ -317,7 +304,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             _symptomClassNameController.clear();
                           });
                         } catch (e) {
-                          debugPrint('Error deleting crew type: $e');
+                          // Error deleting crew type
                         }
                       }
                     } : null,
@@ -365,34 +352,34 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                     ElevatedButton(
                       onPressed: canAddSymptomClass ? () async {
                         final name = _symptomClassNameController.text.trim();
-                        if (name.isEmpty || selectedCrewTypeIdInt == null) return;
+                        if (name.isEmpty) return;
                         try {
                           await Supabase.instance.client.from('symptomclass').insert({
                             'symptomclassstring': name,
                             'crewType': selectedCrewTypeIdInt,
                           });
-                          await _loadCrewTypesAndClasses();
+                          await _loadData();
                           setState(() {
                             _isAddSymptomClassMode = true;
                             _symptomClassNameController.clear();
                             // Stay in add mode, do not select the new class
                           });
                         } catch (e) {
-                          debugPrint('Error adding symptom class: $e');
+                          // Error adding symptom class
                         }
                       } : canUpdateSymptomClass ? () async {
                         final name = _symptomClassNameController.text.trim();
-                        if (name.isEmpty || selectedCrewTypeIdInt == null || _selectedClassId == null) return;
+                        if (name.isEmpty || _selectedClassId == null) return;
                         try {
                           await Supabase.instance.client.from('symptomclass').update({
                             'symptomclassstring': name,
                           }).eq('id', int.parse(_selectedClassId!));
-                          await _loadCrewTypesAndClasses();
+                          await _loadData();
                           setState(() {
                             _symptomClassNameController.text = name;
                           });
                         } catch (e) {
-                          debugPrint('Error updating symptom class: $e');
+                          // Error updating symptom class
                         }
                       } : null,
                       child: Text(_isAddSymptomClassMode ? 'Add' : 'Update'),
@@ -414,14 +401,14 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                         if (confirmed == true) {
                           try {
                             await Supabase.instance.client.from('symptomclass').delete().eq('id', int.parse(_selectedClassId!));
-                            await _loadCrewTypesAndClasses();
+                            await _loadData();
                             setState(() {
                               _selectedClassId = null;
                               _symptomClassNameController.clear();
                               _isAddSymptomClassMode = false;
                             });
                           } catch (e) {
-                            debugPrint('Error deleting symptom class: $e');
+                            // Error deleting symptom class
                           }
                         }
                       } : null,
@@ -475,7 +462,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             // Stay in add mode, do not select the new symptom
                           });
                         } catch (e) {
-                          debugPrint('Error adding symptom: $e');
+                          // Error adding symptom
                         }
                       } : canUpdateSymptom ? () async {
                         final name = _symptomNameController.text.trim();
@@ -489,7 +476,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                             _symptomNameController.text = name;
                           });
                         } catch (e) {
-                          debugPrint('Error updating symptom: $e');
+                          // Error updating symptom
                         }
                       } : null,
                       child: Text(_isAddSymptomMode ? 'Add' : 'Update'),
@@ -518,7 +505,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               _isAddSymptomMode = false;
                             });
                           } catch (e) {
-                            debugPrint('Error deleting symptom: $e');
+                            // Error deleting symptom
                           }
                         }
                       } : null,
@@ -578,7 +565,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               // Stay in add mode, do not select the new action
                             });
                           } catch (e) {
-                            debugPrint('Error adding action: $e');
+                            // Error adding action
                           }
                         } : canUpdateAction ? () async {
                           final name = _actionNameController.text.trim();
@@ -592,7 +579,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                               _actionNameController.text = name;
                             });
                           } catch (e) {
-                            debugPrint('Error updating action: $e');
+                            // Error updating action
                           }
                         } : null,
                         child: Text(_isAddActionMode ? 'Add' : 'Update'),
@@ -621,7 +608,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
                                 _isAddActionMode = false;
                               });
                             } catch (e) {
-                              debugPrint('Error deleting action: $e');
+                              // Error deleting action
                             }
                           }
                         } : null,

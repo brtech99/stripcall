@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/auth_helpers.dart';
 import '../routes.dart';
 import '../pages/database_page.dart';
-import '../services/notification_service.dart';
 
 class SettingsMenu extends StatefulWidget {
   const SettingsMenu({super.key});
@@ -71,7 +70,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
               MaterialPageRoute(builder: (context) => const DatabasePage()),
             );
             break;
-
           case 'logout':
             Supabase.instance.client.auth.signOut();
             context.go(Routes.login);
@@ -130,8 +128,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
             ),
           );
         }
-
-
 
         // Always add logout option
         items.add(

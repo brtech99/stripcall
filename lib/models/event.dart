@@ -31,7 +31,7 @@ class Event {
     if (json['organizer'] is Map<String, dynamic>) {
       // Joined data from users table
       organizer = json['organizer'] as Map<String, dynamic>;
-      organizerId = organizer?['supabase_id'] ?? '';
+      organizerId = organizer['supabase_id'] ?? '';
     } else {
       // Just the organizer ID
       organizerId = json['organizer']?.toString() ?? '';
@@ -61,7 +61,6 @@ class Event {
         idValue = int.parse(json['id'].toString());
       }
     } catch (e) {
-      print('Error parsing event ID: ${json['id']} (type: ${json['id'].runtimeType})');
       rethrow;
     }
     

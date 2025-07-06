@@ -18,9 +18,6 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   Timer? _verificationTimer;
-  static const _maxWaitTime = Duration(minutes: 3);
-  static const _pollInterval = Duration(seconds: 3);
-  late final DateTime _startTime;  // Will be initialized when polling starts
   bool _isLoading = false;
 
   @override
@@ -34,155 +31,95 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     super.dispose();
   }
 
-  // TODO: Replace this polling mechanism with a proper deep link solution.
-  // This current implementation is a temporary workaround due to difficulties
-  // in setting up deep linking. The goal is to have the user click a link
-  // in their email that opens the app and automatically verifies them.
-  void _startPollingForVerification(String userId) {
-    debugPrint('Starting verification polling for user: $userId');
-    _startTime = DateTime.now();
-    
-    if (!mounted) return;
-    
-    // Capture BuildContext
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.of(context);
-    
-    scaffoldMessenger.showSnackBar(
-      const SnackBar(
-        content: Text('Please check your email and verify your account. Waiting for verification...'),
-        duration: Duration(seconds: 8),
-      ),
-    );
-
-    _verificationTimer = Timer.periodic(_pollInterval, (timer) async {
+  Future<void> _startVerificationPolling(String userId) async {
+    Timer.periodic(const Duration(seconds: 2), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
       }
 
-      debugPrint('=== Polling for verification ===');
-      
-      // Debug current session state
-      final session = Supabase.instance.client.auth.currentSession;
-      debugPrint('Current session state: ${session != null ? "Active" : "None"}');
-      
-      // Check if we've exceeded max wait time
-      if (DateTime.now().difference(_startTime) > _maxWaitTime) {
-        debugPrint('Verification timeout reached, redirecting to login');
-        timer.cancel();
-        
-        if (!mounted) return;
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Verification timeout. Please try logging in.'),
-          ),
-        );
-        await Supabase.instance.client.auth.signOut();
-        if (!mounted) return;
-        router.go('/');
-        return;
-      }
-
       try {
-        // Try to sign in with the credentials we have
-        final response = await Supabase.instance.client.auth.signInWithPassword(
-          email: _emailController.text,
-          password: _passwordController.text,
-        );
-        
-        final user = response.user;
-        debugPrint('User email: ${user?.email}');
-        debugPrint('Email confirmed at: ${user?.emailConfirmedAt}');
-        
-        if (user?.emailConfirmedAt != null) {
-          debugPrint('User verified! Redirecting to select event');
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session == null) {
           timer.cancel();
-          if (!mounted) return;
-          router.go('/select_event');
-        } else {
-          debugPrint('Still waiting for verification...');
-          // Sign out to keep things clean between checks
-          await Supabase.instance.client.auth.signOut();
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed('/login');
+          }
+          return;
+        }
+
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user?.emailConfirmedAt != null) {
+          timer.cancel();
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed('/selectEvent');
+          }
+          return;
         }
       } catch (e) {
-        debugPrint('Error checking verification: $e');
-        debugPrint('Error details: ${e.toString()}');
-        // No need to sign out here as the sign in attempt failed
+        timer.cancel();
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
+      }
+    });
+
+    // Timeout after 5 minutes
+    Timer(const Duration(minutes: 5), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
       }
     });
   }
 
   Future<void> _signUp() async {
-    debugPrint('=== Starting signup process ===');
-    if (!mounted) return;
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() {
-      _isLoading = true;  // Set loading state when starting
+      _isLoading = true;
     });
 
     try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
-      final phone = _phoneController.text.trim();
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
-      
-      debugPrint('Calling Supabase signUp with email: $email');
+
       final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
         data: {
           'firstname': firstName,
           'lastname': lastName,
-          'phonenbr': phone,
         },
-        emailRedirectTo: 'https://stripcall.us/auth/verify'
       );
-      
-      final userId = response.user?.id;
-      debugPrint('Signup completed - User ID: $userId');
 
-      if (userId == null) {
-        throw Exception('Signup failed - no user ID returned');
+      if (response.user != null) {
+        final userId = response.user!.id;
+        
+        try {
+          await Supabase.instance.client
+              .from('pending_users')
+              .insert({
+                'supabase_id': userId,
+                'email': email,
+                'firstname': firstName,
+                'lastname': lastName,
+              });
+        } catch (dbError) {
+          // Database error - user might already exist
+        }
+
+        if (mounted) {
+          _startVerificationPolling(userId);
+        }
       }
-
-      debugPrint('Writing to pending_users table...');
-      try {
-        await Supabase.instance.client.from('pending_users').insert({
-          'email': email,
-          'firstname': firstName,
-          'lastname': lastName,
-          'phone_number': phone,
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
-        debugPrint('Successfully wrote to pending_users');
-      } catch (dbError) {
-        debugPrint('Database error details: $dbError');
       }
-      
-      if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please check your email to verify your account'),
-          duration: Duration(seconds: 5),
-        ),
-      );
-      
-      _startPollingForVerification(userId);
-      
-    } catch (e, stackTrace) {
-      debugPrint('=== Signup error ===');
-      debugPrint('Error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (!mounted) return;
-      
-      setState(() {
-        _isLoading = false;  // Reset loading state on error
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
     }
   }
 

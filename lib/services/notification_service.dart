@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:convert';
 import 'dart:io';
+import '../utils/debug_utils.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -70,17 +71,18 @@ class NotificationService {
       // Listen for token refresh
       try {
         _firebaseMessaging.onTokenRefresh.listen((newToken) {
-          print('DEBUG: FCM token refreshed: $newToken');
+          debugLog('FCM token refreshed');
           _fcmToken = newToken;
           _saveTokenToDatabase(newToken);
         });
       } catch (e) {
-        print('DEBUG: Error setting up token refresh listener: $e');
+        debugLogError('Error setting up token refresh listener', e);
       }
 
       // Handle foreground messages
       try {
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          debugLog('Received foreground message: ${message.notification?.title}');
           // For foreground messages, we'll show a custom in-app notification
           // instead of relying on system notification banner
           if (message.notification != null) {
@@ -92,7 +94,7 @@ class NotificationService {
           }
         });
       } catch (e) {
-        // Continue without foreground message handling
+        debugLogError('Error setting up foreground message handler', e);
       }
 
       // Handle background messages
@@ -116,8 +118,7 @@ class NotificationService {
 
       // Listen for auth state changes to save token when user logs in
       _supabase.auth.onAuthStateChange.listen((event) {
-        if (event.event == 'SIGNED_IN' && _fcmToken != null) {
-          print('DEBUG: User signed in, saving FCM token...');
+        if (event.event == AuthChangeEvent.signedIn && _fcmToken != null) {
           _saveTokenToDatabase(_fcmToken!);
         }
       });
@@ -145,6 +146,27 @@ class NotificationService {
       );
 
       await _localNotifications.initialize(initSettings);
+      
+      // Create notification channel for Android (iOS doesn't use channels)
+      try {
+        const androidChannel = AndroidNotificationChannel(
+          'stripcall_channel',
+          'StripCall Notifications',
+          description: 'Notifications for StripCall app',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        );
+        
+        final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        
+        if (androidPlugin != null) {
+          await androidPlugin.createNotificationChannel(androidChannel);
+        }
+      } catch (e) {
+        // Error creating Android notification channel
+      }
       
       // Request permissions explicitly for iOS
       try {
@@ -209,13 +231,10 @@ class NotificationService {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
-        print('DEBUG: No user ID found, cannot save token');
         return;
       }
 
       final platform = Platform.isIOS ? 'ios' : 'android';
-      print('DEBUG: Attempting to save FCM token for user: $userId, platform: $platform');
-      print('DEBUG: Token to save: ${token.substring(0, 20)}...');
       
       // Check if token already exists
       final existingToken = await _supabase
@@ -226,28 +245,16 @@ class NotificationService {
           .maybeSingle();
 
       if (existingToken == null) {
-        print('DEBUG: Token does not exist, inserting new token...');
         // Insert new token
-        final result = await _supabase.from('device_tokens').insert({
+        await _supabase.from('device_tokens').insert({
           'user_id': userId,
           'device_token': token,
           'platform': platform,
         });
-        print('DEBUG: FCM token saved to database successfully: $result');
-      } else {
-        print('DEBUG: Token already exists in database');
-        print('DEBUG: Existing token details: $existingToken');
       }
       
-      // Also check all tokens for this user
-      final allUserTokens = await _supabase
-          .from('device_tokens')
-          .select('*')
-          .eq('user_id', userId);
-      print('DEBUG: All tokens for user $userId: $allUserTokens');
-      
     } catch (e) {
-      print('DEBUG: Error saving FCM token to database: $e');
+      // Error saving FCM token to database
     }
   }
 
@@ -256,8 +263,6 @@ class NotificationService {
 
   /// Check if notifications are available
   bool get isAvailable => _isInitialized && _fcmToken != null;
-
-
 
   /// Send a notification to specific users via the Edge Function
   Future<bool> sendNotification({
@@ -268,20 +273,15 @@ class NotificationService {
     String? problemId,
   }) async {
     try {
-      print('DEBUG: NotificationService.sendNotification called');
-      print('DEBUG: Title: $title');
-      print('DEBUG: Body: $body');
-      print('DEBUG: User IDs: $userIds');
-      print('DEBUG: Data: $data');
+      debugLog('Sending notification: $title - $body to ${userIds.length} users');
       
       // Get the current user's session
       final session = _supabase.auth.currentSession;
       if (session == null) {
-        print('DEBUG: No active session found');
+        debugLogError('No active session found');
         return false;
       }
 
-      print('DEBUG: Calling Edge Function...');
       final response = await _supabase.functions.invoke(
         'send-fcm-notification',
         body: {
@@ -294,23 +294,14 @@ class NotificationService {
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          print('DEBUG: Edge Function call timed out after 30 seconds');
           throw TimeoutException('Edge Function call timed out', const Duration(seconds: 30));
         },
       );
 
-      print('DEBUG: Edge Function response status: ${response.status}');
-      print('DEBUG: Edge Function response body: ${response.data}');
-
-      if (response.status == 200) {
-        print('DEBUG: Notification sent successfully');
-        return true;
-      } else {
-        print('DEBUG: Notification failed with status: ${response.status}');
-        return false;
-      }
+      debugLog('Notification response: ${response.status}');
+      return response.status == 200;
     } catch (e) {
-      print('DEBUG: Error sending notification: $e');
+      debugLogError('Error sending notification', e);
       return false;
     }
   }
@@ -324,32 +315,17 @@ class NotificationService {
     required String reporterId,
   }) async {
     try {
-      print('DEBUG: sendNewProblemNotification called');
-      print('DEBUG: crewId: $crewId');
-      print('DEBUG: reporterId: $reporterId');
-      
-      // TEMPORARY: For debugging, include the reporter in notifications
-      // TODO: Remove this after testing
-      print('DEBUG: TEMPORARILY INCLUDING REPORTER IN NOTIFICATIONS FOR TESTING');
-      
-      // Get crew members (including the reporter for debugging)
+      // Get crew members
       final crewMembers = await _supabase
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId);
 
-      print('DEBUG: Found ${crewMembers.length} crew members');
-      for (final member in crewMembers) {
-        print('DEBUG: Crew member: ${member['crewmember']}');
-      }
-
       if (crewMembers.isEmpty) {
-        print('DEBUG: No crew members found to notify');
         return true; // Not an error, just no one to notify
       }
 
       final userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
-      print('DEBUG: User IDs to notify: $userIds');
 
       return await sendNotification(
         title: 'New Problem Reported',
@@ -363,7 +339,6 @@ class NotificationService {
         problemId: problemId,
       );
     } catch (e) {
-      print('DEBUG: Error in sendNewProblemNotification: $e');
       return false;
     }
   }
@@ -377,33 +352,17 @@ class NotificationService {
     required String resolverId,
   }) async {
     try {
-      print('DEBUG: sendProblemResolvedNotification called');
-      print('DEBUG: crewId: $crewId');
-      print('DEBUG: resolverId: $resolverId');
-      
-      // First, let's see ALL crew members for this crew
-      final allCrewMembers = await _supabase
+      // Get crew members
+      final crewMembers = await _supabase
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId);
-      
-      print('DEBUG: ALL crew members for crew $crewId:');
-      for (final member in allCrewMembers) {
-        print('DEBUG: - ${member['crewmember']}');
+
+      if (crewMembers.isEmpty) {
+        return true; // Not an error, just no one to notify
       }
-      
-      // TEMPORARY: For debugging, send notification only to current user
-      // TODO: Remove this after testing
-      print('DEBUG: TEMPORARILY SENDING NOTIFICATION ONLY TO CURRENT USER FOR TESTING');
-      
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser == null) {
-        print('DEBUG: No current user found');
-        return false;
-      }
-      
-      final userIds = [currentUser.id];
-      print('DEBUG: User IDs to notify (current user only): $userIds');
+
+      final userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
 
       return await sendNotification(
         title: 'Problem Resolved',
@@ -417,7 +376,6 @@ class NotificationService {
         problemId: problemId,
       );
     } catch (e) {
-      print('DEBUG: Error in sendProblemResolvedNotification: $e');
       return false;
     }
   }
@@ -470,30 +428,14 @@ class NotificationService {
     required Map<String, dynamic> data,
     bool includeReporter = false,
   }) async {
-    print('🚨🚨🚨 NEW sendCrewNotification CALLED! 🚨🚨🚨');
-    print('🚨🚨🚨 This should be the new unified notification function! 🚨🚨🚨');
-    
     try {
-      print('DEBUG: sendCrewNotification called');
-      print('DEBUG: Title: $title');
-      print('DEBUG: Body: $body');
-      print('DEBUG: Crew ID: $crewId');
-      print('DEBUG: Sender ID: $senderId');
-      print('DEBUG: Include reporter: $includeReporter');
-      
       // Get all crew members
       final crewMembers = await _supabase
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId);
 
-      print('DEBUG: Found ${crewMembers.length} crew members');
-      for (final member in crewMembers) {
-        print('DEBUG: Crew member: ${member['crewmember']}');
-      }
-
       if (crewMembers.isEmpty) {
-        print('DEBUG: No crew members found to notify');
         return true; // Not an error, just no one to notify
       }
 
@@ -503,29 +445,6 @@ class NotificationService {
       // Remove sender unless includeReporter is true
       if (!includeReporter) {
         userIds.removeWhere((id) => id == senderId);
-        print('DEBUG: Removed sender from notification list');
-      } else {
-        print('DEBUG: Including sender in notification list');
-      }
-      
-      // TEMPORARY: For debugging, always include the sender
-      // TODO: Remove this after testing
-      if (!userIds.contains(senderId)) {
-        print('DEBUG: TEMPORARILY ADDING SENDER TO NOTIFICATION LIST FOR TESTING');
-        userIds.add(senderId);
-      }
-      
-      print('DEBUG: Final user IDs to notify: $userIds');
-      
-      // DEBUG: Check if current user has device tokens
-      final currentUser = _supabase.auth.currentUser;
-      if (currentUser != null) {
-        print('DEBUG: Current user ID: ${currentUser.id}');
-        final userTokens = await _supabase
-            .from('device_tokens')
-            .select('*')
-            .eq('user_id', currentUser.id);
-        print('DEBUG: Current user device tokens: $userTokens');
       }
 
       return await sendNotification(
@@ -536,7 +455,6 @@ class NotificationService {
         problemId: data['problemId'],
       );
     } catch (e) {
-      print('DEBUG: Error in sendCrewNotification: $e');
       return false;
     }
   }
@@ -583,12 +501,9 @@ class NotificationService {
     String body,
     Map<String, dynamic>? data,
   ) {
-    // TODO: Implement custom in-app notification UI
-    // This could be:
-    // - A custom overlay widget
-    // - A snackbar with custom styling
-    // - A modal dialog
-    // - A banner at the top of the screen
+    // Don't show local notifications for foreground messages
+    // The background handler will show the notification when the message arrives
+    // This prevents duplicate notifications
   }
 
   /// Clean up resources
@@ -597,15 +512,13 @@ class NotificationService {
       // Remove all FCM tokens for current user from database
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) {
-        print('DEBUG: Cleaning up all device tokens for user: $userId');
         await _supabase
             .from('device_tokens')
             .delete()
             .eq('user_id', userId);
-        print('DEBUG: Cleaned up device tokens for user: $userId');
       }
     } catch (e) {
-      print('DEBUG: Error cleaning up device tokens: $e');
+      // Error cleaning up device tokens
     }
   }
 
@@ -617,14 +530,10 @@ class NotificationService {
 
       // Save current user's token
       if (_fcmToken != null) {
-        print('DEBUG: Saving current FCM token to database...');
-        print('DEBUG: Current user: ${_supabase.auth.currentUser?.id}');
         await _saveTokenToDatabase(_fcmToken!);
-      } else {
-        print('DEBUG: No current FCM token to save');
       }
     } catch (e) {
-      print('DEBUG: Error in _cleanupAndSaveToken: $e');
+      // Error in cleanup and save token
     }
   }
 }
@@ -632,10 +541,6 @@ class NotificationService {
 // Background message handler
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('🔥 BACKGROUND MESSAGE RECEIVED! 🔥');
-  print('🔥 Message data: ${message.data}');
-  print('🔥 Message notification: ${message.notification?.title} - ${message.notification?.body}');
-  
   // Initialize Firebase for background processing
   await Firebase.initializeApp();
   
@@ -684,7 +589,5 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       details,
       payload: message.data.isNotEmpty ? json.encode(message.data) : null,
     );
-    
-    print('🔥 Background notification shown successfully! 🔥');
   }
 } 

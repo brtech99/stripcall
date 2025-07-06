@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/auth/login_page.dart';
@@ -13,34 +12,31 @@ import 'pages/auth/forgot_password_page.dart';
 import 'models/event.dart';
 
 final router = GoRouter(
-  initialLocation: Routes.login,
+  initialLocation: '/',
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
-    final isAuthRoute = state.matchedLocation == Routes.login ||
-        state.matchedLocation == Routes.register ||
-        state.matchedLocation == Routes.forgotPassword;
+    final isAuthRoute = state.matchedLocation == '/login' || 
+                       state.matchedLocation == '/createAccount' ||
+                       state.matchedLocation == '/forgotPassword';
 
-    debugPrint('Router redirect - Session: ${session != null}, Location: ${state.matchedLocation}, IsAuthRoute: $isAuthRoute');
-
-    // If the user is logged in and trying to access an auth route,
-    // redirect them to the main app.
     if (session != null && isAuthRoute) {
-      debugPrint('Redirecting to selectEvent');
-      return Routes.selectEvent;
+      return '/selectEvent';
     }
 
-    // If the user is not logged in and not on an auth route,
-    // redirect them to the login page.
     if (session == null && !isAuthRoute) {
-      debugPrint('Redirecting to login');
-      return Routes.login;
+      return '/login';
     }
 
-    // Otherwise, allow navigation.
-    debugPrint('No redirect needed');
     return null;
   },
   routes: [
+    GoRoute(
+      path: '/',
+      redirect: (context, state) {
+        final session = Supabase.instance.client.auth.currentSession;
+        return session != null ? Routes.selectEvent : Routes.login;
+      },
+    ),
     GoRoute(
       path: Routes.login,
       builder: (context, state) => LoginPage(),

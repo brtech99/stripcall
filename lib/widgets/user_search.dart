@@ -32,55 +32,60 @@ class _UserSearchFieldState extends State<UserSearchField> {
   Future<void> _loadInitialUser() async {
     if (widget.initialValue == null) return;
     
-    setState(() => _isLoading = true);
     try {
       final response = await Supabase.instance.client
           .from('users')
           .select('supabase_id, firstname, lastname')
           .eq('supabase_id', widget.initialValue!)
-          .single();
+          .maybeSingle();
       
-      if (mounted) {
-        final user = app_models.User.fromJson(response);
-        _searchController.text = user.lastNameFirstName;
+      if (response != null && mounted) {
+        final firstName = response['firstname'] as String? ?? '';
+        final lastName = response['lastname'] as String? ?? '';
+        final fullName = '$firstName $lastName'.trim();
+        
+        setState(() {
+          _filteredUsers = [app_models.User.fromJson(response)];
+          _searchController.text = fullName;
+        });
       }
     } catch (e) {
-      debugPrint('Error loading initial user: $e');
-      if (mounted) {
-        _searchController.clear();
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      // Error loading initial user
     }
   }
 
   Future<void> _searchUsers(String query) async {
-    if (query.isEmpty) {
-      setState(() => _filteredUsers = []);
+    if (query.length < 2) {
+      setState(() {
+        _filteredUsers = [];
+        _isLoading = false;
+      });
       return;
     }
 
-    if (query.length < 2) return;
+    setState(() {
+      _isLoading = true;
+    });
 
-    setState(() => _isLoading = true);
     try {
       final response = await Supabase.instance.client
           .from('users')
           .select('supabase_id, firstname, lastname')
-          .ilike('lastname', '$query%')
-          .order('lastname')
+          .or('firstname.ilike.%$query%,lastname.ilike.%$query%')
           .limit(10);
-      
+
       if (mounted) {
-        setState(() => _filteredUsers = response.map<app_models.User>((json) => app_models.User.fromJson(json)).toList());
+        setState(() {
+          _filteredUsers = response.map<app_models.User>((json) => app_models.User.fromJson(json)).toList();
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      debugPrint('Error searching users: $e');
-    } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _filteredUsers = [];
+          _isLoading = false;
+        });
       }
     }
   }

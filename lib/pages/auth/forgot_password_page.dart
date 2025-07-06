@@ -83,15 +83,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       switch (_currentStep) {
         case ForgotPasswordStep.enterEmail:
           final email = _emailController.text.trim();
-          debugPrint('Requesting OTP for: $email');
           
-          try {
-            await Supabase.instance.client.auth.resetPasswordForEmail(email);
-            debugPrint('Reset password request sent successfully');
-          } catch (e) {
-            debugPrint('Error sending reset password request: $e');
-            rethrow;
-          }
+          await Supabase.instance.client.auth.resetPasswordForEmail(
+            email,
+            redirectTo: 'https://stripcall.us/auth/reset-password',
+          );
 
           if (!mounted) return;
           setState(() {
@@ -100,29 +96,36 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Check your email for the reset code'),
+              content: Text('Password reset email sent. Please check your email.'),
               duration: Duration(seconds: 8),  // Give them more time to read
             ),
           );
           break;
 
         case ForgotPasswordStep.enterCode:
-          debugPrint('Verifying OTP: ${_codeController.text}');
-          final response = await Supabase.instance.client.auth.verifyOTP(
-            email: _emailController.text.trim(),
-            token: _codeController.text.trim(),
+          final email = _emailController.text.trim();
+          final otp = _codeController.text.trim();
+          final newPassword = _newPasswordController.text;
+
+          // Verify OTP and set new password
+          await Supabase.instance.client.auth.verifyOTP(
+            email: email,
+            token: otp,
             type: OtpType.recovery,
           );
-          
-          if (response.session == null) {
-            throw Exception('Invalid or expired code');
-          }
-          
+
+          // Update password
+          await Supabase.instance.client.auth.updateUser(
+            UserAttributes(password: newPassword),
+          );
+
           if (!mounted) return;
-          setState(() {
-            _currentStep = ForgotPasswordStep.resetPassword;
-            _isValidInput = false;
-          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password updated successfully. You can now log in.'),
+            ),
+          );
+          context.go(Routes.login);
           break;
 
         case ForgotPasswordStep.resetPassword:
@@ -130,7 +133,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             throw Exception('Passwords do not match');
           }
           
-          debugPrint('Setting new password');
           await Supabase.instance.client.auth.updateUser(
             UserAttributes(
               password: _newPasswordController.text,
@@ -147,12 +149,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           break;
       }
     } on AuthException catch (e) {
-      debugPrint('Auth error in forgot password flow: $e');
       setState(() {
         _error = e.message;
       });
     } catch (e) {
-      debugPrint('Error in forgot password flow: $e');
       setState(() {
         _error = e.toString();
       });

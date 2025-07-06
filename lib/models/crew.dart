@@ -24,7 +24,7 @@ class Crew {
     if (json['crew_chief'] is Map<String, dynamic>) {
       // Joined data from users table
       crewChief = json['crew_chief'] as Map<String, dynamic>;
-      crewChiefId = crewChief?['supabase_id'] ?? '';
+      crewChiefId = crewChief['supabase_id'] ?? '';
     } else {
       // Just the crew chief ID
       crewChiefId = json['crew_chief']?.toString() ?? '';
@@ -45,7 +45,6 @@ class Crew {
         idValue = int.parse(json['id'].toString());
       }
     } catch (e) {
-      print('Error parsing crew ID: ${json['id']} (type: ${json['id'].runtimeType})');
       rethrow;
     }
     
@@ -68,7 +67,6 @@ class Crew {
         eventIdValue = int.parse(json['event'].toString());
       }
     } catch (e) {
-      print('Error parsing crew event ID: ${json['event']} (type: ${json['event'].runtimeType})');
       rethrow;
     }
     
@@ -81,7 +79,6 @@ class Crew {
         crewTypeIdValue = int.parse(json['crew_type'].toString());
       }
     } catch (e) {
-      print('Error parsing crew type ID: ${json['crew_type']} (type: ${json['crew_type'].runtimeType})');
       rethrow;
     }
     
