@@ -13,9 +13,6 @@ jobs:
         with:
           node-version: 18
       - run: npm install @supabase/supabase-js
-      - run: |
-          echo "URL length: ${#SUPABASE_URL}"
-          echo "KEY length: ${#SUPABASE_KEY}"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
