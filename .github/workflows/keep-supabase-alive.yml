@@ -16,7 +16,7 @@ jobs:
           node -e "
             const { createClient } = require('@supabase/supabase-js');
             const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-            supabase.from('any_existing_table').select('id').limit(1).then(console.log).catch(console.error);
+            supabase.from('users').select('id').limit(1).then(console.log).catch(console.error);
           "
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
