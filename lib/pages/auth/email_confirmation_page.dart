@@ -90,7 +90,15 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
                 'phonenbr': pendingUser['phone_number'],
               });
           
-          print('User data copied successfully');
+          print('User data copied successfully, cleaning up pending_users...');
+          
+          // Delete the record from pending_users to prevent data leakage
+          await Supabase.instance.client
+              .from('pending_users')
+              .delete()
+              .eq('email', user.email ?? '');
+          
+          print('Pending user data cleaned up successfully');
           setState(() {
             _isProcessing = false;
             _message = 'Account confirmed successfully! You can now log in.';

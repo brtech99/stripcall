@@ -257,18 +257,30 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (confirmed != true) return;
 
     try {
+      print('=== DELETE USER: Starting deletion process ===');
+      print('=== DELETE USER: Selected table: $_selectedTable ===');
+      print('=== DELETE USER: Selected user: $_selectedUser ===');
+      
       switch (_selectedTable) {
         case 'auth_users':
           // Delete from auth.users using Edge Function
+          print('=== DELETE USER: Attempting to delete auth user with ID: ${_selectedUser!['id']} ===');
+          
           final response = await Supabase.instance.client.functions.invoke(
             'delete-user',
             body: {'user_id': _selectedUser!['id']},
           );
           
+          print('=== DELETE USER: Response status: ${response.status} ===');
+          print('=== DELETE USER: Response data: ${response.data} ===');
+          
           if (response.status != 200) {
             final errorData = response.data as Map<String, dynamic>?;
+            print('=== DELETE USER: Error response: $errorData ===');
             throw Exception(errorData?['error'] ?? 'Failed to delete user');
           }
+          
+          print('=== DELETE USER: Auth user deletion successful ===');
           break;
         case 'public_users':
           await Supabase.instance.client
@@ -294,6 +306,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const SnackBar(content: Text('User deleted successfully')),
       );
     } catch (e) {
+      print('=== DELETE USER: Exception caught ===');
+      print('=== DELETE USER: Exception type: ${e.runtimeType} ===');
+      print('=== DELETE USER: Exception message: $e ===');
       debugLogError('Error deleting user', e);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error deleting user: $e')),

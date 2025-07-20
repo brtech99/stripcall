@@ -8,13 +8,12 @@ const firebaseConfig = {
   appId: "1:955423518908:web:f5b75410cb94b99a1660b9",
 };
 
-// VAPID key for push notifications - this should be the public key from Firebase console
+// VAPID key for push notifications
 const vapidKey = "BEl62iUYgUivxIkv69yViEuiBIa1lQJHRlVQlBXhsS8JfSxOBuVRjAifBRUONyHNUUxKQllAtojljGUkpl4vTYBg";
 
 // Convert VAPID key to Uint8Array
 function urlBase64ToUint8Array(base64String) {
   try {
-    // Remove any whitespace and ensure proper padding
     const cleanBase64 = base64String.replace(/\s/g, '');
     const padding = '='.repeat((4 - cleanBase64.length % 4) % 4);
     const base64 = (cleanBase64 + padding)
@@ -30,7 +29,6 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
   } catch (error) {
     console.error('Error converting VAPID key:', error);
-    // Return a fallback or throw error
     throw new Error('Invalid VAPID key format');
   }
 }
@@ -46,12 +44,10 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/firebase-messaging-sw.js')
     .then(function(registration) {
       console.log('Service Worker registered with scope:', registration.scope);
-      // Wait for service worker to be ready before requesting token
       return navigator.serviceWorker.ready;
     })
     .then(function(registration) {
       console.log('Service Worker is ready');
-      // Now request permission and token
       return requestPermissionAndToken();
     })
     .catch(function(err) {
@@ -68,34 +64,34 @@ function requestPermissionAndToken() {
       console.log('Notification permission:', permission);
       if (permission === 'granted') {
         console.log('Requesting FCM token...');
-        return messaging.getToken();
+        
+        return messaging.getToken({ vapidKey: vapidKey })
+          .then(function(token) {
+            console.log('FCM token obtained successfully');
+            window.fcmToken = token;
+            return token;
+          })
+          .catch(function(error) {
+            console.log('FCM token error:', error.message);
+            window.fcmToken = null;
+            return null;
+          });
       } else {
-        console.log('❌ Notification permission denied');
+        console.log('Notification permission denied');
+        window.fcmToken = null;
         return null;
       }
     })
-    .then(function(currentToken) {
-      if (currentToken) {
-        console.log('✅ FCM token obtained successfully!');
-        console.log('FCM token:', currentToken);
-        // Store token for later use
-        window.fcmToken = currentToken;
-      } else {
-        console.log('❌ No registration token available.');
-      }
-    })
     .catch(function(err) {
-      console.log('❌ An error occurred while retrieving token. ', err);
+      console.log('Error requesting permission:', err);
+      window.fcmToken = null;
+      return null;
     });
 }
 
-// Permission and token request is now handled by requestPermissionAndToken()
-// after the service worker is ready
-
 // Handle foreground messages
 messaging.onMessage((payload) => {
-  console.log('Message received in foreground. ', payload);
-  // Show notification manually
+  console.log('Message received in foreground:', payload);
   showNotification(payload);
 });
 
@@ -126,71 +122,35 @@ function showNotification(payload) {
   }
 }
 
-// Test function to show a local notification
-function testLocalNotification() {
-  console.log('=== JavaScript: Testing local notification ===');
-  console.log('Service Worker available:', 'serviceWorker' in navigator);
-  console.log('Notification API available:', 'Notification' in window);
-  console.log('Notification permission:', Notification.permission);
-  
-  // First, try a simple direct notification without service worker
-  if ('Notification' in window && Notification.permission === 'granted') {
-    console.log('Trying direct notification...');
-    try {
-      const notification = new Notification('Direct Test', {
-        body: 'This is a direct test notification',
-        icon: '/icons/Icon-192.png',
-        requireInteraction: true
-      });
-      console.log('✅ Direct notification created successfully!');
-      
-      notification.onclick = function() {
-        console.log('Direct notification clicked');
-        window.focus();
-      };
-    } catch (error) {
-      console.error('❌ Error creating direct notification:', error);
-    }
-  }
-  
-  // Then try the service worker notification
-  if ('serviceWorker' in navigator && 'Notification' in window) {
-    console.log('Getting service worker registration...');
-    navigator.serviceWorker.ready.then(function(registration) {
-      console.log('Service worker ready, showing notification...');
-      registration.showNotification('Service Worker Test', {
-        body: 'This is a service worker test notification!',
-        icon: '/icons/Icon-192.png',
-        badge: '/icons/Icon-192.png',
-        tag: 'test-notification',
-        requireInteraction: true,
-        actions: [
-          {
-            action: 'open',
-            title: 'Open'
-          },
-          {
-            action: 'close',
-            title: 'Close'
-          }
-        ]
-      }).then(function() {
-        console.log('✅ Service worker notification sent successfully!');
-      }).catch(function(error) {
-        console.error('❌ Error showing service worker notification:', error);
-      });
-    }).catch(function(error) {
-      console.error('❌ Error getting service worker:', error);
-    });
-  } else {
-    console.error('❌ Service Worker or Notification API not available');
-  }
-}
-
 // Function to expose FCM token to Dart
 window.getFCMToken = function() {
+  if (!window.fcmToken) {
+    return messaging.getToken({ vapidKey: vapidKey })
+      .then(function(token) {
+        window.fcmToken = token;
+        return token;
+      })
+      .catch(function(error) {
+        console.log('Error getting FCM token:', error.message);
+        return null;
+      });
+  }
   return window.fcmToken;
 };
 
-// Make test function available globally
-window.testLocalNotification = testLocalNotification; 
+// Simple function to request notification permission
+window.requestNotificationPermission = function() {
+  if (Notification.permission === 'default') {
+    return Notification.requestPermission()
+      .then(function(permission) {
+        console.log('Permission request result:', permission);
+        return permission;
+      })
+      .catch(function(error) {
+        console.log('Error requesting permission:', error);
+        return 'denied';
+      });
+  } else {
+    return Promise.resolve(Notification.permission);
+  }
+}; 

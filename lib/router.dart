@@ -69,7 +69,15 @@ final router = GoRouter(
                       'phonenbr': pendingUser['phone_number'],
                     });
                 
-                print('User data copied successfully, redirecting to login');
+                print('User data copied successfully, cleaning up pending_users...');
+                
+                // Delete the record from pending_users to prevent data leakage
+                await Supabase.instance.client
+                    .from('pending_users')
+                    .delete()
+                    .eq('email', user.email ?? '');
+                
+                print('Pending user data cleaned up successfully, redirecting to login');
                 return Routes.login;
               } else {
                 print('No pending user data found');
@@ -128,7 +136,15 @@ final router = GoRouter(
                     'phonenbr': pendingUser['phone_number'],
                   });
               
-              print('User data copied successfully, redirecting to select event');
+              print('User data copied successfully, cleaning up pending_users...');
+              
+              // Delete the record from pending_users to prevent data leakage
+              await Supabase.instance.client
+                  .from('pending_users')
+                  .delete()
+                  .eq('email', user.email ?? '');
+              
+              print('Pending user data cleaned up successfully, redirecting to select event');
               return Routes.selectEvent;
             } else {
               print('No pending user data found');
@@ -189,7 +205,15 @@ final router = GoRouter(
                     'phonenbr': pendingUser['phone_number'],
                   });
               
-              print('User data copied successfully, allowing access');
+              print('User data copied successfully, cleaning up pending_users...');
+              
+              // Delete the record from pending_users to prevent data leakage
+              await Supabase.instance.client
+                  .from('pending_users')
+                  .delete()
+                  .eq('email', user.email ?? '');
+              
+              print('Pending user data cleaned up successfully, allowing access');
               return null; // Allow access to the requested route
             } else {
               print('No pending user data found');

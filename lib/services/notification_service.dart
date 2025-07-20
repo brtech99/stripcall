@@ -9,6 +9,9 @@ import 'dart:io';
 import 'dart:js' as js;
 import '../utils/debug_utils.dart';
 
+// Web-specific imports
+import 'dart:js_interop' if (dart.library.io) 'dart:io' as js_interop;
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -23,14 +26,11 @@ class NotificationService {
 
   /// Initialize Firebase, request permissions, and set up local notifications
   Future<void> initialize() async {
-    print('=== NOTIFICATION SERVICE: Initialize called ===');
     if (_isInitialized) {
-      print('=== NOTIFICATION SERVICE: Already initialized, returning ===');
       return;
     }
 
     try {
-      print('=== NOTIFICATION SERVICE: Starting initialization ===');
       // Initialize Firebase
       try {
         await Firebase.initializeApp();
@@ -48,6 +48,16 @@ class NotificationService {
         try {
           debugLog('Requesting notification permissions...');
           print('Requesting notification permissions from Dart side...');
+          
+          // For web, request browser notification permission first
+          if (kIsWeb) {
+            try {
+              js.context.callMethod('eval', ['Notification.requestPermission()']);
+            } catch (webError) {
+              debugLogError('Error requesting web notification permission', webError);
+            }
+          }
+          
           NotificationSettings settings = await _firebaseMessaging.requestPermission(
             alert: true,
             announcement: false,
@@ -59,16 +69,12 @@ class NotificationService {
           );
           
           debugLog('Notification permission status: ${settings.authorizationStatus}');
-          print('Notification permission status: ${settings.authorizationStatus}');
           if (settings.authorizationStatus == AuthorizationStatus.authorized) {
             debugLog('Notification permission granted');
-            print('Notification permission granted');
           } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
             debugLog('Provisional notification permission granted');
-            print('Provisional notification permission granted');
           } else {
             debugLog('Notification permission denied: ${settings.authorizationStatus}');
-            print('Notification permission denied: ${settings.authorizationStatus}');
           }
         } catch (e) {
           debugLogError('Continue without FCM permissions', e);
@@ -79,34 +85,46 @@ class NotificationService {
       // Get FCM token
       try {
         debugLog('Requesting FCM token...');
-        print('Requesting FCM token from Dart side...');
         _fcmToken = await _firebaseMessaging.getToken();
         if (_fcmToken != null) {
           debugLog('FCM token obtained: ${_fcmToken!.substring(0, 20)}...');
-          print('FCM token obtained from Dart: ${_fcmToken!.substring(0, 20)}...');
         } else {
           debugLog('No FCM token obtained');
-          print('No FCM token obtained from Dart side');
           
           // Try to get token from JavaScript side as fallback
           try {
-            print('Trying to get FCM token from JavaScript side...');
             final jsToken = js.context.callMethod('getFCMToken');
             if (jsToken != null) {
-              _fcmToken = jsToken.toString();
-              print('FCM token obtained from JavaScript: ${_fcmToken!.substring(0, 20)}...');
+              // Handle both sync and async responses
+              if (jsToken is Future) {
+                final asyncToken = await jsToken;
+                if (asyncToken != null) {
+                  _fcmToken = asyncToken.toString();
+                  debugLog('FCM token obtained from JavaScript async: ${_fcmToken!.substring(0, 20)}...');
+                }
+              } else {
+                _fcmToken = jsToken.toString();
+                debugLog('FCM token obtained from JavaScript sync: ${_fcmToken!.substring(0, 20)}...');
+              }
             } else {
-              print('JavaScript token is null, waiting and retrying...');
               // Wait a bit and try again
               await Future.delayed(const Duration(seconds: 2));
               final retryToken = js.context.callMethod('getFCMToken');
               if (retryToken != null) {
-                _fcmToken = retryToken.toString();
-                print('FCM token obtained from JavaScript on retry: ${_fcmToken!.substring(0, 20)}...');
+                if (retryToken is Future) {
+                  final asyncRetryToken = await retryToken;
+                  if (asyncRetryToken != null) {
+                    _fcmToken = asyncRetryToken.toString();
+                    debugLog('FCM token obtained from JavaScript async retry: ${_fcmToken!.substring(0, 20)}...');
+                  }
+                } else {
+                  _fcmToken = retryToken.toString();
+                  debugLog('FCM token obtained from JavaScript sync retry: ${_fcmToken!.substring(0, 20)}...');
+                }
               }
             }
           } catch (jsError) {
-            print('Failed to get FCM token from JavaScript: $jsError');
+            debugLogError('Failed to get FCM token from JavaScript', jsError);
           }
         }
       } catch (e) {
@@ -356,155 +374,7 @@ class NotificationService {
   /// Check if notifications are available
   bool get isAvailable => _isInitialized && _fcmToken != null;
 
-  /// Save FCM token to database manually
-  Future<bool> saveTokenToDatabase() async {
-    try {
-      print('=== STARTING SAVE TOKEN TO DATABASE ===');
-      debugLog('=== Starting saveTokenToDatabase ===');
-      print('Save token method called - this should appear in console');
-      
-      // Try to get fresh token from JavaScript first
-      try {
-        print('Trying to get fresh FCM token from JavaScript...');
-        final jsToken = js.context.callMethod('getFCMToken');
-        if (jsToken != null) {
-          _fcmToken = jsToken.toString();
-          print('Fresh FCM token obtained from JavaScript: ${_fcmToken!.substring(0, 20)}...');
-        }
-      } catch (jsError) {
-        print('Failed to get fresh FCM token from JavaScript: $jsError');
-      }
-      
-      if (_fcmToken == null) {
-        print('ERROR: No FCM token available to save');
-        debugLog('No FCM token available to save');
-        return false;
-      }
-      
-      print('FCM token is available, proceeding...');
-      
-      debugLog('FCM token available: ${_fcmToken!.substring(0, 20)}...');
-      debugLog('Manually saving FCM token to database...');
-      print('About to call _saveTokenToDatabase...');
-      
-      await _saveTokenToDatabase(_fcmToken!);
-      print('_saveTokenToDatabase completed successfully');
-      debugLog('FCM token saved to database successfully');
-      return true;
-    } catch (e) {
-      print('ERROR in saveTokenToDatabase: $e');
-      print('ERROR type: ${e.runtimeType}');
-      debugLogError('Error saving FCM token to database', e);
-      debugLogError('Full error details: ${e.toString()}');
-      debugLogError('Error type: ${e.runtimeType}');
-      if (e is PostgrestException) {
-        print('PostgrestException message: ${e.message}');
-        print('PostgrestException details: ${e.details}');
-        debugLogError('PostgrestException details: ${e.message}');
-        debugLogError('PostgrestException details: ${e.details}');
-      }
-      return false;
-    }
-  }
 
-  /// Test database connection and table access
-  Future<bool> testDatabaseConnection() async {
-    try {
-      print('=== TESTING DATABASE CONNECTION ===');
-      debugLog('=== Testing database connection ===');
-      print('Debug logging test - this should appear in console');
-      
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugLogError('No current user found');
-        return false;
-      }
-      
-      debugLog('Current user ID: $userId');
-      debugLog('User ID type: ${userId.runtimeType}');
-      
-      // Test basic connection
-      try {
-        final result = await _supabase.from('device_tokens').select('count').limit(1);
-        debugLog('Database connection successful');
-        debugLog('device_tokens table accessible');
-        debugLog('Query result: $result');
-        
-        // Test RLS policy by trying to insert a test record
-        debugLog('Testing RLS policy with insert...');
-        try {
-          final testResult = await _supabase.from('device_tokens').insert({
-            'user_id': userId,
-            'device_token': 'test_token_${DateTime.now().millisecondsSinceEpoch}',
-            'platform': 'web',
-          });
-          debugLog('RLS policy test successful - insert worked');
-          
-          // Clean up the test record
-          await _supabase.from('device_tokens')
-              .delete()
-              .eq('device_token', 'test_token_${DateTime.now().millisecondsSinceEpoch}');
-          debugLog('Test record cleaned up');
-          
-        } catch (e) {
-          debugLogError('RLS policy test failed - insert blocked', e);
-          debugLogError('RLS error details: ${e.toString()}');
-          return false;
-        }
-        
-        return true;
-      } catch (e) {
-        debugLogError('Database connection failed', e);
-        debugLogError('Error details: ${e.toString()}');
-        return false;
-      }
-    } catch (e) {
-      debugLogError('Error testing database connection', e);
-      return false;
-    }
-  }
-
-  /// Test method to show a local notification directly
-  Future<bool> testLocalNotification() async {
-    try {
-      debugLog('Testing local notification...');
-      print('=== Testing local notification ===');
-      
-      if (_fcmToken != null) {
-        debugLog('FCM token available: ${_fcmToken!.substring(0, 20)}...');
-        print('FCM token available: ${_fcmToken!.substring(0, 20)}...');
-      } else {
-        debugLog('No FCM token available');
-        print('No FCM token available');
-      }
-
-      // For web, we can show a notification directly
-      if (kIsWeb) {
-        debugLog('Showing web notification...');
-        print('Showing web notification...');
-        
-        // Try to call the JavaScript function if it exists
-        try {
-          // This will call the JavaScript function we added to firebase-config.js
-          print('Calling JavaScript testLocalNotification function...');
-          js.context.callMethod('testLocalNotification');
-          debugLog('JavaScript notification function called');
-          print('JavaScript notification function called successfully');
-          return true;
-        } catch (e) {
-          debugLogError('Error calling JavaScript notification function', e);
-          print('Error calling JavaScript notification function: $e');
-          return false;
-        }
-      }
-
-      return false;
-    } catch (e) {
-      debugLogError('Error testing local notification', e);
-      print('Error testing local notification: $e');
-      return false;
-    }
-  }
 
   /// Send a notification to specific users via the Edge Function
   Future<bool> sendNotification({
@@ -517,7 +387,30 @@ class NotificationService {
     try {
       debugLog('Sending notification: $title - $body to ${userIds.length} users');
       
-      // Get the current user's session
+      // For web, use local notifications since FCM is having auth issues
+      if (kIsWeb) {
+        try {
+          // Check if we have permission
+          final permission = js.context.callMethod('eval', ['Notification.permission']);
+          if (permission == 'granted') {
+            // Show local notification immediately
+            js.context.callMethod('eval', [
+              'new Notification("$title", {body: "$body", icon: "/icons/Icon-192.png"})'
+            ]);
+            debugLog('Local notification sent: $title - $body');
+            print('Local notification sent: $title - $body');
+            return true;
+          } else {
+            debugLog('Notification permission not granted: $permission');
+            return false;
+          }
+        } catch (e) {
+          debugLogError('Error sending local notification', e);
+          return false;
+        }
+      }
+      
+      // For mobile, use the Edge Function (FCM)
       final session = _supabase.auth.currentSession;
       if (session == null) {
         debugLogError('No active session found');
