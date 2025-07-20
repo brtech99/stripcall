@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# Load environment variables from .env file
-if [ -f .env ]; then
-  export $(cat .env | sed 's/#.*//g' | xargs)
-fi
-
-# Check if the required variables are set
-if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-  echo "Error: SUPABASE_URL and SUPABASE_ANON_KEY must be set in your .env file."
-  exit 1
-fi
 
 # Run the Flutter app with the defined variables
-flutter run --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+flutter run -v --dart-define=SUPABASE_URL=https://wpytorahphbnzgikowgz.supabase.co --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndweXRvcmFocGhibnpnaWtvd2d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzYxMjA4ODYsImV4cCI6MjA1MTY5Njg4Nn0.3DFQacxVHHoIeS6wb1GU1GSNQ__Mbmt6SDiZFjwHuWg

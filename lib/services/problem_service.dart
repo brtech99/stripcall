@@ -14,47 +14,97 @@ class ProblemService {
     int? crewId,
   }) async {
     try {
-      final params = <String, dynamic>{
-        'event_id': eventId,
-        'since_time': DateTime(1970).toIso8601String(),
-        'user_id': userId,
-      };
-      
-      if (crewId != null) {
-        params['crew_id'] = crewId;
-      }
-      
-      final response = await Supabase.instance.client
-          .rpc('get_new_problems_wrapper', params: params);
-      
-      final problems = <ProblemWithDetails>[];
-      if (response != null) {
+      // First, check if user is part of a crew for this event
+      final crewMemberResponse = crewId != null ? await Supabase.instance.client
+          .from('crewmembers')
+          .select('crew')
+          .eq('crewmember', userId)
+          .eq('crew', crewId)
+          .maybeSingle() : null;
+
+      // If user is not part of the specified crew, only show their own problems
+      if (crewId != null && crewMemberResponse == null) {
+        // User is not part of this crew, only show problems they created
+        final response = await Supabase.instance.client
+            .from('problem')
+            .select('''
+              *,
+              symptom:symptom(id, symptomstring),
+              originator:users!problem_originator_fkey(supabase_id, firstname, lastname),
+              actionby:users!problem_actionby_fkey(supabase_id, firstname, lastname),
+              action:action(id, actionstring),
+              messages:messages(*)
+            ''')
+            .eq('event', eventId)
+            .eq('originator', userId)
+            .order('startdatetime', ascending: false);
+        
+        final problems = <ProblemWithDetails>[];
         for (final json in response) {
           try {
-            if (json is Map<String, dynamic>) {
-              final problem = ProblemWithDetails.fromJson(json);
+            final problem = ProblemWithDetails.fromJson(json);
+            
+            // Filter out resolved problems that are older than 5 minutes
+            if (problem.resolvedDateTimeParsed != null) {
+              final resolvedTime = problem.resolvedDateTimeParsed!;
+              final now = DateTime.now();
+              final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
               
-              // Filter out resolved problems that are older than 5 minutes
-              if (problem.resolvedDateTimeParsed != null) {
-                final resolvedTime = problem.resolvedDateTimeParsed!;
-                final now = DateTime.now();
-                final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
-                
-                if (minutesSinceResolved >= 5) {
-                  continue;
-                }
+              if (minutesSinceResolved >= 5) {
+                continue;
               }
-              
-              problems.add(problem);
             }
+            
+            problems.add(problem);
           } catch (e) {
             debugLogError('Error parsing problem', e);
-            // Error parsing problem
           }
         }
+        
+        return problems;
+      } else {
+        // User is part of the crew, use the existing RPC call
+        final params = <String, dynamic>{
+          'event_id': eventId,
+          'since_time': DateTime(1970).toIso8601String(),
+          'user_id': userId,
+        };
+        
+        if (crewId != null) {
+          params['crew_id'] = crewId;
+        }
+        
+        final response = await Supabase.instance.client
+            .rpc('get_new_problems_wrapper', params: params);
+        
+        final problems = <ProblemWithDetails>[];
+        if (response != null) {
+          for (final json in response) {
+            try {
+              if (json is Map<String, dynamic>) {
+                final problem = ProblemWithDetails.fromJson(json);
+                
+                // Filter out resolved problems that are older than 5 minutes
+                if (problem.resolvedDateTimeParsed != null) {
+                  final resolvedTime = problem.resolvedDateTimeParsed!;
+                  final now = DateTime.now();
+                  final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
+                  
+                  if (minutesSinceResolved >= 5) {
+                    continue;
+                  }
+                }
+                
+                problems.add(problem);
+              }
+            } catch (e) {
+              debugLogError('Error parsing problem', e);
+            }
+          }
+        }
+        
+        return problems;
       }
-      
-      return problems;
     } catch (e) {
       debugLogError('Failed to load problems', e);
       throw Exception('Failed to load problems: $e');

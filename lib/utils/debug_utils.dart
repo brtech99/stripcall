@@ -1,6 +1,6 @@
 // Debug utilities for conditional logging
 // Set this to true to enable debug logging, false to disable
-const bool kDebugLogging = false;
+const bool kDebugLogging = true;
 
 /// Conditional debug print function
 /// Only prints when kDebugLogging is true

@@ -6,7 +6,11 @@ import 'services/notification_service.dart';
 import 'utils/debug_utils.dart';
 
 void main() async {
+  print('=== MAIN: App starting ===');
   WidgetsFlutterBinding.ensureInitialized();
+
+  debugLog('=== APP STARTING ===');
+  debugLog('Debug logging is working!');
 
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -15,19 +19,44 @@ void main() async {
     throw Exception('Missing Supabase environment variables');
   }
 
+  debugLog('Supabase URL: $supabaseUrl');
+  debugLog('Supabase Anon Key: ${supabaseAnonKey.substring(0, 20)}...');
+
+  // Debug Firebase environment variables
+  const firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
+  const firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
+  
+  debugLog('Firebase API Key: ${firebaseApiKey.isNotEmpty ? "${firebaseApiKey.substring(0, 10)}..." : "NOT SET"}');
+  debugLog('Firebase App ID: ${firebaseAppId.isNotEmpty ? firebaseAppId : "NOT SET"}');
+
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
   );
 
+  debugLog('Supabase initialized successfully');
+
   try {
-    await Firebase.initializeApp();
+    debugLog('Starting Firebase initialization...');
+    await Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: const String.fromEnvironment('FIREBASE_API_KEY'),
+        authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
+        projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID'),
+        storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
+        messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
+        appId: const String.fromEnvironment('FIREBASE_APP_ID'),
+      ),
+    );
+    debugLog('Firebase initialized successfully');
   } catch (e) {
     debugLogError('Firebase initialization failed, but we can continue without it', e);
   }
 
   try {
+    debugLog('Starting notification service initialization...');
     await NotificationService().initialize();
+    debugLog('Notification service initialized successfully');
   } catch (e) {
     debugLogError('Notification service initialization failed, but we can continue without it', e);
   }

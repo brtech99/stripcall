@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:async';
 import '../../utils/debug_utils.dart';
 
 class CreateAccountPage extends StatefulWidget {
@@ -18,7 +17,6 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  Timer? _verificationTimer;
   bool _isLoading = false;
   String? _error;
 
@@ -29,53 +27,15 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _verificationTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _startVerificationPolling(String userId) async {
-    Timer.periodic(const Duration(seconds: 2), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      try {
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session == null) {
-          timer.cancel();
-          if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/login');
-          }
-          return;
-        }
-
-        final user = Supabase.instance.client.auth.currentUser;
-        if (user?.emailConfirmedAt != null) {
-          timer.cancel();
-          if (mounted) {
-            Navigator.of(context).pushReplacementNamed('/selectEvent');
-          }
-          return;
-        }
-      } catch (e) {
-        timer.cancel();
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/login');
-        }
-      }
-    });
-
-    // Timeout after 5 minutes
-    Timer(const Duration(minutes: 5), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    });
-  }
-
   Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
+    print('Starting signup process...');
+    if (!_formKey.currentState!.validate()) {
+      print('Form validation failed');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -87,6 +47,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
 
+      print('Attempting to sign up with email: $email');
       final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
@@ -96,32 +57,55 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         },
       );
 
+      print('Signup response received: ${response.user != null ? 'User created' : 'No user'}');
+      print('Response error: ${response.session}');
+      print('Response user: ${response.user?.id}');
+
       if (response.user != null) {
         final userId = response.user!.id;
+        print('User created successfully with ID: $userId');
         
         try {
+          print('Inserting user data into pending_users table...');
           await Supabase.instance.client
               .from('pending_users')
               .insert({
-                'supabase_id': userId,
                 'email': email,
                 'firstname': firstName,
                 'lastname': lastName,
+                'phone_number': _phoneController.text.trim(),
               });
+          print('User data inserted successfully');
         } catch (dbError) {
+          print('Database error during account creation: $dbError');
           debugLogError('Database error during account creation', dbError);
           setState(() {
             _error = dbError.toString();
             _isLoading = false;
           });
+          return;
         }
 
+        print('Account created successfully, redirecting to login');
         if (mounted) {
-          _startVerificationPolling(userId);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account created! Please check your email and click the confirmation link.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+          context.go('/login');
         }
+      } else {
+        print('No user created in response');
+        setState(() {
+          _error = 'Failed to create account. Please try again.';
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      debugLogError('Error creating account', e);
+      print('Error during signup: $e');
+      debugLogError('Error during signup', e);
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -191,11 +175,16 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your email';
                     }
-                    // Basic email validation
-                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                    if (!emailRegex.hasMatch(value.trim())) {
+                    // Proper email validation that allows + character
+                    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+                    final trimmedValue = value.trim();
+                    print('Validating email: $trimmedValue');
+                    print('Regex match result: ${emailRegex.hasMatch(trimmedValue)}');
+                    if (!emailRegex.hasMatch(trimmedValue)) {
+                      print('Email validation failed for: $trimmedValue');
                       return 'Please enter a valid email address';
                     }
+                    print('Email validation passed for: $trimmedValue');
                     return null;
                   },
                 ),
