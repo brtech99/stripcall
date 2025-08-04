@@ -14,6 +14,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Simple in-memory rate limiting (for production, consider Redis)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
+const RATE_LIMIT_WINDOW = 60000 // 1 minute
+const RATE_LIMIT_MAX = 10 // Max 10 notifications per minute per user
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const userLimit = rateLimitStore.get(userId)
+
+  if (!userLimit || now > userLimit.resetTime) {
+    rateLimitStore.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
+    return true
+  }
+
+  if (userLimit.count >= RATE_LIMIT_MAX) {
+    return false
+  }
+
+  userLimit.count++
+  return true
+}
+
 interface NotificationRequest {
   title: string
   body: string
@@ -21,6 +43,8 @@ interface NotificationRequest {
   userIds: string[]
   problemId?: string
 }
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 serve(async (req) => {
   const startTime = Date.now();
@@ -31,20 +55,61 @@ serve(async (req) => {
   }
 
   try {
-    console.log('DEBUG: Edge Function called')
-    const { title, body, userIds, data, problemId }: NotificationRequest = await req.json()
-    console.log('DEBUG: Request data:', { title, body, userIds, data, problemId })
+    // Create a Supabase client with the Auth context of the function
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
 
-    if (!title || !body || !userIds || userIds.length === 0) {
-      console.log('DEBUG: Missing required fields')
+    // Check if the user is authenticated
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      console.error('Auth error:', authError)
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: title, body, userIds' }),
+        JSON.stringify({ error: 'Unauthorized' }),
         { 
-          status: 400, 
+          status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
+
+    // Check rate limiting
+    if (!checkRateLimit(user.id)) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Please wait before trying again.' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 429
+        }
+      )
+    }
+
+    console.log('DEBUG: Edge Function called by user:', user.id)
+    const { title, body, userIds, data, problemId }: NotificationRequest = await req.json()
+    console.log('DEBUG: Request data:', { title, body, userIds, data, problemId })
+
+    // Input validation
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      return new Response(JSON.stringify({ error: 'Invalid or missing title' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (!body || typeof body !== 'string' || body.trim() === '') {
+      return new Response(JSON.stringify({ error: 'Invalid or missing body' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return new Response(JSON.stringify({ error: 'userIds must be a non-empty array' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    for (const id of userIds) {
+      if (typeof id !== 'string' || !uuidRegex.test(id)) {
+        return new Response(JSON.stringify({ error: `Invalid user ID format: ${id}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+    }
+
 
     // Get FCM service account key from secrets
     const fcmServiceAccountKey = Deno.env.get('FCM_SERVICE_ACCOUNT_KEY')
@@ -61,14 +126,10 @@ serve(async (req) => {
     const serviceAccount = JSON.parse(fcmServiceAccountKey)
     const projectId = serviceAccount.project_id
 
-    // Create Supabase client to get device tokens
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
+    // Use the user-context client to get device tokens
     console.log('DEBUG: Fetching device tokens for users:', userIds)
     // Get device tokens for the specified users
-    const { data: deviceTokens, error: tokenError } = await supabase
+    const { data: deviceTokens, error: tokenError } = await supabaseClient
       .from('device_tokens')
       .select('device_token')
       .in('user_id', userIds)
