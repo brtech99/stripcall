@@ -526,8 +526,9 @@ on "public"."crews"
 as permissive
 for insert
 to public
-with check ((is_superuser(auth.uid()) OR is_organizer(auth.uid())));
-
+with check ((is_superuser(auth.uid()) OR (EXISTS ( SELECT 1
+   FROM events e
+  WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text))))));
 
 create policy "crews_delete_policy"
 on "public"."crews"
