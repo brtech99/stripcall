@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
+import '../../routes.dart';
 
 class CreateAccountPage extends StatefulWidget {
   const CreateAccountPage({super.key});
@@ -88,13 +89,16 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
         print('Account created successfully, redirecting to login');
         if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Account created! Please check your email and click the confirmation link.'),
               duration: Duration(seconds: 5),
             ),
           );
-          context.go('/login');
+          context.go(Routes.login);
         }
       } else {
         print('No user created in response');
@@ -110,6 +114,12 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
         _error = e.toString();
         _isLoading = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -229,7 +239,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                   children: [
                     const Text('Already have an account?'),
                     TextButton(
-                      onPressed: () => context.go('/'),
+                      onPressed: () => context.go(Routes.login),
                       child: const Text('Sign In'),
                     ),
                   ],

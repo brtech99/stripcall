@@ -51,7 +51,7 @@ app.*.map.json
 !package.json
 !analysis_options.yaml
 !firebase.json
-!deno.json
+!deno.jso
 !tsconfig.json
 !package-lock.json
 !pubspec.lock
@@ -72,6 +72,9 @@ GoogleService-Info.plist
 .env*
 !.env.example
 
+# Hostinger configuration (contains sensitive credentials)
+hostinger_config.sh
+
 # Test files with potential secrets
 test_*.js
 test_*.sh
@@ -91,3 +94,21 @@ pglite-debug.log
 # Temporary files
 *.tmp
 *.temp
+
+# Shell scripts with embedded secrets
+run_*.sh
+deploy_*.sh
+stop_*.sh
+
+# Service account keys (CRITICAL)
+serviceAccountKey.json
+*serviceAccountKey*.json
+
+# Hostinger config (already listed but needs to be verified)
+hostinger_config.sh
+
+# Test files with secrets
+test_*.js
+test_*.sh
+keep_function_warm.js
+send_fcm_test.js
