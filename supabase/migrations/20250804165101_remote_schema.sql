@@ -526,7 +526,9 @@ on "public"."crews"
 as permissive
 for insert
 to public
-with check ((is_superuser(auth.uid()) OR is_organizer(auth.uid())));
+with check ((is_superuser(auth.uid()) OR (EXISTS ( SELECT 1
+   FROM events e
+  WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text))))));
 
 
 create policy "crews_delete_policy"
@@ -534,7 +536,9 @@ on "public"."crews"
 as permissive
 for delete
 to public
-using ((is_superuser(auth.uid()) OR (is_organizer(auth.uid()) AND (crew_chief = (auth.uid())::text))));
+using ((is_superuser(auth.uid()) OR (EXISTS ( SELECT 1
+   FROM events e
+  WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text))))));
 
 
 create policy "crews_read_policy"
@@ -550,7 +554,9 @@ on "public"."crews"
 as permissive
 for update
 to public
-using ((is_superuser(auth.uid()) OR (is_organizer(auth.uid()) AND (crew_chief = (auth.uid())::text))));
+using ((is_superuser(auth.uid()) OR (EXISTS ( SELECT 1
+   FROM events e
+  WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text)))));
 
 
 create policy "crewtypes_read_policy"
@@ -648,12 +654,14 @@ using (((auth.role() = 'authenticated'::text) AND (is_superuser(auth.uid()) OR (
   WHERE ((p.id = oldproblemsymptom.problem) AND (cm.crewmember = (auth.uid())::text)))))));
 
 
-create policy "oldproblemsymptom_write_policy"
+create policy "oldproblemsymptom_insert_policy"
 on "public"."oldproblemsymptom"
 as permissive
-for all
+for insert
 to public
-using (is_superuser(auth.uid()));
+with check ((is_superuser(auth.uid()) OR (EXISTS ( SELECT 1
+   FROM problem p
+  WHERE ((p.id = oldproblemsymptom.problem) AND is_crew_chief(auth.uid(), p.crew))))));
 
 
 create policy "PendingUsersDeletePolicy"
@@ -661,7 +669,9 @@ on "public"."pending_users"
 as permissive
 for delete
 to public
-using ((auth.role() = 'authenticated'::text));
+using ((is_superuser(auth.uid()) OR (email = ( SELECT u.email
+   FROM auth.users u
+  WHERE (u.id = auth.uid())))));
 
 
 create policy "PendingUsersInsertPolicy"
@@ -677,7 +687,9 @@ on "public"."pending_users"
 as permissive
 for select
 to public
-using ((auth.role() = 'authenticated'::text));
+using ((is_superuser(auth.uid()) OR (email = ( SELECT u.email
+   FROM auth.users u
+  WHERE (u.id = auth.uid())))));
 
 
 create policy "problem_create_policy"
@@ -725,6 +737,14 @@ with check (((auth.role() = 'authenticated'::text) AND (is_superuser(auth.uid())
    FROM (problem p
      JOIN crewmembers cm ON ((p.crew = cm.crew)))
   WHERE ((p.id = responders.problem) AND (cm.crewmember = (auth.uid())::text)))))));
+
+
+create policy "responders_delete_policy"
+on "public"."responders"
+as permissive
+for delete
+to public
+using ((is_superuser(auth.uid()) OR (user_id = (auth.uid())::text)));
 
 
 create policy "responders_read_policy"
