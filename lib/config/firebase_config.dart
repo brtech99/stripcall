@@ -1,10 +1,9 @@
+import '../services/secret_service.dart';
+
 class FirebaseConfig {
-  // Replace this with your actual Firebase Server Key
-  // You can find this in your Firebase Console:
-  // Project Settings > Cloud Messaging > Server key
-  static const String serverKey = 'YOUR_FIREBASE_SERVER_KEY_HERE';
+  static final _secretService = SecretService();
   
-  // Firebase project configuration
+  // Static project info (non-sensitive)
   static const String projectId = 'stripcalls-458912';
   
   // Notification settings
@@ -17,4 +16,19 @@ class FirebaseConfig {
   static const bool enableResponseNotifications = true;
   static const bool enableResolutionNotifications = true;
   static const bool enableMessageNotifications = true;
+
+  /// Get Firebase web configuration from Vault
+  static Future<Map<String, dynamic>> getWebConfig() async {
+    return await _secretService.getFirebaseWebConfig();
+  }
+
+  /// Get Firebase server key from Vault
+  static Future<String?> getServerKey() async {
+    return await _secretService.getFirebaseSecret('FIREBASE_API_KEY');
+  }
+
+  /// Get VAPID key for push notifications
+  static Future<String?> getVapidKey() async {
+    return await _secretService.getFirebaseVapidKey();
+  }
 } 

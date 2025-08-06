@@ -112,3 +112,9 @@ test_*.js
 test_*.sh
 keep_function_warm.js
 send_fcm_test.js
+
+# Configuration files with credentials
+config/app_config.sh
+config/*.sh
+!config/*.template.sh
+!config/*.example.sh

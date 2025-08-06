@@ -23,6 +23,7 @@ class _SelectEventPageState extends State<SelectEventPage> {
   @override
   void initState() {
     super.initState();
+    print('=== SELECT EVENT PAGE: initState called ===');
     _loadEvents();
   }
 
@@ -116,6 +117,9 @@ class _SelectEventPageState extends State<SelectEventPage> {
 
   @override
   Widget build(BuildContext context) {
+    print('=== SELECT EVENT PAGE: build() method called ===');
+    print('=== SELECT EVENT PAGE: _isLoading = $_isLoading ===');
+    print('=== SELECT EVENT PAGE: _events.length = ${_events.length} ===');
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Event'),

@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'router.dart';
 import 'services/notification_service.dart';
+import 'services/secret_service.dart';
+import 'config/firebase_config.dart';
 import 'utils/debug_utils.dart';
 
 void main() async {
@@ -12,6 +14,7 @@ void main() async {
   debugLog('=== APP STARTING ===');
   debugLog('Debug logging is working!');
 
+  // Get Supabase credentials from environment (passed via --dart-define)
   const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
@@ -22,44 +25,13 @@ void main() async {
   debugLog('Supabase URL: $supabaseUrl');
   debugLog('Supabase Anon Key: ${supabaseAnonKey.substring(0, 20)}...');
 
-  // Debug Firebase environment variables
-  const firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
-  const firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
-  
-  debugLog('Firebase API Key: ${firebaseApiKey.isNotEmpty ? "${firebaseApiKey.substring(0, 10)}..." : "NOT SET"}');
-  debugLog('Firebase App ID: ${firebaseAppId.isNotEmpty ? firebaseAppId : "NOT SET"}');
-
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
   );
 
   debugLog('Supabase initialized successfully');
-
-  try {
-    debugLog('Starting Firebase initialization...');
-    await Firebase.initializeApp(
-      options: FirebaseOptions(
-        apiKey: const String.fromEnvironment('FIREBASE_API_KEY'),
-        authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
-        projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID'),
-        storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
-        messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
-        appId: const String.fromEnvironment('FIREBASE_APP_ID'),
-      ),
-    );
-    debugLog('Firebase initialized successfully');
-  } catch (e) {
-    debugLogError('Firebase initialization failed, but we can continue without it', e);
-  }
-
-  try {
-    debugLog('Starting notification service initialization...');
-    await NotificationService().initialize();
-    debugLog('Notification service initialized successfully');
-  } catch (e) {
-    debugLogError('Notification service initialization failed, but we can continue without it', e);
-  }
+  debugLog('🔐 Firebase secrets will be fetched from Vault after user authentication');
 
   runApp(const MyApp());
 }
@@ -72,17 +44,126 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool _isInitialized = false;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
+    _initializeApp();
     
+    // Listen for auth state changes
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      // Auth state changes are handled by the router
+      if (event.event == AuthChangeEvent.signedIn) {
+        _initializeFirebaseAfterAuth();
+      } else if (event.event == AuthChangeEvent.signedOut) {
+        // Clear cached secrets when user logs out
+        SecretService().clearCache();
+      }
     });
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      // App is ready to show login screen
+      setState(() {
+        _isInitialized = true;
+      });
+      
+      debugLog('✅ App initialization completed - ready for login');
+    } catch (e) {
+      debugLogError('App initialization failed', e);
+      setState(() {
+        _error = e.toString();
+        _isInitialized = true;
+      });
+    }
+  }
+
+  Future<void> _initializeFirebaseAfterAuth() async {
+    try {
+      debugLog('🔐 User authenticated, initializing Firebase with Vault secrets...');
+      
+      // Get Firebase config from Vault
+      final firebaseConfig = await FirebaseConfig.getWebConfig();
+      
+      // Initialize Firebase with secrets from Vault
+      await Firebase.initializeApp(
+        options: FirebaseOptions(
+          apiKey: firebaseConfig['apiKey'],
+          authDomain: firebaseConfig['authDomain'],
+          projectId: firebaseConfig['projectId'],
+          storageBucket: firebaseConfig['storageBucket'],
+          messagingSenderId: firebaseConfig['messagingSenderId'],
+          appId: firebaseConfig['appId'],
+        ),
+      );
+      
+      debugLog('✅ Firebase initialized with secrets from Vault');
+      
+      // Initialize notification service
+      try {
+        await NotificationService().initialize();
+        debugLog('✅ Notification service initialized');
+      } catch (e) {
+        debugLogError('Notification service initialization failed, continuing without it', e);
+      }
+      
+    } catch (e) {
+      debugLogError('Firebase initialization with Vault secrets failed', e);
+      // Continue without Firebase - the app should still work
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Initializing StripCall...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error, color: Colors.red, size: 64),
+                SizedBox(height: 16),
+                Text('Initialization Error:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                SizedBox(height: 8),
+                Text(_error!, textAlign: TextAlign.center),
+                SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isInitialized = false;
+                      _error = null;
+                    });
+                    _initializeApp();
+                  },
+                  child: Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return MaterialApp.router(
       title: 'StripCall',
       theme: ThemeData(

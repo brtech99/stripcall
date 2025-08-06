@@ -100,24 +100,28 @@ final router = GoRouter(
     // If user has a session and is on an auth route, check if they should be redirected
     if (session != null && isAuthRoute) {
       final user = session.user;
-      print('User with session on auth route: ${user.email}');
-      print('Email confirmed at: ${user.emailConfirmedAt}');
+      print('=== ROUTER DEBUG: User with session on auth route: ${user.email} ===');
+      print('=== ROUTER DEBUG: User ID: ${user.id} ===');
+      print('=== ROUTER DEBUG: Email confirmed: ${user.emailConfirmedAt != null} ===');
+      print('=== ROUTER DEBUG: Current location: ${state.matchedLocation} ===');
       
       if (user.emailConfirmedAt != null) {
         try {
-          // Check if user exists in the users table
-          await Supabase.instance.client
+          print('=== ROUTER DEBUG: Checking if user exists in users table... ===');
+          final userRecord = await Supabase.instance.client
               .from('users')
-              .select('supabase_id')
+              .select('supabase_id, firstname, lastname')
               .eq('supabase_id', user.id)
               .single();
           
-          print('User exists in users table, redirecting to select event');
+          print('=== ROUTER DEBUG: User found in users table: ${userRecord['firstname']} ${userRecord['lastname']} ===');
+          print('=== ROUTER DEBUG: About to redirect to: ${Routes.selectEvent} ===');
+          
           return Routes.selectEvent;
         } catch (e) {
-          print('User not in users table, copying from pending_users...');
+          print('=== ROUTER DEBUG: User not found in users table, error: $e ===');
           
-          // Copy user data from pending_users to users table
+          // Try to copy from pending_users but DON'T delete the pending record
           try {
             final pendingUser = await Supabase.instance.client
                 .from('pending_users')
@@ -126,7 +130,7 @@ final router = GoRouter(
                 .single();
             
             if (pendingUser != null) {
-              print('Found pending user data, copying to users table...');
+              print('=== ROUTER DEBUG: Found pending user, copying to users table ===');
               await Supabase.instance.client
                   .from('users')
                   .insert({
@@ -136,31 +140,23 @@ final router = GoRouter(
                     'phonenbr': pendingUser['phone_number'],
                   });
               
-              print('User data copied successfully, cleaning up pending_users...');
-              
-              // Delete the record from pending_users to prevent data leakage
-              await Supabase.instance.client
-                  .from('pending_users')
-                  .delete()
-                  .eq('email', user.email ?? '');
-              
-              print('Pending user data cleaned up successfully, redirecting to select event');
+              print('=== ROUTER DEBUG: User copied successfully, redirecting to select event ===');
               return Routes.selectEvent;
-            } else {
-              print('No pending user data found');
             }
           } catch (copyError) {
-            print('Error copying user data: $copyError');
+            print('=== ROUTER DEBUG: Error copying from pending_users: $copyError ===');
           }
           
-          // If copying fails, stay on auth page
+          // If we can't find or copy the user, stay on auth page
           return null;
         }
       } else {
-        // User is not confirmed yet, stay on auth page
+        print('=== ROUTER DEBUG: Email not confirmed, staying on auth page ===');
         return null;
       }
     }
+
+    print('=== ROUTER DEBUG: No redirect needed, returning null ===');
 
     if (session == null && !isAuthRoute) {
       return Routes.login;

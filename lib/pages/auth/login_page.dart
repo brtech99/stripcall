@@ -12,6 +12,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -25,104 +26,56 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _testSupabaseConnection() async {
     try {
-      print('=== SUPABASE TEST: Testing connection... ===');
       debugLog('Testing Supabase connection...');
       final session = Supabase.instance.client.auth.currentSession;
-      print('=== SUPABASE TEST: Current session: ${session != null ? "exists" : "none"} ===');
       debugLog('Current session: ${session != null ? "exists" : "none"}');
       
-      if (session != null) {
-        print('=== SUPABASE TEST: Session user email: ${session.user.email} ===');
-        print('=== SUPABASE TEST: Session user confirmed: ${session.user.emailConfirmedAt != null} ===');
-        debugLog('Session user email: ${session.user.email}');
-        debugLog('Session user confirmed: ${session.user.emailConfirmedAt != null}');
-      }
-      
       // Test a simple database query
-      print('=== SUPABASE TEST: Testing database query... ===');
-      final result = await Supabase.instance.client
+      await Supabase.instance.client
           .from('users')
           .select('count')
           .limit(1);
-      print('=== SUPABASE TEST: Database connection successful ===');
       debugLog('Database connection test successful');
       
-      // Check if the test user exists in auth
-      await _checkUserExists('brian.rosen@gmail.com');
     } catch (e) {
-      print('=== SUPABASE TEST ERROR: $e ===');
       debugLogError('Supabase connection test failed', e);
     }
   }
 
-  Future<void> _checkUserExists(String email) async {
-    try {
-      print('=== USER CHECK: Checking if user exists: $email ===');
-      
-      // Try to get user by email (this will only work if we have admin access)
-      // For now, let's just check if we can see any users in the users table
-      final users = await Supabase.instance.client
-          .from('users')
-          .select('supabase_id, firstname, lastname')
-          .limit(5);
-      
-      print('=== USER CHECK: Found ${users.length} users in users table ===');
-      
-      // Also check pending_users table
-      final pendingUsers = await Supabase.instance.client
-          .from('pending_users')
-          .select('email, firstname, lastname')
-          .eq('email', email);
-      
-      print('=== USER CHECK: Found ${pendingUsers.length} users with email $email in pending_users table ===');
-      
-    } catch (e) {
-      print('=== USER CHECK ERROR: $e ===');
-    }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
   Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      print('=== LOGIN: Attempting login with email: ${_emailController.text} ===');
-      debugLog('Attempting login with email: ${_emailController.text}');
+      debugLog('Attempting login for $email');
       
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
       );
       
-      print('=== LOGIN: Login successful! ===');
-      debugLog('Login successful!');
-      if (!mounted) return;
-      context.go(Routes.selectEvent);
-    } on AuthException catch (e) {
-      print('=== LOGIN ERROR: ${e.message} (Status: ${e.statusCode}) ===');
-      debugLogError('AuthException during login', e);
-      debugLog('Auth error message: ${e.message}');
-      debugLog('Auth error status code: ${e.statusCode}');
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _isLoading = false;
-      });
+      if (response.user != null) {
+        debugLog('Login successful for ${response.user!.email}');
+        
+        if (!mounted) return;
+        
+        // Force router to refresh and redirect
+        context.go('/');
+      }
     } catch (e) {
-      print('=== LOGIN ERROR: $e ===');
       debugLogError('Error during login', e);
       if (!mounted) return;
       setState(() {
-        _error = 'Invalid credentials';
+        _error = 'Invalid email or password. Please try again.';
         _isLoading = false;
       });
     }
@@ -136,74 +89,107 @@ class _LoginPageState extends State<LoginPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  _error!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
                   ),
                 ),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                textCapitalization: TextCapitalization.none,
+                enabled: !_isLoading,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Please enter a valid email address';
+                  }
+                  return null;
+                },
               ),
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'email'),
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              textCapitalization: TextCapitalization.none,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-              enabled: !_isLoading,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _handleLogin,
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Login'),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: _isLoading ? null : () => context.go(Routes.forgotPassword),
-                  child: const Text('Forgot Password'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(width: 16),
-                TextButton(
-                  onPressed: _isLoading ? null : () => context.go(Routes.register),
-                  child: const Text('Create Account'),
+                obscureText: true,
+                enabled: !_isLoading,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _handleLogin,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Login'),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: _isLoading ? null : () => context.go(Routes.forgotPassword),
+                    child: const Text('Forgot Password'),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton(
+                    onPressed: _isLoading ? null : () => context.go(Routes.register),
+                    child: const Text('Create Account'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 } 

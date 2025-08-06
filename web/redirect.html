@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirecting...</title>
+    <script>
+        // Get the current URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const type = urlParams.get('type');
+        const redirectTo = urlParams.get('redirect_to');
+        
+        // Redirect to the app with the same parameters
+        const appUrl = 'https://stripcall.us/app/';
+        const newUrl = appUrl + '?code=' + code + '&type=' + type + '&redirect_to=' + encodeURIComponent(redirectTo || '');
+        
+        window.location.href = newUrl;
+    </script>
+</head>
+<body>
+    <p>Redirecting to StripCall app...</p>
+</body>
+</html> 
