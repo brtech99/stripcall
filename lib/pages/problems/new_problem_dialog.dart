@@ -49,12 +49,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
           .from('crews')
           .select('id, crewtype:crewtypes(crewtype)')
           .eq('event', widget.eventId);
-      
+
       if (mounted) {
         setState(() {
           _crews = List<Map<String, dynamic>>.from(response);
         });
-        
+
         if (_crews.isEmpty) {
           setState(() {
             _error = 'No crews are available for this event. Please contact the event organizer.';
@@ -90,14 +90,18 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
   }
 
   Future<void> _loadSymptomClasses() async {
+    await _loadSymptomClassesForCrewType(widget.crewType);
+  }
+
+  Future<void> _loadSymptomClassesForCrewType(String? crewTypeName) async {
     try {
       // Now try the filtered query - use the same pattern as problems_page.dart
-      if (widget.crewType == null) {
+      if (crewTypeName == null) {
         final response = await Supabase.instance.client
             .from('symptomclass')
             .select('id, symptomclassstring')
             .order('symptomclassstring');
-        
+
         if (mounted) {
           setState(() {
             _symptomClasses = List<Map<String, dynamic>>.from(response);
@@ -105,14 +109,14 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         }
         return;
       }
-      
+
       // First get the crew type ID from the crewtypes table
       final crewTypeResponse = await Supabase.instance.client
           .from('crewtypes')
           .select('id')
-          .eq('crewtype', widget.crewType!)
+          .eq('crewtype', crewTypeName)
           .maybeSingle();
-      
+
       if (crewTypeResponse == null) {
         if (mounted) {
           setState(() {
@@ -121,15 +125,15 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         }
         return;
       }
-      
+
       final crewTypeId = crewTypeResponse['id'] as int;
-      
+
       final symptomClassesResponse = await Supabase.instance.client
           .from('symptomclass')
           .select('id, symptomclassstring')
           .eq('crewType', crewTypeId)
           .order('symptomclassstring');
-      
+
       if (mounted) {
         setState(() {
           _symptomClasses = List<Map<String, dynamic>>.from(symptomClassesResponse);
@@ -150,20 +154,25 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         }
         return;
       }
-      
+
       final response = await Supabase.instance.client
           .from('symptom')
           .select('id, symptomstring')
-          .eq('symptomclass', _selectedSymptomClass!)
+          .eq('symptomclass', int.parse(_selectedSymptomClass!))
           .order('symptomstring');
-      
+
       if (mounted) {
         setState(() {
           _symptoms = List<Map<String, dynamic>>.from(response);
         });
       }
     } catch (e) {
-      // Error loading symptoms
+      debugLogError('Error loading symptoms', e);
+      if (mounted) {
+        setState(() {
+          _symptoms = [];
+        });
+      }
     }
   }
 
@@ -189,7 +198,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         'crew': _selectedCrewId,
         'originator': userId,
         'strip': _selectedStrip,
-        'symptom': _selectedSymptom,
+        'symptom': int.parse(_selectedSymptom!),
         'startdatetime': DateTime.now().toUtc().toIso8601String(),
       }).select().single();
 
@@ -200,18 +209,23 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       )['symptomstring'] as String;
 
       // Send notification using Edge Function
-      await NotificationService().sendCrewNotification(
-        title: 'New Problem Reported',
-        body: 'Strip $_selectedStrip: $symptomName',
-        crewId: _selectedCrewId.toString(),
-        senderId: userId,
-        data: {
-          'type': 'new_problem',
-          'problemId': problemResponse['id'].toString(),
-          'crewId': _selectedCrewId.toString(),
-        },
-        includeReporter: true, // Include reporter for new problems
-      );
+      try {
+        await NotificationService().sendCrewNotification(
+          title: 'New Problem Reported',
+          body: 'Strip $_selectedStrip: $symptomName',
+          crewId: _selectedCrewId.toString(),
+          senderId: userId,
+          data: {
+            'type': 'new_problem',
+            'problemId': problemResponse['id'].toString(),
+            'crewId': _selectedCrewId.toString(),
+          },
+          includeReporter: true, // Include reporter for new problems
+        );
+      } catch (notificationError) {
+        debugLogError('Failed to send notification (problem was created successfully)', notificationError);
+        // Continue - problem was created successfully even if notification failed
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -386,28 +400,37 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                     style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
-              DropdownButtonFormField<int>(
-                value: _selectedCrewId,
-                decoration: const InputDecoration(
-                  labelText: 'Crew',
-                ),
-                items: _crews.map((crew) {
+              const Text('Select Crew:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _crews.map((crew) {
                   final crewType = crew['crewtype']?['crewtype'] ?? '';
-                  return DropdownMenuItem(
-                    value: crew['id'] as int,
-                    child: Text(crewType.isNotEmpty ? crewType : 'Unknown Crew'),
+                  final crewId = crew['id'] as int;
+                  return IntrinsicWidth(
+                    child: RadioListTile<int>(
+                      title: Text(crewType.isNotEmpty ? crewType : 'Unknown Crew'),
+                      value: crewId,
+                      groupValue: _selectedCrewId,
+                      onChanged: (value) async {
+                        setState(() {
+                          _selectedCrewId = value;
+                          _selectedSymptomClass = null;
+                          _selectedSymptom = null;
+                        });
+                        if (value != null) {
+                          // Get the crew type for the selected crew and load symptom classes
+                          final selectedCrew = _crews.firstWhere((c) => c['id'] == value);
+                          final crewTypeName = selectedCrew['crewtype']?['crewtype'] as String?;
+                          await _loadSymptomClassesForCrewType(crewTypeName);
+                        }
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
                   );
                 }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCrewId = value;
-                    _selectedSymptomClass = null;
-                    _selectedSymptom = null;
-                  });
-                  if (value != null) {
-                    _loadSymptomClasses();
-                  }
-                },
               ),
               const SizedBox(height: 12),
               _buildStripSelector(),
@@ -510,4 +533,4 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       ],
     );
   }
-} 
+}

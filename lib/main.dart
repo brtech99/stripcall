@@ -51,7 +51,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _initializeApp();
-    
+
     // Listen for auth state changes
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
@@ -69,7 +69,7 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         _isInitialized = true;
       });
-      
+
       debugLog('✅ App initialization completed - ready for login');
     } catch (e) {
       debugLogError('App initialization failed', e);
@@ -83,10 +83,10 @@ class _MyAppState extends State<MyApp> {
   Future<void> _initializeFirebaseAfterAuth() async {
     try {
       debugLog('🔐 User authenticated, initializing Firebase with Vault secrets...');
-      
+
       // Get Firebase config from Vault
       final firebaseConfig = await FirebaseConfig.getWebConfig();
-      
+
       // Initialize Firebase with secrets from Vault
       await Firebase.initializeApp(
         options: FirebaseOptions(
@@ -98,9 +98,9 @@ class _MyAppState extends State<MyApp> {
           appId: firebaseConfig['appId'],
         ),
       );
-      
+
       debugLog('✅ Firebase initialized with secrets from Vault');
-      
+
       // Initialize notification service
       try {
         await NotificationService().initialize();
@@ -108,7 +108,7 @@ class _MyAppState extends State<MyApp> {
       } catch (e) {
         debugLogError('Notification service initialization failed, continuing without it', e);
       }
-      
+
     } catch (e) {
       debugLogError('Firebase initialization with Vault secrets failed', e);
       // Continue without Firebase - the app should still work
@@ -124,9 +124,9 @@ class _MyAppState extends State<MyApp> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Initializing StripCall...'),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text('Initializing StripCall...'),
               ],
             ),
           ),

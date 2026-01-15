@@ -16,14 +16,14 @@ class SupabaseEventsRepository implements EventsRepository {
     // Calculate the cutoff date (2 days before start date)
     final now = DateTime.now();
     final cutoffDate = now.subtract(const Duration(days: 2));
-    
+
     final response = await Supabase.instance.client
         .from('events')
         .select('*, organizer:users(firstname, lastname)')
         .eq('organizer', userId)
         .gte('enddatetime', cutoffDate.toIso8601String()) // Only events that haven't ended more than 2 days ago
         .order('startdatetime');
-    
+
     return response.map<Event>((json) => Event.fromJson(json)).toList();
   }
 }
@@ -96,6 +96,13 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            context.go(Routes.selectEvent);
+          },
+          tooltip: 'Back to Select Event',
+        ),
         title: const Text('My Events'),
         actions: [
           const SettingsMenu(),

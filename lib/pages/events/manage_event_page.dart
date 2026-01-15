@@ -8,6 +8,7 @@ import '../../models/user.dart' as app_models;
 import '../../models/crew.dart';
 import '../../models/crew_type.dart';
 import '../../utils/debug_utils.dart';
+import '../../widgets/settings_menu.dart';
 
 class ManageEventPage extends StatefulWidget {
   final Event? event;  // null for new event, populated for editing
@@ -102,26 +103,66 @@ class _ManageEventPageState extends State<ManageEventPage> {
   }
 
   Future<void> _saveEvent() async {
-    if (widget.event == null) return;
+    // Validation
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an event name')),
+      );
+      return;
+    }
+
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please set both start and end dates')),
+      );
+      return;
+    }
+
+    if (_endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End date must be after start date')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client
-          .from('events')
-          .update({
-            'name': _nameController.text,
-            'city': _cityController.text,
-            'state': _stateController.text,
-            'startdatetime': _startDate?.toIso8601String(),
-            'enddatetime': _endDate?.toIso8601String(),
-            'stripnumbering': _stripNumbering,
-            'count': _count,
-          })
-          .eq('id', widget.event!.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event updated successfully')),
-        );
+      final eventData = {
+        'name': _nameController.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'startdatetime': _startDate!.toIso8601String(),
+        'enddatetime': _endDate!.toIso8601String(),
+        'stripnumbering': _stripNumbering,
+        'count': _count,
+      };
+
+      if (widget.event == null) {
+        // Creating new event
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          eventData['organizer'] = userId;
+        }
+        await Supabase.instance.client.from('events').insert(eventData);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Event created successfully')),
+          );
+          context.go(Routes.manageEvents);
+        }
+      } else {
+        // Updating existing event
+        await Supabase.instance.client
+            .from('events')
+            .update(eventData)
+            .eq('id', widget.event!.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Event updated successfully')),
+          );
+        }
       }
+      setState(() => _isLoading = false);
     } catch (e) {
       debugLogError('Error saving event', e);
       setState(() {
@@ -265,23 +306,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
       appBar: AppBar(
         title: Text(widget.event == null ? 'Create Event' : 'Edit Event'),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.settings),
-            onSelected: (value) {
-              if (value == 'logout') {
-                Supabase.instance.client.auth.signOut();
-                if (mounted) {
-                  context.go(Routes.login);
-                }
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Logout'),
-              ),
-            ],
-          ),
+          const SettingsMenu(),
         ],
       ),
       body: _isLoading
@@ -302,135 +327,137 @@ class _ManageEventPageState extends State<ManageEventPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (widget.event != null) ...[
-                        TextFormField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(labelText: 'Event Name'),
-                        ),
-                        TextFormField(
-                          controller: _cityController,
-                          decoration: const InputDecoration(labelText: 'City'),
-                        ),
-                        TextFormField(
-                          controller: _stateController,
-                          decoration: const InputDecoration(labelText: 'State'),
-                        ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(_startDate != null ? 'Start Date: ${_startDate!.toLocal().toString().split(' ')[0]}' : 'Start Date: Not set'),
-                            ),
-                            TextButton(
-                              onPressed: () => _pickDate(isStart: true),
-                              child: const Text('Pick'),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(_endDate != null ? 'End Date: ${_endDate!.toLocal().toString().split(' ')[0]}' : 'End Date: Not set'),
-                            ),
-                            TextButton(
-                              onPressed: () => _pickDate(isStart: false),
-                              child: const Text('Pick'),
-                            ),
-                          ],
-                        ),
-                        DropdownButtonFormField<String>(
-                          value: _stripNumbering,
-                          decoration: const InputDecoration(labelText: 'Strip Numbering'),
-                          items: const [
-                            DropdownMenuItem(value: 'Pods', child: Text('Pods')),
-                            DropdownMenuItem(value: 'SequentialNumbers', child: Text('Sequential Numbers')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) setState(() => _stripNumbering = val);
-                          },
-                        ),
-                        TextFormField(
-                          initialValue: _count > 0 ? _count.toString() : '',
-                          decoration: const InputDecoration(labelText: 'Number of Strips'),
-                          keyboardType: TextInputType.number,
-                          onChanged: (val) {
-                            final parsed = int.tryParse(val);
-                            if (parsed != null) setState(() => _count = parsed);
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _saveEvent,
-                          child: const Text('Save'),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(labelText: 'Event Name'),
+                      ),
+                      TextFormField(
+                        controller: _cityController,
+                        decoration: const InputDecoration(labelText: 'City'),
+                      ),
+                      TextFormField(
+                        controller: _stateController,
+                        decoration: const InputDecoration(labelText: 'State'),
+                      ),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Crews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          if (_availableCrewTypes.isNotEmpty)
-                            IconButton(
-                              onPressed: _addCrew,
-                              icon: const Icon(Icons.add),
-                              tooltip: 'Add Crew',
-                            ),
+                          Expanded(
+                            child: Text(_startDate != null ? 'Start Date: ${_startDate!.toLocal().toString().split(' ')[0]}' : 'Start Date: Not set'),
+                          ),
+                          TextButton(
+                            onPressed: () => _pickDate(isStart: true),
+                            child: const Text('Pick'),
+                          ),
                         ],
                       ),
-                      if (_crews.isEmpty)
-                        const Center(child: Text('No crews found'))
-                      else
-                        Container(
-                          constraints: const BoxConstraints(maxHeight: 300),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: _crews.length,
-                          itemBuilder: (context, index) {
-                            final crew = _crews[index];
-                            // Get crew chief name from joined data or fallback to ID
-                            String chiefName;
-                            if (crew.crewChief != null) {
-                              final firstName = crew.crewChief!['firstname'] as String? ?? '';
-                              final lastName = crew.crewChief!['lastname'] as String? ?? '';
-                              if (firstName.isNotEmpty || lastName.isNotEmpty) {
-                                chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
-                              } else {
-                                chiefName = 'Chief ID: ${crew.crewChiefId}';
-                              }
-                            } else {
-                              chiefName = 'Chief ID: ${crew.crewChiefId}';
-                            }
-                            
-                            // Lookup crew type name
-                            String crewTypeName = crew.crewTypeId.toString();
-                            final crewTypeObj = _allCrewTypes.firstWhere(
-                              (t) => t.id == crew.crewTypeId,
-                              orElse: () => CrewType(id: -1, crewType: 'Unknown'),
-                            );
-                            if (crewTypeObj.id != -1) {
-                              crewTypeName = crewTypeObj.crewType;
-                            }
-                            return Card(
-                              child: ListTile(
-                                title: Text(crewTypeName),
-                                subtitle: Text('Crew Chief: $chiefName'),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _editCrew(crew),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () => _deleteCrew(crew.id),
-                                    ),
-                                  ],
-                                ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(_endDate != null ? 'End Date: ${_endDate!.toLocal().toString().split(' ')[0]}' : 'End Date: Not set'),
+                          ),
+                          TextButton(
+                            onPressed: () => _pickDate(isStart: false),
+                            child: const Text('Pick'),
+                          ),
+                        ],
+                      ),
+                      DropdownButtonFormField<String>(
+                        value: _stripNumbering,
+                        decoration: const InputDecoration(labelText: 'Strip Numbering'),
+                        items: const [
+                          DropdownMenuItem(value: 'Pods', child: Text('Pods')),
+                          DropdownMenuItem(value: 'SequentialNumbers', child: Text('Sequential Numbers')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _stripNumbering = val);
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: _count > 0 ? _count.toString() : '',
+                        decoration: InputDecoration(
+                          labelText: _stripNumbering == 'Pods' ? 'Number of Pods' : 'Number of Strips',
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (val) {
+                          final parsed = int.tryParse(val);
+                          if (parsed != null) setState(() => _count = parsed);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _saveEvent,
+                        child: Text(widget.event == null ? 'Create Event' : 'Save'),
+                      ),
+                      const SizedBox(height: 16),
+                      if (widget.event != null) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Crews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            if (_availableCrewTypes.isNotEmpty)
+                              IconButton(
+                                onPressed: _addCrew,
+                                icon: const Icon(Icons.add),
+                                tooltip: 'Add Crew',
                               ),
-                            );
-                          },
+                          ],
+                        ),
+                        if (_crews.isEmpty)
+                          const Center(child: Text('No crews found'))
+                        else
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: _crews.length,
+                              itemBuilder: (context, index) {
+                                final crew = _crews[index];
+                                // Get crew chief name from joined data or fallback to ID
+                                String chiefName;
+                                if (crew.crewChief != null) {
+                                  final firstName = crew.crewChief!['firstname'] as String? ?? '';
+                                  final lastName = crew.crewChief!['lastname'] as String? ?? '';
+                                  if (firstName.isNotEmpty || lastName.isNotEmpty) {
+                                    chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
+                                  } else {
+                                    chiefName = 'Chief ID: ${crew.crewChiefId}';
+                                  }
+                                } else {
+                                  chiefName = 'Chief ID: ${crew.crewChiefId}';
+                                }
+
+                                // Lookup crew type name
+                                String crewTypeName = crew.crewTypeId.toString();
+                                final crewTypeObj = _allCrewTypes.firstWhere(
+                                  (t) => t.id == crew.crewTypeId,
+                                  orElse: () => CrewType(id: -1, crewType: 'Unknown'),
+                                );
+                                if (crewTypeObj.id != -1) {
+                                  crewTypeName = crewTypeObj.crewType;
+                                }
+                                return Card(
+                                  child: ListTile(
+                                    title: Text(crewTypeName),
+                                    subtitle: Text('Crew Chief: $chiefName'),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit),
+                                          onPressed: () => _editCrew(crew),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete),
+                                          onPressed: () => _deleteCrew(crew.id),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
+                      ],
                     ],
                   ),
                 ),

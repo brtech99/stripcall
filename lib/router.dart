@@ -4,6 +4,7 @@ import 'pages/auth/login_page.dart';
 import 'pages/events/manage_event_page.dart';
 import 'pages/events/manage_events_page.dart';
 import 'pages/events/select_event_page.dart';
+import 'package:provider/provider.dart';
 import 'pages/problems/problems_page.dart';
 import 'pages/crews/select_crew_page.dart';
 import 'routes.dart';
@@ -11,13 +12,14 @@ import 'pages/auth/create_account_page.dart';
 import 'pages/auth/forgot_password_page.dart';
 import 'models/event.dart';
 import 'pages/auth/email_confirmation_page.dart';
+import 'providers/problems_page_provider.dart';
 
 final router = GoRouter(
   initialLocation: '/',
   redirect: (context, state) async {
     print('=== ROUTER REDIRECT: ${state.matchedLocation} ===');
     final session = Supabase.instance.client.auth.currentSession;
-    final isAuthRoute = state.matchedLocation == Routes.login || 
+    final isAuthRoute = state.matchedLocation == Routes.login ||
                        state.matchedLocation == Routes.register ||
                        state.matchedLocation == Routes.forgotPassword ||
                        state.matchedLocation == '/confirm-email';
@@ -33,10 +35,10 @@ final router = GoRouter(
         final user = Supabase.instance.client.auth.currentUser;
         print('Current user from auth: ${user?.email}');
         print('Email confirmed at: ${user?.emailConfirmedAt}');
-        
+
         if (user?.emailConfirmedAt != null) {
           print('Email is confirmed, checking if user exists in users table...');
-          
+
           // Check if user exists in users table
           try {
             await Supabase.instance.client
@@ -44,12 +46,12 @@ final router = GoRouter(
                 .select('supabase_id')
                 .eq('supabase_id', user!.id)
                 .single();
-            
+
             print('User exists in users table, redirecting to login');
             return Routes.login;
           } catch (e) {
             print('User not in users table, copying from pending_users...');
-            
+
             // Copy user data from pending_users to users table
             try {
               final pendingUser = await Supabase.instance.client
@@ -57,7 +59,7 @@ final router = GoRouter(
                   .select('firstname, lastname, phone_number')
                   .eq('email', user!.email ?? '')
                   .single();
-              
+
               if (pendingUser != null) {
                 print('Found pending user data, copying to users table...');
                 await Supabase.instance.client
@@ -68,15 +70,15 @@ final router = GoRouter(
                       'lastname': pendingUser['lastname'],
                       'phonenbr': pendingUser['phone_number'],
                     });
-                
+
                 print('User data copied successfully, cleaning up pending_users...');
-                
+
                 // Delete the record from pending_users to prevent data leakage
                 await Supabase.instance.client
                     .from('pending_users')
                     .delete()
                     .eq('email', user.email ?? '');
-                
+
                 print('Pending user data cleaned up successfully, redirecting to login');
                 return Routes.login;
               } else {
@@ -92,7 +94,7 @@ final router = GoRouter(
       } catch (e) {
         print('Error handling email confirmation: $e');
       }
-      
+
       // If we get here, redirect to login
       return Routes.login;
     }
@@ -104,7 +106,7 @@ final router = GoRouter(
       print('=== ROUTER DEBUG: User ID: ${user.id} ===');
       print('=== ROUTER DEBUG: Email confirmed: ${user.emailConfirmedAt != null} ===');
       print('=== ROUTER DEBUG: Current location: ${state.matchedLocation} ===');
-      
+
       if (user.emailConfirmedAt != null) {
         try {
           print('=== ROUTER DEBUG: Checking if user exists in users table... ===');
@@ -113,14 +115,14 @@ final router = GoRouter(
               .select('supabase_id, firstname, lastname')
               .eq('supabase_id', user.id)
               .single();
-          
+
           print('=== ROUTER DEBUG: User found in users table: ${userRecord['firstname']} ${userRecord['lastname']} ===');
           print('=== ROUTER DEBUG: About to redirect to: ${Routes.selectEvent} ===');
-          
+
           return Routes.selectEvent;
         } catch (e) {
           print('=== ROUTER DEBUG: User not found in users table, error: $e ===');
-          
+
           // Try to copy from pending_users but DON'T delete the pending record
           try {
             final pendingUser = await Supabase.instance.client
@@ -128,7 +130,7 @@ final router = GoRouter(
                 .select('firstname, lastname, phone_number')
                 .eq('email', user.email ?? '')
                 .single();
-            
+
             if (pendingUser != null) {
               print('=== ROUTER DEBUG: Found pending user, copying to users table ===');
               await Supabase.instance.client
@@ -139,14 +141,14 @@ final router = GoRouter(
                     'lastname': pendingUser['lastname'],
                     'phonenbr': pendingUser['phone_number'],
                   });
-              
+
               print('=== ROUTER DEBUG: User copied successfully, redirecting to select event ===');
               return Routes.selectEvent;
             }
           } catch (copyError) {
             print('=== ROUTER DEBUG: Error copying from pending_users: $copyError ===');
           }
-          
+
           // If we can't find or copy the user, stay on auth page
           return null;
         }
@@ -167,7 +169,7 @@ final router = GoRouter(
       final user = session.user;
       print('User with session: ${user.email}');
       print('Email confirmed at: ${user.emailConfirmedAt}');
-      
+
       if (user.emailConfirmedAt != null) {
         try {
           // Check if user exists in the users table
@@ -176,12 +178,12 @@ final router = GoRouter(
               .select('supabase_id')
               .eq('supabase_id', user.id)
               .single();
-          
+
           print('User exists in users table, allowing access');
           return null; // Allow access to the requested route
         } catch (e) {
           print('User not in users table, copying from pending_users...');
-          
+
           // Copy user data from pending_users to users table
           try {
             final pendingUser = await Supabase.instance.client
@@ -189,7 +191,7 @@ final router = GoRouter(
                 .select('firstname, lastname, phone_number')
                 .eq('email', user.email ?? '')
                 .single();
-            
+
             if (pendingUser != null) {
               print('Found pending user data, copying to users table...');
               await Supabase.instance.client
@@ -200,15 +202,15 @@ final router = GoRouter(
                     'lastname': pendingUser['lastname'],
                     'phonenbr': pendingUser['phone_number'],
                   });
-              
+
               print('User data copied successfully, cleaning up pending_users...');
-              
+
               // Delete the record from pending_users to prevent data leakage
               await Supabase.instance.client
                   .from('pending_users')
                   .delete()
                   .eq('email', user.email ?? '');
-              
+
               print('Pending user data cleaned up successfully, allowing access');
               return null; // Allow access to the requested route
             } else {
@@ -217,7 +219,7 @@ final router = GoRouter(
           } catch (copyError) {
             print('Error copying user data: $copyError');
           }
-          
+
           // If copying fails, redirect to login
           print('Redirecting to login due to missing user data');
           return Routes.login;
@@ -272,10 +274,15 @@ final router = GoRouter(
       path: Routes.problems,
       builder: (context, state) {
         final params = state.extra as Map<String, dynamic>;
-        return ProblemsPage(
-          eventId: params['eventId'] as int,
-          crewId: params['crewId'] as int?,
-          crewType: params['crewType'] as String?,
+        final eventId = params['eventId'] as int;
+        final crewId = params['crewId'] as int?;
+        return ChangeNotifierProvider(
+          create: (_) => ProblemsPageProvider(eventId: eventId, crewId: crewId),
+          child: ProblemsPage(
+            eventId: eventId,
+            crewId: crewId,
+            crewType: params['crewType'] as String?,
+          ),
         );
       },
     ),

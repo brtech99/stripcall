@@ -134,31 +134,36 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
           .single();
 
       await Supabase.instance.client.from('problem').update({
-        'action': _selectedAction,
+        'action': int.parse(_selectedAction!),
         'notes': _notesController.text.trim(),
         'actionby': userId,
         'enddatetime': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', widget.problemId);
 
       // Send notification
-      final resolverName = '${userResponse['firstname']} ${userResponse['lastname']}';
-      final resolution = actionResponse['actionstring'] as String;
-      final strip = problemResponse['strip'] as String;
-      final crewId = problemResponse['crew'].toString();
+      try {
+        final resolverName = '${userResponse['firstname']} ${userResponse['lastname']}';
+        final resolution = actionResponse['actionstring'] as String;
+        final strip = problemResponse['strip'] as String;
+        final crewId = problemResponse['crew'].toString();
 
-      await NotificationService().sendCrewNotification(
-        title: 'Problem Resolved',
-        body: 'Strip $strip resolved by $resolverName: $resolution',
-        crewId: crewId,
-        senderId: userId,
-        data: {
-          'type': 'problem_resolved',
-          'problemId': widget.problemId.toString(),
-          'crewId': crewId,
-          'strip': strip,
-        },
-        includeReporter: true, // Include resolver for resolved problems
-      );
+        await NotificationService().sendCrewNotification(
+          title: 'Problem Resolved',
+          body: 'Strip $strip resolved by $resolverName: $resolution',
+          crewId: crewId,
+          senderId: userId,
+          data: {
+            'type': 'problem_resolved',
+            'problemId': widget.problemId.toString(),
+            'crewId': crewId,
+            'strip': strip,
+          },
+          includeReporter: true, // Include resolver for resolved problems
+        );
+      } catch (notificationError) {
+        debugLogError('Failed to send notification (problem was resolved successfully)', notificationError);
+        // Continue - problem was resolved successfully even if notification failed
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -218,7 +223,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           ),
                           menuMaxHeight: 200,
                           isExpanded: true,
-                          items: _actions.isEmpty 
+                          items: _actions.isEmpty
                             ? [
                                 const DropdownMenuItem(
                                   value: null,
@@ -280,4 +285,4 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       ),
     );
   }
-} 
+}

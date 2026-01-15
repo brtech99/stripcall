@@ -1,2 +1,3 @@
 node_modules/
 *.local
+run_app.sh
