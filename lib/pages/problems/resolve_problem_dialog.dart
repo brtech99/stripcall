@@ -57,25 +57,34 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       List<Map<String, dynamic>> actionsResponse;
       if (symptomId != null) {
         try {
-          // Try to get actions filtered by symptom
+          // Try to get actions filtered by symptom, ordered by display_order
           actionsResponse = await Supabase.instance.client
               .from('action')
               .select('*')
               .eq('symptom', symptomId)
-              .order('actionstring');
+              .order('display_order', ascending: true);
         } catch (e) {
-          // If filtering by symptom fails, get all actions
-          actionsResponse = await Supabase.instance.client
-              .from('action')
-              .select('*')
-              .order('actionstring');
+          // If display_order doesn't exist or filtering fails, fall back to alphabetical
+          try {
+            actionsResponse = await Supabase.instance.client
+                .from('action')
+                .select('*')
+                .eq('symptom', symptomId)
+                .order('actionstring');
+          } catch (e2) {
+            // If filtering by symptom fails, get all actions
+            actionsResponse = await Supabase.instance.client
+                .from('action')
+                .select('*')
+                .order('actionstring');
+          }
         }
       } else {
         // If no symptom ID, get all actions
         actionsResponse = await Supabase.instance.client
             .from('action')
             .select('*')
-            .order('actionstring');
+            .order('display_order', ascending: true);
       }
 
       if (mounted) {
@@ -115,7 +124,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       // Get problem details for notification
       final problemResponse = await Supabase.instance.client
           .from('problem')
-          .select('crew, strip, symptom:symptom(symptomstring)')
+          .select('crew, strip, originator, symptom:symptom(symptomstring)')
           .eq('id', widget.problemId)
           .single();
 
@@ -146,6 +155,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
         final resolution = actionResponse['actionstring'] as String;
         final strip = problemResponse['strip'] as String;
         final crewId = problemResponse['crew'].toString();
+        final reporterId = problemResponse['originator'] as String?;
 
         await NotificationService().sendCrewNotification(
           title: 'Problem Resolved',
@@ -158,7 +168,8 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
             'crewId': crewId,
             'strip': strip,
           },
-          includeReporter: true, // Include resolver for resolved problems
+          includeReporter: true, // Include reporter so they know their problem is resolved
+          reporterId: reporterId,
         );
       } catch (notificationError) {
         debugLogError('Failed to send notification (problem was resolved successfully)', notificationError);

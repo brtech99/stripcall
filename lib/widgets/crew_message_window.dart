@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -132,7 +133,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
           // Filter out duplicates based on message ID
           final existingIds = _messages.map((m) => m.id).toSet();
           final uniqueNewMessages = newMessages.where((m) => !existingIds.contains(m.id)).toList();
-          
+
           if (uniqueNewMessages.isNotEmpty) {
             _messages.insertAll(0, uniqueNewMessages);
             // Keep only the last 20 messages to prevent memory issues
@@ -170,45 +171,47 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         'message': message,
       };
 
-      final result = await Supabase.instance.client
-          .from('crew_messages')
-          .insert(insertData)
-          .select('''
-            *,
-            author_data:author(supabase_id, firstname, lastname)
-          ''')
-          .single();
+      try {
+        await Supabase.instance.client
+            .from('crew_messages')
+            .insert(insertData);
+      } catch (insertError) {
+        debugLogError('Error inserting crew message', insertError);
+        throw insertError;
+      }
 
+      // Clear the input immediately
       if (mounted) {
         setState(() {
           _messageController.clear();
-          final newMessage = CrewMessage.fromJson(result);
-          
-          // Check if this message already exists to prevent duplicates
-          final messageExists = _messages.any((m) => m.id == newMessage.id);
-          if (!messageExists) {
-            _messages.add(newMessage);
-            // Keep only the last 20 messages
-            if (_messages.length > 20) {
-              _messages = _messages.take(20).toList();
-            }
-          }
         });
-        _scrollToBottom();
       }
 
-      // Send notification for the new message
-      await NotificationService().sendCrewNotification(
-        title: 'Crew Message',
-        body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
-        crewId: widget.crewId.toString(),
-        senderId: widget.currentUserId!,
-        data: {
-          'type': 'crew_message',
-          'crewId': widget.crewId.toString(),
-        },
-        includeReporter: false,
-      );
+      // Reload messages to get the new one with all data
+      try {
+        await _loadMessages();
+      } catch (loadError) {
+        debugLogError('Error loading messages after insert', loadError);
+      }
+
+      // Send notification for the new message (skip on web to avoid type errors)
+      if (!kIsWeb) {
+        try {
+          await NotificationService().sendCrewNotification(
+            title: 'Crew Message',
+            body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
+            crewId: widget.crewId.toString(),
+            senderId: widget.currentUserId!,
+            data: {
+              'type': 'crew_message',
+              'crewId': widget.crewId.toString(),
+            },
+            includeReporter: false,
+          );
+        } catch (notifError) {
+          debugLogError('Error sending notification', notifError);
+        }
+      }
 
     } catch (e) {
       debugLogError('Error sending message', e);
@@ -333,7 +336,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
                           itemBuilder: (context, index) {
                             final message = _messages[index];
                             final isMe = message.authorId == widget.currentUserId;
-                            
+
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 2.0),
                               child: Row(
@@ -356,8 +359,8 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
                                   ],
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: isMe 
-                                          ? CrossAxisAlignment.end 
+                                      crossAxisAlignment: isMe
+                                          ? CrossAxisAlignment.end
                                           : CrossAxisAlignment.start,
                                       children: [
                                         if (!isMe)
@@ -374,7 +377,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
                                             vertical: 6,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: isMe 
+                                            color: isMe
                                                 ? Theme.of(context).colorScheme.primary
                                                 : Colors.grey.shade200,
                                             borderRadius: BorderRadius.circular(12),
@@ -382,8 +385,8 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
                                           child: Text(
                                             message.message,
                                             style: TextStyle(
-                                              color: isMe 
-                                                  ? Colors.white 
+                                              color: isMe
+                                                  ? Colors.white
                                                   : null,
                                               fontSize: 14,
                                             ),
@@ -411,4 +414,4 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
       ),
     );
   }
-} 
+}

@@ -97,10 +97,18 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
     try {
       // Now try the filtered query - use the same pattern as problems_page.dart
       if (crewTypeName == null) {
-        final response = await Supabase.instance.client
-            .from('symptomclass')
-            .select('id, symptomclassstring')
-            .order('symptomclassstring');
+        List<Map<String, dynamic>> response;
+        try {
+          response = await Supabase.instance.client
+              .from('symptomclass')
+              .select('id, symptomclassstring')
+              .order('display_order', ascending: true);
+        } catch (e) {
+          response = await Supabase.instance.client
+              .from('symptomclass')
+              .select('id, symptomclassstring')
+              .order('symptomclassstring');
+        }
 
         if (mounted) {
           setState(() {
@@ -128,11 +136,20 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
 
       final crewTypeId = crewTypeResponse['id'] as int;
 
-      final symptomClassesResponse = await Supabase.instance.client
-          .from('symptomclass')
-          .select('id, symptomclassstring')
-          .eq('crewType', crewTypeId)
-          .order('symptomclassstring');
+      List<Map<String, dynamic>> symptomClassesResponse;
+      try {
+        symptomClassesResponse = await Supabase.instance.client
+            .from('symptomclass')
+            .select('id, symptomclassstring')
+            .eq('crewType', crewTypeId)
+            .order('display_order', ascending: true);
+      } catch (e) {
+        symptomClassesResponse = await Supabase.instance.client
+            .from('symptomclass')
+            .select('id, symptomclassstring')
+            .eq('crewType', crewTypeId)
+            .order('symptomclassstring');
+      }
 
       if (mounted) {
         setState(() {
@@ -155,11 +172,20 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         return;
       }
 
-      final response = await Supabase.instance.client
-          .from('symptom')
-          .select('id, symptomstring')
-          .eq('symptomclass', int.parse(_selectedSymptomClass!))
-          .order('symptomstring');
+      List<Map<String, dynamic>> response;
+      try {
+        response = await Supabase.instance.client
+            .from('symptom')
+            .select('id, symptomstring')
+            .eq('symptomclass', int.parse(_selectedSymptomClass!))
+            .order('display_order', ascending: true);
+      } catch (e) {
+        response = await Supabase.instance.client
+            .from('symptom')
+            .select('id, symptomstring')
+            .eq('symptomclass', int.parse(_selectedSymptomClass!))
+            .order('symptomstring');
+      }
 
       if (mounted) {
         setState(() {
@@ -454,20 +480,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Problem Area',
                     ),
-                    items: (() {
-                      final sorted = List<Map<String, dynamic>>.from(_symptomClasses);
-                      sorted.sort((a, b) {
-                        if (a['symptomclassstring'] == 'Other') return 1;
-                        if (b['symptomclassstring'] == 'Other') return -1;
-                        return a['symptomclassstring'].compareTo(b['symptomclassstring']);
-                      });
-                      return sorted.map((symptomClass) {
-                        return DropdownMenuItem(
-                          value: symptomClass['id'].toString(),
-                          child: Text(symptomClass['symptomclassstring']),
-                        );
-                      }).toList();
-                    })(),
+                    items: _symptomClasses.map((symptomClass) {
+                      return DropdownMenuItem(
+                        value: symptomClass['id'].toString(),
+                        child: Text(symptomClass['symptomclassstring']),
+                      );
+                    }).toList(),
                     onChanged: (value) {
                       setState(() {
                         _selectedSymptomClass = value;
@@ -484,20 +502,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Problem',
                 ),
-                items: (() {
-                  final sorted = List<Map<String, dynamic>>.from(_symptoms);
-                  sorted.sort((a, b) {
-                    if (a['symptomstring'] == 'Other') return 1;
-                    if (b['symptomstring'] == 'Other') return -1;
-                    return a['symptomstring'].compareTo(b['symptomstring']);
-                  });
-                  return sorted.map((symptom) {
-                    return DropdownMenuItem(
-                      value: symptom['id'].toString(),
-                      child: Text(symptom['symptomstring']),
-                    );
-                  }).toList();
-                })(),
+                items: _symptoms.map((symptom) {
+                  return DropdownMenuItem(
+                    value: symptom['id'].toString(),
+                    child: Text(symptom['symptomstring']),
+                  );
+                }).toList(),
                 onChanged: (value) {
                   setState(() {
                     _selectedSymptom = value;

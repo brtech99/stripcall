@@ -143,14 +143,72 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _checkForResolvedProblems(DateTime since) async {
-    if (!mounted || widget.crewId == null) return;
+    if (!mounted) return;
+
+    // For reporters (no crew), use the new checkForProblemUpdates method
+    if (widget.crewId == null) {
+      if (_problems.isEmpty) return;
+
+      try {
+        // Only check for updates on unresolved problems
+        final unresolvedProblemIds = _problems
+            .where((p) => p.resolvedDateTime == null)
+            .map((p) => p.id)
+            .toList();
+
+        if (unresolvedProblemIds.isEmpty) {
+          debugLog('DEBUG: No unresolved problems to check for updates');
+          return;
+        }
+
+        debugLog('DEBUG: Checking for problem updates (reporter mode) on ${unresolvedProblemIds.length} unresolved problems since $since');
+        final updatedProblems = await _problemService.checkForProblemUpdates(
+          since: since,
+          problemIds: unresolvedProblemIds,
+        );
+
+        debugLog('DEBUG: Found ${updatedProblems.length} updated problems');
+        if (updatedProblems.isNotEmpty) {
+          debugLog('DEBUG: Updated problems data: $updatedProblems');
+        }
+
+        if (mounted && updatedProblems.isNotEmpty) {
+          for (final updated in updatedProblems) {
+            try {
+              final enddatetime = updated['enddatetime'] as String?;
+              if (enddatetime != null) {
+                final resolvedTime = DateTime.parse(enddatetime);
+                final problemId = (updated['id'] as num).toInt();
+                debugLog('DEBUG: Handling updated problem $problemId with data: $updated');
+                await _handleProblemResolved(
+                  problemId,
+                  resolvedTime,
+                  resolvedData: updated,
+                );
+              }
+            } catch (e) {
+              debugLogError('Error handling updated problem', e);
+            }
+          }
+        }
+      } catch (e) {
+        debugLogError('Error checking for problem updates', e);
+      }
+      return;
+    }
 
     try {
+      debugLog('DEBUG: Checking for resolved problems since $since');
       final resolvedProblems = await _problemService.checkForResolvedProblems(
         eventId: widget.eventId,
         crewId: widget.crewId!,
         since: since,
       );
+
+      debugLog('DEBUG: Found ${resolvedProblems.length} resolved problems');
+      if (resolvedProblems.isNotEmpty) {
+        debugLog('DEBUG: Resolved problems data: $resolvedProblems');
+      }
 
       if (mounted && resolvedProblems.isNotEmpty) {
         for (final resolved in resolvedProblems) {
@@ -164,9 +222,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
             if (resolvedTimeStr != null) {
               final resolvedTime = DateTime.parse(resolvedTimeStr);
+              final problemId = (resolved['id'] as num).toInt();
+              debugLog('DEBUG: Handling resolved problem $problemId with data: $resolved');
               await _handleProblemResolved(
-                (resolved['id'] as num).toInt(),
+                problemId,
                 resolvedTime,
+                resolvedData: resolved, // Pass the full resolved data including action and actionby
               );
             }
           } catch (e) {
@@ -233,16 +294,38 @@ class _ProblemsPageState extends State<ProblemsPage> {
     });
   }
 
-  Future<void> _handleProblemResolved(int problemId, DateTime resolvedTime) async {
+  Future<void> _handleProblemResolved(int problemId, DateTime resolvedTime, {Map<String, dynamic>? resolvedData}) async {
     if (!mounted) return;
 
     setState(() {
       final problemIndex = _problems.indexWhere((p) => p.id == problemId);
       if (problemIndex != -1) {
         final problem = _problems[problemIndex];
-        _problems[problemIndex] = problem.copyWith(
-          resolvedDateTime: resolvedTime.toIso8601String(),
-        );
+
+        debugLog('DEBUG: Found problem at index $problemIndex, current action: ${problem.action}');
+        debugLog('DEBUG: resolvedData keys: ${resolvedData?.keys}');
+        debugLog('DEBUG: action_data: ${resolvedData?['action_data']}');
+        debugLog('DEBUG: actionby_data: ${resolvedData?['actionby_data']}');
+
+        // If we have resolution data (action, actionby), update those too
+        if (resolvedData != null && resolvedData.containsKey('action_data')) {
+          debugLog('DEBUG: Updating problem with action_data');
+          _problems[problemIndex] = problem.copyWith(
+            resolvedDateTime: resolvedTime.toIso8601String(),
+            action: resolvedData['action_data'],
+            actionBy: resolvedData['actionby_data'],
+          );
+        } else {
+          debugLog('DEBUG: No action_data found, only updating resolvedDateTime');
+          // Fallback to just updating resolved time
+          _problems[problemIndex] = problem.copyWith(
+            resolvedDateTime: resolvedTime.toIso8601String(),
+          );
+        }
+
+        debugLog('DEBUG: After update, problem action: ${_problems[problemIndex].action}');
+      } else {
+        debugLog('DEBUG: Problem $problemId not found in current problems list');
       }
     });
   }
@@ -689,6 +772,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
                                       isReferee: _isReferee,
                                       isUserResponding: isUserResponding,
                                       userCrewId: _userCrewId,
+                                      isSuperUser: _isSuperUser,
+                                      responders: _responders[problem.id],
                                       onToggleExpansion: () => _toggleProblemExpansion(problem.id),
                                       onResolve: () => _showResolveDialog(problem.id),
                                       onGoOnMyWay: () => _goOnMyWay(problem.id),

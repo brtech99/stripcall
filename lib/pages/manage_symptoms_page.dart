@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 import '../utils/debug_utils.dart';
+import '../routes.dart';
 
 class ManageSymptomsPage extends StatefulWidget {
   const ManageSymptomsPage({super.key});
@@ -12,677 +14,1277 @@ class ManageSymptomsPage extends StatefulWidget {
 class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   List<Map<String, dynamic>> _crewTypes = [];
   List<Map<String, dynamic>> _symptomClasses = [];
-  List<Map<String, dynamic>> _symptoms = [];
-  List<Map<String, dynamic>> _actions = [];
-  String? _selectedCrewTypeId;
-  String? _selectedClassId;
-  String? _selectedSymptomId;
-  String? _selectedActionId;
-  final TextEditingController _crewTypeNameController = TextEditingController();
-  final TextEditingController _symptomClassNameController = TextEditingController();
-  final TextEditingController _symptomNameController = TextEditingController();
-  final TextEditingController _actionNameController = TextEditingController();
-  bool _isAddCrewTypeMode = false;
-  bool _isAddSymptomClassMode = false;
-  bool _isAddSymptomMode = false;
-  bool _isAddActionMode = false;
-  String? _error;
+  Map<int, List<Map<String, dynamic>>> _symptomsByClass = {};
+  Map<int, List<Map<String, dynamic>>> _actionsBySymptom = {};
+  int? _selectedCrewTypeId;
+  Set<int> _expandedClasses = {};
+  Set<int> _expandedSymptoms = {};
   bool _isLoading = true;
+  bool _isSuperUser = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _loadActions();
+    _checkSuperUserAndLoad();
+  }
+
+  Future<void> _checkSuperUserAndLoad() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        if (mounted) {
+          context.go(Routes.login);
+        }
+        return;
+      }
+
+      final userResponse = await Supabase.instance.client
+          .from('users')
+          .select('superuser')
+          .eq('supabase_id', userId)
+          .maybeSingle();
+
+      final isSuperUser = userResponse?['superuser'] == true;
+
+      if (!isSuperUser) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Access denied. Super user only.')),
+          );
+          context.go(Routes.home);
+        }
+        return;
+      }
+
+      setState(() {
+        _isSuperUser = true;
+      });
+
+      await _loadData();
+    } catch (e) {
+      debugLogError('Error checking super user status', e);
+      if (mounted) {
+        context.go(Routes.home);
+      }
+    }
   }
 
   Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
+      // Load crew types
       final crewTypesResponse = await Supabase.instance.client
           .from('crewtypes')
           .select()
           .order('crewtype');
-      final symptomClassesResponse = await Supabase.instance.client
-          .from('symptom_classes')
-          .select()
-          .order('symptomclass');
 
       if (mounted) {
         setState(() {
           _crewTypes = List<Map<String, dynamic>>.from(crewTypesResponse);
-          _symptomClasses = List<Map<String, dynamic>>.from(symptomClassesResponse);
-          _isLoading = false;
+          if (_selectedCrewTypeId == null && _crewTypes.isNotEmpty) {
+            _selectedCrewTypeId = _crewTypes.first['id'] as int;
+          }
         });
+
+        if (_selectedCrewTypeId != null) {
+          await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
+        }
       }
     } catch (e) {
       debugLogError('Error loading data', e);
-      setState(() {
-        _error = 'Failed to load data: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadActions() async {
-    try {
-      final response = await Supabase.instance.client
-          .from('actions')
-          .select()
-          .order('actionstring');
-
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading data: $e')),
+        );
+      }
+    } finally {
       if (mounted) {
         setState(() {
-          _actions = List<Map<String, dynamic>>.from(response);
           _isLoading = false;
         });
       }
-    } catch (e) {
-      debugLogError('Error loading actions', e);
-      setState(() {
-        _error = 'Failed to load actions: $e';
-        _isLoading = false;
-      });
     }
   }
 
-  void _onCrewTypeChanged(String? id) {
-    setState(() {
-      _selectedCrewTypeId = id;
-      _isAddCrewTypeMode = id == 'add_new';
-      if (_isAddCrewTypeMode) {
-        _crewTypeNameController.clear();
-      } else {
-        final selected = _crewTypes.firstWhere((c) => c['id'].toString() == id, orElse: () => {});
-        _crewTypeNameController.text = selected['crewtype'] ?? '';
-      }
-      // Reset lower levels
-      _selectedClassId = null;
-      _isAddSymptomClassMode = false;
-      _symptomClassNameController.clear();
-      _selectedSymptomId = null;
-      _isAddSymptomMode = false;
-      _symptomNameController.clear();
-      _selectedActionId = null;
-      _isAddActionMode = false;
-      _actionNameController.clear();
-      _symptoms = [];
-    });
-  }
-
-  void _onSymptomClassChanged(String? id) {
-    setState(() {
-      _selectedClassId = id;
-      _isAddSymptomClassMode = id == 'add_new';
-      if (_isAddSymptomClassMode) {
-        _symptomClassNameController.clear();
-      } else {
-        final selected = _symptomClasses.firstWhere((c) => c['id'].toString() == id, orElse: () => {});
-        _symptomClassNameController.text = selected['symptomclassstring'] ?? '';
-      }
-      // Reset lower levels
-      _selectedSymptomId = null;
-      _isAddSymptomMode = false;
-      _symptomNameController.clear();
-      _selectedActionId = null;
-      _isAddActionMode = false;
-      _actionNameController.clear();
-      _loadSymptomsForClass();
-    });
-  }
-
-  Future<void> _loadSymptomsForClass() async {
-    if (_selectedClassId == null || _isAddSymptomClassMode) {
-      setState(() {
-        _symptoms = [];
-      });
-      return;
-    }
+  Future<void> _loadSymptomClassesForCrewType(int crewTypeId) async {
     try {
-      final response = await Supabase.instance.client
+      // Try to order by display_order, fall back to alphabetical if column doesn't exist
+      var query = Supabase.instance.client
+          .from('symptomclass')
+          .select()
+          .eq('crewType', crewTypeId);
+
+      try {
+        final response = await query.order('display_order', ascending: true);
+        debugLog('Loaded ${response.length} symptom classes ordered by display_order:');
+        for (var item in response) {
+          debugLog('  classId=${item['id']} display_order=${item['display_order']} name=${item['symptomclassstring']}');
+        }
+        if (mounted) {
+          setState(() {
+            _symptomClasses = List<Map<String, dynamic>>.from(response);
+          });
+        }
+      } catch (orderError) {
+        // display_order column doesn't exist yet, use alphabetical
+        debugLog('display_order column not found, falling back to alphabetical');
+        final response = await query.order('symptomclassstring');
+        if (mounted) {
+          setState(() {
+            _symptomClasses = List<Map<String, dynamic>>.from(response);
+          });
+        }
+      }
+    } catch (e) {
+      debugLogError('Error loading symptom classes', e);
+    }
+  }
+
+  Future<void> _loadSymptomsForClass(int classId) async {
+    try {
+      var query = Supabase.instance.client
           .from('symptom')
-          .select('id, symptomstring, symptomclass')
-          .eq('symptomclass', int.parse(_selectedClassId!))
-          .order('symptomstring');
-      if (mounted) {
-        setState(() {
-          _symptoms = List<Map<String, dynamic>>.from(response);
-        });
+          .select()
+          .eq('symptomclass', classId);
+
+      try {
+        final response = await query.order('display_order', ascending: true);
+        if (mounted) {
+          setState(() {
+            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(response);
+          });
+        }
+      } catch (orderError) {
+        // display_order column doesn't exist yet, use alphabetical
+        final response = await query.order('symptomstring');
+        if (mounted) {
+          setState(() {
+            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(response);
+          });
+        }
       }
     } catch (e) {
       debugLogError('Error loading symptoms', e);
-      setState(() {
-        _error = 'Failed to load symptoms: $e';
-        _isLoading = false;
-      });
     }
   }
 
-  void _onSymptomChanged(String? id) {
-    setState(() {
-      _selectedSymptomId = id;
-      _isAddSymptomMode = id == 'add_new';
-      if (_isAddSymptomMode) {
-        _symptomNameController.clear();
-      } else {
-        final selected = _symptoms.firstWhere((s) => s['id'].toString() == id, orElse: () => {});
-        _symptomNameController.text = selected['symptomstring'] ?? '';
+  Future<void> _loadActionsForSymptom(int symptomId) async {
+    try {
+      var query = Supabase.instance.client
+          .from('action')
+          .select()
+          .eq('symptom', symptomId);
+
+      try {
+        final response = await query.order('display_order', ascending: true);
+        if (mounted) {
+          setState(() {
+            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(response);
+          });
+        }
+      } catch (orderError) {
+        // display_order column doesn't exist yet, use alphabetical
+        final response = await query.order('actionstring');
+        if (mounted) {
+          setState(() {
+            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(response);
+          });
+        }
       }
-      // Reset lower level
-      _selectedActionId = null;
-      _isAddActionMode = false;
-      _actionNameController.clear();
-      // Reload actions for the selected symptom
-      _loadActions();
+    } catch (e) {
+      debugLogError('Error loading actions', e);
+    }
+  }
+
+  Future<void> _addSymptomClass(String name) async {
+    if (_selectedCrewTypeId == null) return;
+
+    try {
+      // Try to use display_order if column exists
+      try {
+        final maxOrderResponse = await Supabase.instance.client
+            .from('symptomclass')
+            .select('display_order')
+            .eq('crewType', _selectedCrewTypeId!)
+            .order('display_order', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
+
+        await Supabase.instance.client.from('symptomclass').insert({
+          'symptomclassstring': name,
+          'crewType': _selectedCrewTypeId,
+          'display_order': newOrder,
+        });
+      } catch (orderError) {
+        // display_order column doesn't exist yet, insert without it
+        await Supabase.instance.client.from('symptomclass').insert({
+          'symptomclassstring': name,
+          'crewType': _selectedCrewTypeId,
+        });
+      }
+
+      await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom class added')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error adding symptom class', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateSymptomClass(int id, String name) async {
+    try {
+      await Supabase.instance.client
+          .from('symptomclass')
+          .update({'symptomclassstring': name})
+          .eq('id', id);
+
+      await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom class updated')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error updating symptom class', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteSymptomClass(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Symptom Class'),
+        content: const Text(
+          'Are you sure? This will delete all symptoms and actions within this class.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client.from('symptomclass').delete().eq('id', id);
+      await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom class deleted')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error deleting symptom class', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addSymptom(int classId, String name) async {
+    try {
+      try {
+        final maxOrderResponse = await Supabase.instance.client
+            .from('symptom')
+            .select('display_order')
+            .eq('symptomclass', classId)
+            .order('display_order', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
+
+        await Supabase.instance.client.from('symptom').insert({
+          'symptomstring': name,
+          'symptomclass': classId,
+          'display_order': newOrder,
+        });
+      } catch (orderError) {
+        await Supabase.instance.client.from('symptom').insert({
+          'symptomstring': name,
+          'symptomclass': classId,
+        });
+      }
+
+      await _loadSymptomsForClass(classId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom added')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error adding symptom', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateSymptom(int id, int classId, String name) async {
+    try {
+      await Supabase.instance.client
+          .from('symptom')
+          .update({'symptomstring': name})
+          .eq('id', id);
+
+      await _loadSymptomsForClass(classId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom updated')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error updating symptom', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteSymptom(int id, int classId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Symptom'),
+        content: const Text(
+          'Are you sure? This will delete all actions for this symptom.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client.from('symptom').delete().eq('id', id);
+      await _loadSymptomsForClass(classId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Symptom deleted')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error deleting symptom', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addAction(int symptomId, String name) async {
+    try {
+      try {
+        final maxOrderResponse = await Supabase.instance.client
+            .from('action')
+            .select('display_order')
+            .eq('symptom', symptomId)
+            .order('display_order', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
+
+        await Supabase.instance.client.from('action').insert({
+          'actionstring': name,
+          'symptom': symptomId,
+          'display_order': newOrder,
+        });
+      } catch (orderError) {
+        await Supabase.instance.client.from('action').insert({
+          'actionstring': name,
+          'symptom': symptomId,
+        });
+      }
+
+      await _loadActionsForSymptom(symptomId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Action added')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error adding action', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateAction(int id, int symptomId, String name) async {
+    try {
+      await Supabase.instance.client
+          .from('action')
+          .update({'actionstring': name})
+          .eq('id', id);
+
+      await _loadActionsForSymptom(symptomId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Action updated')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error updating action', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAction(int id, int symptomId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Action'),
+        content: const Text('Are you sure you want to delete this action?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client.from('action').delete().eq('id', id);
+      await _loadActionsForSymptom(symptomId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Action deleted')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error deleting action', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  void _toggleClassExpansion(int classId) {
+    setState(() {
+      if (_expandedClasses.contains(classId)) {
+        _expandedClasses.remove(classId);
+      } else {
+        _expandedClasses.add(classId);
+        if (!_symptomsByClass.containsKey(classId)) {
+          _loadSymptomsForClass(classId);
+        }
+      }
     });
   }
 
-  void _onActionChanged(String? id) {
+  void _toggleSymptomExpansion(int symptomId) {
     setState(() {
-      _selectedActionId = id;
-      _isAddActionMode = id == 'add_new';
-      if (_isAddActionMode) {
-        _actionNameController.clear();
+      if (_expandedSymptoms.contains(symptomId)) {
+        _expandedSymptoms.remove(symptomId);
       } else {
-        final selected = _actions.firstWhere((a) => a['id'].toString() == id, orElse: () => {});
-        _actionNameController.text = selected['actionstring'] ?? '';
+        _expandedSymptoms.add(symptomId);
+        if (!_actionsBySymptom.containsKey(symptomId)) {
+          _loadActionsForSymptom(symptomId);
+        }
       }
     });
   }
 
-  @override
-  void dispose() {
-    _crewTypeNameController.dispose();
-    _symptomClassNameController.dispose();
-    _symptomNameController.dispose();
-    _actionNameController.dispose();
-    super.dispose();
+  Future<void> _reorderSymptomClasses(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    setState(() {
+      final item = _symptomClasses.removeAt(oldIndex);
+      _symptomClasses.insert(newIndex, item);
+    });
+
+    // Update display_order in database
+    try {
+      debugLog('Reordering symptom classes: updating ${_symptomClasses.length} items');
+      for (int i = 0; i < _symptomClasses.length; i++) {
+        final classId = _symptomClasses[i]['id'] as int;
+        final className = _symptomClasses[i]['symptomclassstring'] as String;
+        debugLog('Setting display_order=$i for classId=$classId ($className)');
+        await Supabase.instance.client
+            .from('symptomclass')
+            .update({'display_order': i})
+            .eq('id', classId);
+      }
+      debugLog('Successfully reordered symptom classes');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order saved'), duration: Duration(seconds: 1)),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error reordering symptom classes', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error reordering: $e')),
+        );
+      }
+      // Reload to restore correct order
+      if (_selectedCrewTypeId != null) {
+        await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
+      }
+    }
+  }
+
+  Future<void> _reorderSymptoms(int classId, int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    setState(() {
+      final symptoms = _symptomsByClass[classId]!;
+      final item = symptoms.removeAt(oldIndex);
+      symptoms.insert(newIndex, item);
+    });
+
+    // Update display_order in database
+    try {
+      final symptoms = _symptomsByClass[classId]!;
+      for (int i = 0; i < symptoms.length; i++) {
+        final symptomId = symptoms[i]['id'] as int;
+        await Supabase.instance.client
+            .from('symptom')
+            .update({'display_order': i})
+            .eq('id', symptomId);
+      }
+    } catch (e) {
+      debugLogError('Error reordering symptoms', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error reordering: $e')),
+        );
+      }
+      // Reload to restore correct order
+      await _loadSymptomsForClass(classId);
+    }
+  }
+
+  Future<void> _reorderActions(int symptomId, int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    setState(() {
+      final actions = _actionsBySymptom[symptomId]!;
+      final item = actions.removeAt(oldIndex);
+      actions.insert(newIndex, item);
+    });
+
+    // Update display_order in database
+    try {
+      final actions = _actionsBySymptom[symptomId]!;
+      for (int i = 0; i < actions.length; i++) {
+        final actionId = actions[i]['id'] as int;
+        await Supabase.instance.client
+            .from('action')
+            .update({'display_order': i})
+            .eq('id', actionId);
+      }
+    } catch (e) {
+      debugLogError('Error reordering actions', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error reordering: $e')),
+        );
+      }
+      // Reload to restore correct order
+      await _loadActionsForSymptom(symptomId);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Filter symptom classes by selected crew type (as int)
-    final selectedCrewTypeIdInt = int.tryParse(_selectedCrewTypeId ?? '');
-    final filteredSymptomClasses = selectedCrewTypeIdInt == null
-        ? <Map<String, dynamic>>[]
-        : _symptomClasses.where((c) => c['crewType'] == selectedCrewTypeIdInt).toList();
-
-    final canAddCrewType = _isAddCrewTypeMode && _crewTypeNameController.text.trim().isNotEmpty;
-    final canAddSymptomClass = _isAddSymptomClassMode && _symptomClassNameController.text.trim().isNotEmpty && selectedCrewTypeIdInt != null;
-
-    // For Update button: enable if editing existing and name is changed
-    final selectedSymptomClass = filteredSymptomClasses.firstWhere(
-      (c) => c['id'].toString() == _selectedClassId,
-      orElse: () => {},
-    );
-    final isEditingSymptomClass = !_isAddSymptomClassMode && _selectedClassId != null;
-    final originalSymptomClassName = selectedSymptomClass['symptomclassstring'] ?? '';
-    final canUpdateSymptomClass = isEditingSymptomClass && _symptomClassNameController.text.trim().isNotEmpty && _symptomClassNameController.text.trim() != originalSymptomClassName;
-
-    final canDeleteCrewType = !_isAddCrewTypeMode && _selectedCrewTypeId != null;
-    final canDeleteSymptomClass = !_isAddSymptomClassMode && _selectedClassId != null;
-
-    final canAddSymptom = _isAddSymptomMode && _symptomNameController.text.trim().isNotEmpty && _selectedClassId != null;
-    final selectedSymptom = _symptoms.firstWhere(
-      (s) => s['id'].toString() == _selectedSymptomId,
-      orElse: () => {},
-    );
-    final isEditingSymptom = !_isAddSymptomMode && _selectedSymptomId != null;
-    final originalSymptomName = selectedSymptom['symptomstring'] ?? '';
-    final canUpdateSymptom = isEditingSymptom && _symptomNameController.text.trim().isNotEmpty && _symptomNameController.text.trim() != originalSymptomName;
-    final canDeleteSymptom = isEditingSymptom;
-
-    final canAddAction = _isAddActionMode && _actionNameController.text.trim().isNotEmpty && _selectedSymptomId != null;
-    final selectedAction = _actions.firstWhere(
-      (a) => a['id'].toString() == _selectedActionId,
-      orElse: () => {},
-    );
-    final isEditingAction = !_isAddActionMode && _selectedActionId != null;
-    final originalActionName = selectedAction['actionstring'] ?? '';
-    final canUpdateAction = isEditingAction && _actionNameController.text.trim().isNotEmpty && _actionNameController.text.trim() != originalActionName;
-    final canDeleteAction = isEditingAction;
+    if (!_isSuperUser || _isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Manage Symptoms')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Manage Crew Types & Symptom Classes')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Crew Type Management
-              const Text('Crew Type', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedCrewTypeId,
-                items: [
-                  ..._crewTypes.map((c) => DropdownMenuItem(
-                        value: c['id'].toString(),
-                        child: Text(c['crewtype'] ?? ''),
-                      )),
-                  const DropdownMenuItem(
-                    value: 'add_new',
-                    child: Text('Add new...'),
-                  ),
-                ],
-                onChanged: _onCrewTypeChanged,
-                decoration: const InputDecoration(labelText: 'Select Crew Type'),
+      appBar: AppBar(
+        title: const Text('Manage Symptoms'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(Routes.home),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Crew Type Selector
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: DropdownButtonFormField<int>(
+              value: _selectedCrewTypeId,
+              decoration: const InputDecoration(
+                labelText: 'Crew Type',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _crewTypeNameController,
-                decoration: const InputDecoration(labelText: 'Crew Type Name'),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: canAddCrewType ? () async {
-                      final name = _crewTypeNameController.text.trim();
-                      if (name.isEmpty) return;
-                      try {
-                        await Supabase.instance.client.from('crewtypes').insert({'crewtype': name});
-                        await _loadData();
-                        setState(() {
-                          _isAddCrewTypeMode = true;
-                          _crewTypeNameController.clear();
-                          // Stay in add mode, do not select the new crew type
-                        });
-                      } catch (e) {
-                        debugLogError('Error adding crew type', e);
-                        setState(() {
-                          _error = 'Failed to add crew type: $e';
-                          _isLoading = false;
-                        });
-                      }
-                    } : null,
-                    child: Text(_isAddCrewTypeMode ? 'Add' : 'Update'),
-                  ),
-                  const SizedBox(width: 12),
-                  TextButton(
-                    onPressed: canDeleteCrewType ? () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Delete Crew Type'),
-                          content: const Text('Are you sure you want to delete this crew type? This cannot be undone.'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                            TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                          ],
-                        ),
-                      );
-                      if (confirmed == true) {
-                        try {
-                          await Supabase.instance.client.from('crewtypes').delete().eq('id', int.parse(_selectedCrewTypeId!));
-                          await _loadData();
-                          setState(() {
-                            _selectedCrewTypeId = null;
-                            _crewTypeNameController.clear();
-                            _isAddCrewTypeMode = false;
-                            _selectedClassId = null;
-                            _isAddSymptomClassMode = false;
-                            _symptomClassNameController.clear();
-                          });
-                        } catch (e) {
-                          debugLogError('Error deleting crew type', e);
-                          setState(() {
-                            _error = 'Failed to delete crew type: $e';
-                            _isLoading = false;
-                          });
-                        }
-                      }
-                    } : null,
-                    child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                  ),
-                ],
-              ),
-              if (_isAddCrewTypeMode)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    'Add a crew type before adding symptom classes.',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              const Divider(height: 32),
-              // Symptom Class Management
-              if (_selectedCrewTypeId != null && !_isAddCrewTypeMode) ...[
-                const Text('Symptom Class', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedClassId,
-                  items: [
-                    ...filteredSymptomClasses.map((c) => DropdownMenuItem(
-                          value: c['id'].toString(),
-                          child: Text(c['symptomclassstring'] ?? ''),
-                        )),
-                    const DropdownMenuItem(
-                      value: 'add_new',
-                      child: Text('Add new...'),
-                    ),
-                  ],
-                  onChanged: _onSymptomClassChanged,
-                  decoration: const InputDecoration(labelText: 'Select Symptom Class'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _symptomClassNameController,
-                  decoration: const InputDecoration(labelText: 'Symptom Class Name'),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: canAddSymptomClass ? () async {
-                        final name = _symptomClassNameController.text.trim();
-                        if (name.isEmpty) return;
-                        try {
-                          await Supabase.instance.client.from('symptomclass').insert({
-                            'symptomclassstring': name,
-                            'crewType': selectedCrewTypeIdInt,
-                          });
-                          await _loadData();
-                          setState(() {
-                            _isAddSymptomClassMode = true;
-                            _symptomClassNameController.clear();
-                            // Stay in add mode, do not select the new class
-                          });
-                        } catch (e) {
-                          debugLogError('Error adding symptom class', e);
-                          setState(() {
-                            _error = 'Failed to add symptom class: $e';
-                            _isLoading = false;
-                          });
-                        }
-                      } : canUpdateSymptomClass ? () async {
-                        final name = _symptomClassNameController.text.trim();
-                        if (name.isEmpty || _selectedClassId == null) return;
-                        try {
-                          await Supabase.instance.client.from('symptomclass').update({
-                            'symptomclassstring': name,
-                          }).eq('id', int.parse(_selectedClassId!));
-                          await _loadData();
-                          setState(() {
-                            _symptomClassNameController.text = name;
-                          });
-                        } catch (e) {
-                          debugLogError('Error updating symptom class', e);
-                          setState(() {
-                            _error = 'Failed to update symptom class: $e';
-                            _isLoading = false;
-                          });
-                        }
-                      } : null,
-                      child: Text(_isAddSymptomClassMode ? 'Add' : 'Update'),
-                    ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: canDeleteSymptomClass ? () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Delete Symptom Class'),
-                            content: const Text('Are you sure you want to delete this symptom class? This cannot be undone.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                            ],
-                          ),
-                        );
-                        if (confirmed == true) {
-                          try {
-                            await Supabase.instance.client.from('symptomclass').delete().eq('id', int.parse(_selectedClassId!));
-                            await _loadData();
-                            setState(() {
-                              _selectedClassId = null;
-                              _symptomClassNameController.clear();
-                              _isAddSymptomClassMode = false;
-                            });
-                          } catch (e) {
-                            debugLogError('Error deleting symptom class', e);
-                            setState(() {
-                              _error = 'Failed to delete symptom class: $e';
-                              _isLoading = false;
-                            });
-                          }
-                        }
-                      } : null,
-                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              ],
-              // Symptom Management
-              if (_selectedClassId != null && !_isAddSymptomClassMode) ...[
-                const Divider(height: 32),
-                const Text('Symptom', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedSymptomId,
-                  items: [
-                    ..._symptoms.map((s) => DropdownMenuItem(
-                          value: s['id'].toString(),
-                          child: Text(s['symptomstring'] ?? ''),
-                        )),
-                    const DropdownMenuItem(
-                      value: 'add_new',
-                      child: Text('Add new...'),
-                    ),
-                  ],
-                  onChanged: _onSymptomChanged,
-                  decoration: const InputDecoration(labelText: 'Select Symptom'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _symptomNameController,
-                  decoration: const InputDecoration(labelText: 'Symptom Name'),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: canAddSymptom ? () async {
-                        final name = _symptomNameController.text.trim();
-                        if (name.isEmpty || _selectedClassId == null) return;
-                        try {
-                          await Supabase.instance.client.from('symptom').insert({
-                            'symptomstring': name,
-                            'symptomclass': int.parse(_selectedClassId!),
-                          });
-                          await _loadSymptomsForClass();
-                          setState(() {
-                            _isAddSymptomMode = true;
-                            _symptomNameController.clear();
-                            // Stay in add mode, do not select the new symptom
-                          });
-                        } catch (e) {
-                          debugLogError('Error creating symptom', e);
-                          setState(() {
-                            _error = 'Failed to create symptom: $e';
-                            _isLoading = false;
-                          });
-                        }
-                      } : canUpdateSymptom ? () async {
-                        final name = _symptomNameController.text.trim();
-                        if (name.isEmpty || _selectedClassId == null || _selectedSymptomId == null) return;
-                        try {
-                          await Supabase.instance.client.from('symptom').update({
-                            'symptomstring': name,
-                          }).eq('id', int.parse(_selectedSymptomId!));
-                          await _loadSymptomsForClass();
-                          setState(() {
-                            _symptomNameController.text = name;
-                          });
-                        } catch (e) {
-                          debugLogError('Error updating symptom', e);
-                          setState(() {
-                            _error = 'Failed to update symptom: $e';
-                            _isLoading = false;
-                          });
-                        }
-                      } : null,
-                      child: Text(_isAddSymptomMode ? 'Add' : 'Update'),
-                    ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: canDeleteSymptom ? () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Delete Symptom'),
-                            content: const Text('Are you sure you want to delete this symptom? This cannot be undone.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                            ],
-                          ),
-                        );
-                        if (confirmed == true) {
-                          try {
-                            await Supabase.instance.client.from('symptom').delete().eq('id', int.parse(_selectedSymptomId!));
-                            await _loadSymptomsForClass();
-                            setState(() {
-                              _selectedSymptomId = null;
-                              _symptomNameController.clear();
-                              _isAddSymptomMode = false;
-                            });
-                          } catch (e) {
-                            debugLogError('Error deleting symptom', e);
-                            setState(() {
-                              _error = 'Failed to delete symptom: $e';
-                              _isLoading = false;
-                            });
-                          }
-                        }
-                      } : null,
-                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              ],
-              // Resolution Management
-              if (_selectedClassId != null && !_isAddSymptomClassMode) ...[
-                if (_selectedSymptomId == null || _isAddSymptomMode) ...[
-                  const Divider(height: 32),
-                  const Text('Resolution', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text('Select a symptom first to manage resolutions', style: TextStyle(color: Colors.grey)),
-                ] else ...[
-                  const Divider(height: 32),
-                  const Text('Resolution', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedActionId,
-                    items: [
-                      ..._actions.map((a) => DropdownMenuItem(
-                            value: a['id'].toString(),
-                            child: Text(a['actionstring'] ?? ''),
-                          )),
-                      const DropdownMenuItem(
-                        value: 'add_new',
-                        child: Text('Add new...'),
-                      ),
-                    ],
-                    onChanged: _onActionChanged,
-                    decoration: const InputDecoration(labelText: 'Select Resolution'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _actionNameController,
-                    decoration: const InputDecoration(labelText: 'Resolution Name'),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: canAddAction ? () async {
-                          final name = _actionNameController.text.trim();
-                          if (name.isEmpty || _selectedSymptomId == null) return;
-                          try {
-                            await Supabase.instance.client.from('action').insert({
-                              'actionstring': name,
-                              'symptom': int.parse(_selectedSymptomId!),
-                            });
-                            await _loadActions();
-                            setState(() {
-                              _isAddActionMode = true;
-                              _actionNameController.clear();
-                              // Stay in add mode, do not select the new action
-                            });
-                          } catch (e) {
-                            debugLogError('Error creating action', e);
-                            setState(() {
-                              _error = 'Failed to create action: $e';
-                              _isLoading = false;
-                            });
-                          }
-                        } : canUpdateAction ? () async {
-                          final name = _actionNameController.text.trim();
-                          if (name.isEmpty || _selectedActionId == null) return;
-                          try {
-                            await Supabase.instance.client.from('action').update({
-                              'actionstring': name,
-                            }).eq('id', int.parse(_selectedActionId!));
-                            await _loadActions();
-                            setState(() {
-                              _actionNameController.text = name;
-                            });
-                          } catch (e) {
-                            debugLogError('Error updating action', e);
-                            setState(() {
-                              _error = 'Failed to update action: $e';
-                              _isLoading = false;
-                            });
-                          }
-                        } : null,
-                        child: Text(_isAddActionMode ? 'Add' : 'Update'),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: canDeleteAction ? () async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Resolution'),
-                              content: const Text('Are you sure you want to delete this resolution? This cannot be undone.'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                                TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                              ],
-                            ),
-                          );
-                          if (confirmed == true) {
-                            try {
-                              await Supabase.instance.client.from('action').delete().eq('id', int.parse(_selectedActionId!));
-                              await _loadActions();
-                              setState(() {
-                                _selectedActionId = null;
-                                _actionNameController.clear();
-                                _isAddActionMode = false;
-                              });
-                            } catch (e) {
-                              debugLogError('Error deleting action', e);
-                              setState(() {
-                                _error = 'Failed to delete action: $e';
-                                _isLoading = false;
-                              });
-                            }
-                          }
-                        } : null,
-                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ],
+              items: _crewTypes.map((crewType) {
+                return DropdownMenuItem<int>(
+                  value: crewType['id'] as int,
+                  child: Text(crewType['crewtype'] as String),
+                );
+              }).toList(),
+              onChanged: (value) async {
+                if (value != null) {
+                  setState(() {
+                    _selectedCrewTypeId = value;
+                    _symptomClasses = [];
+                    _symptomsByClass = {};
+                    _actionsBySymptom = {};
+                    _expandedClasses = {};
+                    _expandedSymptoms = {};
+                  });
+                  await _loadSymptomClassesForCrewType(value);
+                }
+              },
+            ),
           ),
+
+          // Symptom Classes List
+          Expanded(
+            child: _symptomClasses.isEmpty
+                ? const Center(child: Text('No symptom classes found'))
+                : ReorderableListView.builder(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: _symptomClasses.length,
+                    onReorder: _reorderSymptomClasses,
+                    buildDefaultDragHandles: false,
+                    itemBuilder: (context, index) {
+                      final symptomClass = _symptomClasses[index];
+                      final classId = symptomClass['id'] as int;
+                      return _SymptomClassCard(
+                        key: ValueKey(classId),
+                        index: index,
+                        symptomClass: symptomClass,
+                        isExpanded: _expandedClasses.contains(classId),
+                        symptoms: _symptomsByClass[classId] ?? [],
+                        expandedSymptoms: _expandedSymptoms,
+                        actionsBySymptom: _actionsBySymptom,
+                        onToggleExpansion: () => _toggleClassExpansion(classId),
+                        onUpdate: _updateSymptomClass,
+                        onDelete: _deleteSymptomClass,
+                        onAddSymptom: _addSymptom,
+                        onUpdateSymptom: _updateSymptom,
+                        onDeleteSymptom: _deleteSymptom,
+                        onToggleSymptomExpansion: _toggleSymptomExpansion,
+                        onAddAction: _addAction,
+                        onUpdateAction: _updateAction,
+                        onDeleteAction: _deleteAction,
+                        onReorderSymptoms: _reorderSymptoms,
+                        onReorderActions: _reorderActions,
+                      );
+                    },
+                  ),
+          ),
+
+          // Add Symptom Class Button
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton.icon(
+              onPressed: () => _showAddSymptomClassDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Symptom Class'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddSymptomClassDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Symptom Class'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.trim().isNotEmpty) {
+      await _addSymptomClass(result.trim());
+    }
+  }
+}
+
+class _SymptomClassCard extends StatefulWidget {
+  final int index;
+  final Map<String, dynamic> symptomClass;
+  final bool isExpanded;
+  final List<Map<String, dynamic>> symptoms;
+  final Set<int> expandedSymptoms;
+  final Map<int, List<Map<String, dynamic>>> actionsBySymptom;
+  final VoidCallback onToggleExpansion;
+  final Function(int, String) onUpdate;
+  final Function(int) onDelete;
+  final Function(int, String) onAddSymptom;
+  final Function(int, int, String) onUpdateSymptom;
+  final Function(int, int) onDeleteSymptom;
+  final Function(int) onToggleSymptomExpansion;
+  final Function(int, String) onAddAction;
+  final Function(int, int, String) onUpdateAction;
+  final Function(int, int) onDeleteAction;
+  final Function(int, int, int) onReorderSymptoms;
+  final Function(int, int, int) onReorderActions;
+
+  const _SymptomClassCard({
+    super.key,
+    required this.index,
+    required this.symptomClass,
+    required this.isExpanded,
+    required this.symptoms,
+    required this.expandedSymptoms,
+    required this.actionsBySymptom,
+    required this.onToggleExpansion,
+    required this.onUpdate,
+    required this.onDelete,
+    required this.onAddSymptom,
+    required this.onUpdateSymptom,
+    required this.onDeleteSymptom,
+    required this.onToggleSymptomExpansion,
+    required this.onAddAction,
+    required this.onUpdateAction,
+    required this.onDeleteAction,
+    required this.onReorderSymptoms,
+    required this.onReorderActions,
+  });
+
+  @override
+  State<_SymptomClassCard> createState() => _SymptomClassCardState();
+}
+
+class _SymptomClassCardState extends State<_SymptomClassCard> {
+  late TextEditingController _controller;
+  late String _originalName;
+
+  @override
+  void initState() {
+    super.initState();
+    _originalName = widget.symptomClass['symptomclassstring'] as String;
+    _controller = TextEditingController(text: _originalName);
+  }
+
+  @override
+  void didUpdateWidget(_SymptomClassCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newName = widget.symptomClass['symptomclassstring'] as String;
+    if (newName != _originalName) {
+      _originalName = newName;
+      _controller.text = newName;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _hasChanges => _controller.text.trim() != _originalName;
+
+  @override
+  Widget build(BuildContext context) {
+    final classId = widget.symptomClass['id'] as int;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8.0),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 24),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(widget.isExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: widget.onToggleExpansion,
+                ),
+              ],
+            ),
+            title: TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Symptom Class Name',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              onChanged: (_) => setState(() {}),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton(
+                  onPressed: _hasChanges && _controller.text.trim().isNotEmpty
+                      ? () => widget.onUpdate(classId, _controller.text.trim())
+                      : null,
+                  child: const Text('SAVE'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => widget.onDelete(classId),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('DELETE'),
+                ),
+              ],
+            ),
+          ),
+          if (widget.isExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(left: 56.0, right: 16.0, bottom: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Symptoms List
+                  if (widget.symptoms.isNotEmpty)
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: widget.symptoms.length,
+                      onReorder: (oldIndex, newIndex) => widget.onReorderSymptoms(classId, oldIndex, newIndex),
+                      buildDefaultDragHandles: false,
+                      itemBuilder: (context, index) {
+                        final symptom = widget.symptoms[index];
+                        final symptomId = symptom['id'] as int;
+                        return _SymptomCard(
+                          key: ValueKey(symptomId),
+                          index: index,
+                          symptom: symptom,
+                          classId: classId,
+                          isExpanded: widget.expandedSymptoms.contains(symptomId),
+                          actions: widget.actionsBySymptom[symptomId] ?? [],
+                          onToggleExpansion: () => widget.onToggleSymptomExpansion(symptomId),
+                          onUpdate: widget.onUpdateSymptom,
+                          onDelete: widget.onDeleteSymptom,
+                          onAddAction: widget.onAddAction,
+                          onUpdateAction: widget.onUpdateAction,
+                          onDeleteAction: widget.onDeleteAction,
+                          onReorderActions: widget.onReorderActions,
+                        );
+                      },
+                    ),
+
+                  // Add Symptom Button
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddSymptomDialog(context, classId),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Symptom'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddSymptomDialog(BuildContext context, int classId) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Symptom'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.trim().isNotEmpty) {
+      widget.onAddSymptom(classId, result.trim());
+    }
+  }
+}
+
+class _SymptomCard extends StatefulWidget {
+  final int index;
+  final Map<String, dynamic> symptom;
+  final int classId;
+  final bool isExpanded;
+  final List<Map<String, dynamic>> actions;
+  final VoidCallback onToggleExpansion;
+  final Function(int, int, String) onUpdate;
+  final Function(int, int) onDelete;
+  final Function(int, String) onAddAction;
+  final Function(int, int, String) onUpdateAction;
+  final Function(int, int) onDeleteAction;
+  final Function(int, int, int) onReorderActions;
+
+  const _SymptomCard({
+    super.key,
+    required this.index,
+    required this.symptom,
+    required this.classId,
+    required this.isExpanded,
+    required this.actions,
+    required this.onToggleExpansion,
+    required this.onUpdate,
+    required this.onDelete,
+    required this.onAddAction,
+    required this.onUpdateAction,
+    required this.onDeleteAction,
+    required this.onReorderActions,
+  });
+
+  @override
+  State<_SymptomCard> createState() => _SymptomCardState();
+}
+
+class _SymptomCardState extends State<_SymptomCard> {
+  late TextEditingController _controller;
+  late String _originalName;
+
+  @override
+  void initState() {
+    super.initState();
+    _originalName = widget.symptom['symptomstring'] as String;
+    _controller = TextEditingController(text: _originalName);
+  }
+
+  @override
+  void didUpdateWidget(_SymptomCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newName = widget.symptom['symptomstring'] as String;
+    if (newName != _originalName) {
+      _originalName = newName;
+      _controller.text = newName;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _hasChanges => _controller.text.trim() != _originalName;
+
+  @override
+  Widget build(BuildContext context) {
+    final symptomId = widget.symptom['id'] as int;
+
+    return Card(
+      margin: const EdgeInsets.only(top: 8.0),
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          ListTile(
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Icon(widget.isExpanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                  onPressed: widget.onToggleExpansion,
+                ),
+              ],
+            ),
+            title: TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Symptom Name',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton(
+                  onPressed: _hasChanges && _controller.text.trim().isNotEmpty
+                      ? () => widget.onUpdate(symptomId, widget.classId, _controller.text.trim())
+                      : null,
+                  child: const Text('SAVE'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => widget.onDelete(symptomId, widget.classId),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('DELETE'),
+                ),
+              ],
+            ),
+          ),
+          if (widget.isExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(left: 56.0, right: 16.0, bottom: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Actions List
+                  if (widget.actions.isNotEmpty)
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: widget.actions.length,
+                      onReorder: (oldIndex, newIndex) => widget.onReorderActions(symptomId, oldIndex, newIndex),
+                      buildDefaultDragHandles: false,
+                      itemBuilder: (context, index) {
+                        final action = widget.actions[index];
+                        final actionId = action['id'] as int;
+                        return _ActionCard(
+                          key: ValueKey(actionId),
+                          index: index,
+                          action: action,
+                          symptomId: symptomId,
+                          onUpdate: widget.onUpdateAction,
+                          onDelete: widget.onDeleteAction,
+                        );
+                      },
+                    ),
+
+                  // Add Action Button
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddActionDialog(context, symptomId),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Action'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 36),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddActionDialog(BuildContext context, int symptomId) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Action'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.trim().isNotEmpty) {
+      widget.onAddAction(symptomId, result.trim());
+    }
+  }
+}
+
+class _ActionCard extends StatefulWidget {
+  final int index;
+  final Map<String, dynamic> action;
+  final int symptomId;
+  final Function(int, int, String) onUpdate;
+  final Function(int, int) onDelete;
+
+  const _ActionCard({
+    super.key,
+    required this.index,
+    required this.action,
+    required this.symptomId,
+    required this.onUpdate,
+    required this.onDelete,
+  });
+
+  @override
+  State<_ActionCard> createState() => _ActionCardState();
+}
+
+class _ActionCardState extends State<_ActionCard> {
+  late TextEditingController _controller;
+  late String _originalName;
+
+  @override
+  void initState() {
+    super.initState();
+    _originalName = widget.action['actionstring'] as String;
+    _controller = TextEditingController(text: _originalName);
+  }
+
+  @override
+  void didUpdateWidget(_ActionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newName = widget.action['actionstring'] as String;
+    if (newName != _originalName) {
+      _originalName = newName;
+      _controller.text = newName;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool get _hasChanges => _controller.text.trim() != _originalName;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionId = widget.action['id'] as int;
+
+    return Card(
+      margin: const EdgeInsets.only(top: 8.0),
+      color: Colors.grey[200],
+      child: ListTile(
+        leading: ReorderableDragStartListener(
+          index: widget.index,
+          child: const Icon(Icons.drag_handle, color: Colors.grey, size: 18),
+        ),
+        title: TextField(
+          controller: _controller,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            hintText: 'Action Name',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: _hasChanges && _controller.text.trim().isNotEmpty
+                  ? () => widget.onUpdate(actionId, widget.symptomId, _controller.text.trim())
+                  : null,
+              child: const Text('SAVE'),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => widget.onDelete(actionId, widget.symptomId),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('DELETE'),
+            ),
+          ],
         ),
       ),
     );
   }
-} 
+}

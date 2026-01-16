@@ -10,11 +10,13 @@ class ProblemCard extends StatefulWidget {
   final bool isReferee;
   final bool isUserResponding;
   final int? userCrewId;
+  final bool isSuperUser;
+  final List<Map<String, dynamic>>? responders;
   final VoidCallback onToggleExpansion;
   final VoidCallback onResolve;
   final VoidCallback onGoOnMyWay;
   final VoidCallback onLoadMissingData;
-  
+
   const ProblemCard({
     super.key,
     required this.problem,
@@ -23,6 +25,8 @@ class ProblemCard extends StatefulWidget {
     required this.isReferee,
     required this.isUserResponding,
     required this.userCrewId,
+    required this.isSuperUser,
+    this.responders,
     required this.onToggleExpansion,
     required this.onResolve,
     required this.onGoOnMyWay,
@@ -50,35 +54,59 @@ class _ProblemCardState extends State<ProblemCard> {
   }
 
   Widget _buildCollapsedProblem() {
+    // Get the latest message if available, filtering based on user's access
+    String? latestMessage;
+    if (widget.problem.messages != null && widget.problem.messages!.isNotEmpty) {
+      // Filter messages based on user's crew membership
+      final isUserCrew = widget.userCrewId != null && widget.problem.crewId == widget.userCrewId;
+      final visibleMessages = widget.problem.messages!.where((msg) {
+        if (isUserCrew || widget.isSuperUser) {
+          return true; // Crew members and superusers see all messages
+        }
+        // Non-crew members see messages marked for them OR messages they authored
+        final includeReporter = msg['include_reporter'];
+        final isAuthor = msg['author'] == widget.currentUserId;
+        return isAuthor || includeReporter == null || includeReporter == true;
+      }).toList();
+
+      if (visibleMessages.isNotEmpty) {
+        final sortedMessages = List.from(visibleMessages);
+        sortedMessages.sort((a, b) {
+          final aTime = DateTime.parse(a['created_at']);
+          final bTime = DateTime.parse(b['created_at']);
+          return bTime.compareTo(aTime); // Descending order
+        });
+        latestMessage = sortedMessages.first['message'] as String?;
+      }
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         StatusIndicator(status: widget.status),
-        const SizedBox(width: 8),
+        const SizedBox(width: 4),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Strip ${widget.problem.strip}',
+                'Strip ${widget.problem.strip}: ${widget.problem.symptomString ?? 'Unknown'}',
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Problem: ${widget.problem.symptomString ?? 'Unknown'}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
-                style: Theme.of(context).textTheme.bodySmall,
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                latestMessage ?? 'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: latestMessage != null ? FontStyle.italic : null,
+                  color: latestMessage != null ? Colors.grey[700] : null,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -90,11 +118,11 @@ class _ProblemCardState extends State<ProblemCard> {
           },
           icon: Icon(
             Icons.expand_more,
-            size: 28,
+            size: 24,
             color: Colors.grey[600],
           ),
-          padding: const EdgeInsets.all(8),
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          padding: const EdgeInsets.all(4),
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
         ),
       ],
     );
@@ -118,7 +146,8 @@ class _ProblemCardState extends State<ProblemCard> {
                 ),
               ),
             ),
-            if (!widget.isReferee && widget.problem.actionString == null && !widget.problem.isResolved) ...[
+            // Only show buttons if user is superuser OR user's crew matches problem's crew
+            if ((widget.isSuperUser || widget.userCrewId == widget.problem.crewId) && widget.problem.actionString == null && !widget.problem.isResolved) ...[
               if (!widget.isUserResponding)
                 ElevatedButton(
                   onPressed: widget.onGoOnMyWay,
@@ -200,9 +229,28 @@ class _ProblemCardState extends State<ProblemCard> {
           currentUserId: widget.currentUserId,
         ),
         const SizedBox(height: 4),
-        Text(
-          'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
-          style: Theme.of(context).textTheme.bodySmall,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (widget.responders != null && widget.responders!.isNotEmpty)
+              Text(
+                'Responding: ${widget.responders!.map((r) {
+                  final user = r['user'] as Map<String, dynamic>?;
+                  if (user != null) {
+                    return '${user['firstname']} ${user['lastname']}';
+                  }
+                  return 'Unknown';
+                }).join(', ')}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.orange[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+          ],
         ),
         if (widget.problem.isResolved && widget.problem.actionByName != null) ...[
           const SizedBox(height: 1),
@@ -230,4 +278,4 @@ class _ProblemCardState extends State<ProblemCard> {
       ),
     );
   }
-} 
+}

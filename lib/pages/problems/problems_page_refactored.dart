@@ -28,7 +28,7 @@ class ProblemsPage extends StatefulWidget {
 
 class _ProblemsPageState extends State<ProblemsPage> {
   final ProblemService _problemService = ProblemService();
-  
+
   List<ProblemWithDetails> _problems = [];
   bool _isLoading = true;
   String? _error;
@@ -54,7 +54,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     await _determineUserCrewInfo();
     await _loadCrewInfo();
     await _loadProblems();
-    
+
     // Start timers
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) => _cleanupResolvedProblems());
     _updateTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkForUpdates());
@@ -74,7 +74,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      final latestProblemTime = _problems.isNotEmpty 
+      final latestProblemTime = _problems.isNotEmpty
           ? _problems.map((p) => p.startDateTime).reduce((a, b) => a.isAfter(b) ? a : b)
           : DateTime(1970);
 
@@ -92,7 +92,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
-      
+
       final crewId = _isSuperUser ? _selectedCrewId : widget.crewId;
       final newProblems = await _problemService.checkForNewProblems(
         eventId: widget.eventId,
@@ -100,7 +100,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         since: since,
         crewId: crewId,
       );
-      
+
       if (mounted && newProblems.isNotEmpty) {
         for (final problem in newProblems) {
           try {
@@ -156,7 +156,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
             } else if (resolved.containsKey('resolveddatetime')) {
               resolvedTimeStr = resolved['resolveddatetime'] as String?;
             }
-            
+
             if (resolvedTimeStr != null) {
               final resolvedTime = DateTime.parse(resolvedTimeStr);
               await _handleProblemResolved(
@@ -186,18 +186,18 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (!mounted) return;
 
     final problemWithDetails = ProblemWithDetails.fromJson(problemJson);
-    
+
     // Filter out resolved problems that are older than 5 minutes
     if (problemWithDetails.resolvedDateTimeParsed != null) {
       final resolvedTime = problemWithDetails.resolvedDateTimeParsed!;
       final now = DateTime.now();
       final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
-      
+
       if (minutesSinceResolved >= 5) {
         return;
       }
     }
-    
+
     setState(() {
       if (!_problems.any((p) => p.id == problemWithDetails.id)) {
         _problems.add(problemWithDetails);
@@ -215,10 +215,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
       if (problemIndex != -1) {
         final problem = _problems[problemIndex];
         final updatedMessages = <Map<String, dynamic>>[...(problem.messages ?? [])];
-        
+
         final messageId = message['id'] as int;
         final messageExists = updatedMessages.any((m) => m['id'] == messageId);
-        
+
         if (!messageExists) {
           updatedMessages.add(message);
           _problems[problemIndex] = problem.copyWith(messages: updatedMessages);
@@ -285,20 +285,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
-      
+
       final crewId = _isSuperUser ? _selectedCrewId : widget.crewId;
       final problems = await _problemService.loadProblems(
         eventId: widget.eventId,
         userId: userId,
         crewId: crewId,
       );
-      
+
       if (mounted) {
         setState(() {
           _problems = problems;
           _isLoading = false;
         });
-        
+
         // Load responders data after problems are loaded
         await _loadResponders();
       }
@@ -361,12 +361,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
-      
+
       final crewMember = await Supabase.instance.client
           .from('crewmembers')
           .select('''
             crew:crew(
-              id, 
+              id,
               event,
               crewtype:crewtypes(crewtype)
             )
@@ -374,12 +374,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
           .eq('crewmember', userId)
           .eq('crew.event', widget.eventId)
           .maybeSingle();
-          
+
       if (crewMember != null && crewMember['crew'] != null) {
         final crew = crewMember['crew'] as Map<String, dynamic>;
         final crewTypeData = crew['crewtype'] as Map<String, dynamic>?;
         final crewTypeName = crewTypeData?['crewtype'] as String? ?? 'Crew';
-        
+
         setState(() {
           _userCrewId = crew['id'] as int;
           _userCrewName = crewTypeName;
@@ -446,18 +446,18 @@ class _ProblemsPageState extends State<ProblemsPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
-      
+
       final userResponse = await Supabase.instance.client
           .from('users')
           .select('superuser')
           .eq('supabase_id', userId)
           .maybeSingle();
-      
+
       if (mounted) {
         setState(() {
           _isSuperUser = userResponse?['superuser'] == true;
         });
-        
+
         if (_isSuperUser) {
           _loadAllCrews();
         }
@@ -472,13 +472,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final response = await Supabase.instance.client
           .from('crews')
           .select('''
-            id, 
+            id,
             crewtype:crewtypes(crewtype),
             crew_chief:users(firstname, lastname)
           ''')
           .eq('event', widget.eventId)
           .order('crewtype(crewtype)');
-      
+
       if (mounted) {
         setState(() {
           _allCrews = List<Map<String, dynamic>>.from(response);
@@ -496,9 +496,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
-      
+
       await _problemService.goOnMyWay(problemId, userId);
-      
+
       // Update the local responders data immediately
       if (mounted) {
         setState(() {
@@ -512,10 +512,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
           });
         });
       }
-      
+
       // Also reload from database to ensure consistency
       await _loadResponders();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('You are now en route')),
@@ -556,7 +556,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSuperUser 
+        title: _isSuperUser
           ? DropdownButton<int>(
               value: _selectedCrewId,
               underline: Container(),
@@ -609,7 +609,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                       )
                     : _problems.isEmpty
                         ? Center(
-                            child: Text(_isReferee 
+                            child: Text(_isReferee
                               ? 'You haven\'t reported any problems yet'
                               : 'No problems reported yet'),
                           )
@@ -621,7 +621,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                               final isUserCrew = _userCrewId != null && problem.crewId == _userCrewId;
                               final status = _problemService.getProblemStatus(problem, _responders);
                               final isUserResponding = _responders[problem.id]?.any((r) => r['user_id'] == Supabase.instance.client.auth.currentUser?.id) ?? false;
-                              
+
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 6.0),
                                 child: Stack(
@@ -633,6 +633,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
                                       isReferee: _isReferee,
                                       isUserResponding: isUserResponding,
                                       userCrewId: _userCrewId,
+                                      isSuperUser: _isSuperUser,
+                                      responders: _responders[problem.id],
                                       onToggleExpansion: () => _toggleProblemExpansion(problem.id),
                                       onResolve: () => _showResolveDialog(problem.id),
                                       onGoOnMyWay: () => _goOnMyWay(problem.id),
@@ -671,4 +673,4 @@ class _ProblemsPageState extends State<ProblemsPage> {
       ),
     );
   }
-} 
+}

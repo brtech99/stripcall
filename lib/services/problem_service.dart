@@ -199,7 +199,7 @@ class ProblemService {
       final problemIds = problems.map((p) => p.id).toList();
       final response = await Supabase.instance.client
           .from('responders')
-          .select('problem, user_id, responded_at')
+          .select('problem, user_id, responded_at, user:user_id(firstname, lastname)')
           .inFilter('problem', problemIds);
 
       final respondersMap = <int, List<Map<String, dynamic>>>{};
@@ -219,10 +219,10 @@ class ProblemService {
 
   Future<void> goOnMyWay(int problemId, String userId) async {
     try {
-      // Get problem details for notification
+      // Get problem details for notification (including originator)
       final problemResponse = await Supabase.instance.client
           .from('problem')
-          .select('crew, strip')
+          .select('crew, strip, originator')
           .eq('id', problemId)
           .single();
 
@@ -242,6 +242,7 @@ class ProblemService {
       final responderName = '${userResponse['firstname']} ${userResponse['lastname']}';
       final strip = problemResponse['strip'] as String;
       final crewId = problemResponse['crew'] as int;
+      final reporterId = problemResponse['originator'] as String?;
 
       // Send crew message
       try {
@@ -255,7 +256,7 @@ class ProblemService {
         // Continue - responder was recorded successfully even if crew message failed
       }
 
-      // Send notification using Edge Function
+      // Send notification using Edge Function (include reporter so they know someone is coming)
       try {
 
         await NotificationService().sendCrewNotification(
@@ -269,7 +270,8 @@ class ProblemService {
             'crewId': crewId.toString(),
             'strip': strip,
           },
-          includeReporter: false, // Don't include responder for "on my way" notifications
+          includeReporter: true, // Include reporter so they know help is coming
+          reporterId: reporterId,
         );
       } catch (notificationError) {
         debugLogError('Failed to send notification (responder was recorded successfully)', notificationError);
@@ -412,6 +414,41 @@ class ProblemService {
     }
   }
 
+  /// Check for updates to existing problems (resolution status, action changes, etc.)
+  Future<List<Map<String, dynamic>>> checkForProblemUpdates({
+    required DateTime since,
+    required List<int> problemIds,
+  }) async {
+    try {
+      if (problemIds.isEmpty) return [];
+
+      const selectFields = '''
+        id,
+        enddatetime,
+        action,
+        actionby,
+        action_data:action(id, actionstring),
+        actionby_data:actionby(supabase_id, firstname, lastname)
+      ''';
+
+      // Query for problems that have been updated since the last check
+      // Build an OR condition for problem IDs since in_() is not available in older postgrest
+      final idConditions = problemIds.map((id) => 'id.eq.$id').join(',');
+
+      final response = await Supabase.instance.client
+          .from('problem')
+          .select(selectFields)
+          .or(idConditions)
+          .not('enddatetime', 'is', null) // Only get resolved problems
+          .gte('enddatetime', since.toIso8601String());
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugLogError('Error checking for problem updates', e);
+      return [];
+    }
+  }
+
   /// Load messages for a specific problem
   Future<List<Map<String, dynamic>>> loadMessagesForProblem(int problemId) async {
     try {
@@ -433,15 +470,27 @@ class ProblemService {
     required DateTime since,
   }) async {
     try {
-      final resolvedProblems = await Supabase.instance.client
-          .rpc('get_resolved_problems', params: {
-            'event_id': eventId,
-            'crew_id': crewId,
-            'since_time': since.toIso8601String(),
-          });
+      // Use direct query to get full resolution data including action_data and actionby_data
+      const selectFields = '''
+        id,
+        enddatetime,
+        action,
+        actionby,
+        action_data:action(id, actionstring),
+        actionby_data:actionby(supabase_id, firstname, lastname)
+      ''';
 
-      return List<Map<String, dynamic>>.from(resolvedProblems ?? []);
+      final response = await Supabase.instance.client
+          .from('problem')
+          .select(selectFields)
+          .eq('event', eventId)
+          .eq('crew', crewId)
+          .not('enddatetime', 'is', null)
+          .gte('enddatetime', since.toIso8601String());
+
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
+      debugLogError('Error checking for resolved problems', e);
       return [];
     }
   }
