@@ -331,3 +331,14 @@ verify_jwt = true
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/delete-user/index.ts"
+
+[functions.receive-sms]
+enabled = true
+# Twilio webhook doesn't send JWT - uses signature verification instead
+verify_jwt = false
+entrypoint = "./functions/receive-sms/index.ts"
+
+[functions.send-sms]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-sms/index.ts"

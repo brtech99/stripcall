@@ -297,6 +297,21 @@ class _ProblemChatState extends State<ProblemChat> {
                     );
                   }
 
+                  // Send SMS to reporter if include_reporter is true
+                  // (This will only send if the problem has a reporter_phone from SMS)
+                  if (_includeReporter) {
+                    try {
+                      await NotificationService().sendSmsToReporter(
+                        problemId: widget.problemId,
+                        message: text,
+                        type: 'message',
+                      );
+                    } catch (smsError) {
+                      debugLogError('Error sending SMS to reporter', smsError);
+                      // Don't show error to user - SMS is best-effort
+                    }
+                  }
+
                   messenger.showSnackBar(
                     const SnackBar(content: Text('Message sent')),
                   );

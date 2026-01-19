@@ -605,6 +605,58 @@ class NotificationService {
     }
   }
 
+  /// Send SMS to problem reporter (if they have a phone number from SMS-created problem)
+  /// Returns true if SMS was sent or if no SMS was needed (no reporter_phone)
+  Future<bool> sendSmsToReporter({
+    required int problemId,
+    required String message,
+    String type = 'message', // 'message' or 'on_my_way'
+  }) async {
+    try {
+      final session = _supabase.auth.currentSession;
+      if (session == null) {
+        debugLogError('No active session for SMS');
+        return false;
+      }
+
+      debugLog('Sending SMS to reporter: problemId=$problemId, type=$type');
+
+      final response = await _supabase.functions.invoke(
+        'send-sms',
+        body: {
+          'problemId': problemId,
+          'message': message,
+          'type': type,
+        },
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('SMS send timed out', const Duration(seconds: 15));
+        },
+      );
+
+      debugLog('SMS response: ${response.status}');
+
+      if (response.status == 200) {
+        final data = response.data;
+        if (data != null && data['success'] == true) {
+          debugLog('SMS sent successfully: ${data['message']}');
+          return true;
+        } else if (data != null && data['message'] == 'No SMS reporter for this problem') {
+          // Not an error - just means this problem wasn't created via SMS
+          debugLog('No SMS reporter for this problem (not SMS-originated)');
+          return true;
+        }
+      }
+
+      debugLogError('SMS send failed: ${response.data}');
+      return false;
+    } catch (e) {
+      debugLogError('Error sending SMS to reporter', e);
+      return false;
+    }
+  }
+
   /// Show a custom in-app notification for foreground messages
   void _showCustomInAppNotification(
     String title,

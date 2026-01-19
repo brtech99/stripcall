@@ -262,7 +262,6 @@ class ProblemService {
 
       // Send notification using Edge Function (include reporter so they know someone is coming)
       try {
-
         await NotificationService().sendCrewNotification(
           title: 'Crew Member En Route',
           body: '$responderName is en route to Strip $strip',
@@ -280,6 +279,19 @@ class ProblemService {
       } catch (notificationError) {
         debugLogError('Failed to send notification (responder was recorded successfully)', notificationError);
         // Continue - responder was recorded successfully even if notification failed
+      }
+
+      // Send SMS to reporter if problem was created via SMS
+      // (The send-sms function will check if reporter_phone exists)
+      try {
+        await NotificationService().sendSmsToReporter(
+          problemId: problemId,
+          message: '', // Not used for on_my_way type
+          type: 'on_my_way',
+        );
+      } catch (smsError) {
+        debugLogError('Failed to send SMS to reporter (responder was recorded successfully)', smsError);
+        // Continue - responder was recorded successfully even if SMS failed
       }
     } catch (e) {
       debugLogError('Error updating status (goOnMyWay)', e);
