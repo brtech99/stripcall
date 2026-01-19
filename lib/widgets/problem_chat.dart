@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'dart:async';
+import 'dart:convert';
 import 'message_bubble.dart';
 import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
@@ -217,15 +219,51 @@ class _ProblemChatState extends State<ProblemChat> {
                   itemCount: _messages.length,
                   itemBuilder: (context, idx) {
                     final msg = _messages[idx];
-                    final isMe = msg['author'] == widget.currentUserId;
+                    final authorId = msg['author'] as String?;
+                    final isMe = authorId == widget.currentUserId;
+                    final messageText = msg['message'] as String? ?? '';
+
+                    // Handle SMS messages (author is null)
+                    if (authorId == null) {
+                      String smsName = 'SMS';
+                      String smsText = messageText;
+
+                      // Try to parse different SMS message formats:
+                      // Old format: "[SMS from Name] message" or "[SMS from (724) 612-2359] message"
+                      // New format: "Name: message" or "7246122359: message"
+                      final oldFormatMatch = RegExp(r'^\[SMS from ([^\]]+)\]\s*(.*)$').firstMatch(messageText);
+                      if (oldFormatMatch != null) {
+                        smsName = oldFormatMatch.group(1)!.trim();
+                        smsText = oldFormatMatch.group(2)!.trim();
+                        // Clean up phone number format - remove parentheses, dashes, spaces
+                        if (smsName.contains('(') || smsName.contains('-')) {
+                          smsName = smsName.replaceAll(RegExp(r'[^\d]'), '');
+                        }
+                      } else {
+                        // New format: "Name: message"
+                        final colonIndex = messageText.indexOf(': ');
+                        if (colonIndex > 0 && colonIndex < 50) {
+                          smsName = messageText.substring(0, colonIndex);
+                          smsText = messageText.substring(colonIndex + 2);
+                        }
+                      }
+
+                      return MessageBubble(
+                        text: smsText,
+                        senderName: smsName,
+                        isMe: false,
+                        createdAt: DateTime.parse(msg['created_at']),
+                        displayStyle: _crewDisplayStyle,
+                      );
+                    }
 
                     return FutureBuilder<String>(
-                      future: _getUserName(msg['author']),
+                      future: _getUserName(authorId),
                       builder: (context, snapshot) {
                         final senderName = snapshot.data ?? 'Loading...';
 
                         return MessageBubble(
-                          text: msg['message'],
+                          text: messageText,
                           senderName: senderName,
                           isMe: isMe,
                           createdAt: DateTime.parse(msg['created_at']),
@@ -299,13 +337,29 @@ class _ProblemChatState extends State<ProblemChat> {
 
                   // Send SMS to reporter if include_reporter is true
                   // (This will only send if the problem has a reporter_phone from SMS)
+                  // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
                   if (_includeReporter) {
                     try {
-                      await NotificationService().sendSmsToReporter(
-                        problemId: widget.problemId,
-                        message: text,
-                        type: 'message',
-                      );
+                      final session = Supabase.instance.client.auth.currentSession;
+                      if (session != null) {
+                        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+                        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+                        final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
+
+                        await http.post(
+                          url,
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ${session.accessToken}',
+                            'apikey': supabaseAnonKey,
+                          },
+                          body: jsonEncode({
+                            'problemId': widget.problemId,
+                            'message': text,
+                            'type': 'message',
+                          }),
+                        );
+                      }
                     } catch (smsError) {
                       debugLogError('Error sending SMS to reporter', smsError);
                       // Don't show error to user - SMS is best-effort

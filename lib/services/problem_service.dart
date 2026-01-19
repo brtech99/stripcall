@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/problem_with_details.dart';
 import 'notification_service.dart';
 import '../utils/debug_utils.dart';
@@ -283,12 +285,28 @@ class ProblemService {
 
       // Send SMS to reporter if problem was created via SMS
       // (The send-sms function will check if reporter_phone exists)
+      // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
       try {
-        await NotificationService().sendSmsToReporter(
-          problemId: problemId,
-          message: '', // Not used for on_my_way type
-          type: 'on_my_way',
-        );
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session != null) {
+          const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+          const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+          final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
+
+          await http.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${session.accessToken}',
+              'apikey': supabaseAnonKey,
+            },
+            body: jsonEncode({
+              'problemId': problemId,
+              'message': '',
+              'type': 'on_my_way',
+            }),
+          );
+        }
       } catch (smsError) {
         debugLogError('Failed to send SMS to reporter (responder was recorded successfully)', smsError);
         // Continue - responder was recorded successfully even if SMS failed

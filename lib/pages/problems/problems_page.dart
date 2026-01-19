@@ -500,7 +500,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
         problemId: problem.id,
         currentSymptomId: problem.symptomId,
         currentSymptomString: problem.symptomString,
+        currentStrip: problem.strip,
         crewTypeId: crewTypeId,
+        eventId: widget.eventId,
       ),
     );
 

@@ -225,6 +225,7 @@ class _ProblemCardState extends State<ProblemCard> {
               ),
           ],
         ),
+
         if (widget.problem.actionString != null) ...[
           const SizedBox(height: 4),
           Text('Resolution: ${widget.problem.actionString}'),
