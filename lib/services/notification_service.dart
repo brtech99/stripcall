@@ -5,12 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
-import 'dart:io';
-import 'dart:js' as js;
 import '../utils/debug_utils.dart';
 
-// Web-specific imports
-import 'dart:js_interop' if (dart.library.io) 'dart:io' as js_interop;
+// Conditional imports for platform-specific code
+import 'notification_service_stub.dart'
+    if (dart.library.io) 'notification_service_io.dart'
+    if (dart.library.html) 'notification_service_web.dart' as platform;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -40,24 +40,21 @@ class NotificationService {
         return;
       }
 
-      // Initialize local notifications
-      await _initializeLocalNotifications();
+      // Initialize local notifications (skip on web)
+      if (!kIsWeb) {
+        await _initializeLocalNotifications();
+      }
 
       // Request permission for iOS and Web
-      if (Platform.isIOS || kIsWeb) {
+      if (platform.shouldRequestPermission()) {
         try {
           debugLog('Requesting notification permissions...');
-          print('Requesting notification permissions from Dart side...');
 
           // For web, call the JavaScript initialization function
           if (kIsWeb) {
             try {
               debugLog('Calling window.initializeNotifications() for FCM setup...');
-              final initResult = js.context.callMethod('initializeNotifications');
-              // Wait for the promise to resolve
-              if (initResult != null) {
-                await Future.delayed(const Duration(milliseconds: 500));
-              }
+              await platform.initializeWebNotifications();
             } catch (webError) {
               debugLogError('Error calling initializeNotifications()', webError);
             }
@@ -83,7 +80,6 @@ class NotificationService {
           }
         } catch (e) {
           debugLogError('Continue without FCM permissions', e);
-          print('Error requesting notification permissions: $e');
         }
       }
 
@@ -96,45 +92,16 @@ class NotificationService {
         } else {
           debugLog('No FCM token obtained');
 
-          // Try to get token from JavaScript side as fallback
-          try {
-            final jsToken = js.context.callMethod('getFCMToken');
-            if (jsToken != null) {
-              // Handle both sync and async responses
-              if (jsToken is Future) {
-                final asyncToken = await jsToken;
-                if (asyncToken != null) {
-                  _fcmToken = asyncToken.toString();
-                  debugLog('FCM token obtained from JavaScript async: ${_fcmToken!.substring(0, 20)}...');
-                }
-              } else {
-                _fcmToken = jsToken.toString();
-                debugLog('FCM token obtained from JavaScript sync: ${_fcmToken!.substring(0, 20)}...');
-              }
-            } else {
-              // Wait a bit and try again
-              await Future.delayed(const Duration(seconds: 2));
-              final retryToken = js.context.callMethod('getFCMToken');
-              if (retryToken != null) {
-                if (retryToken is Future) {
-                  final asyncRetryToken = await retryToken;
-                  if (asyncRetryToken != null) {
-                    _fcmToken = asyncRetryToken.toString();
-                    debugLog('FCM token obtained from JavaScript async retry: ${_fcmToken!.substring(0, 20)}...');
-                  }
-                } else {
-                  _fcmToken = retryToken.toString();
-                  debugLog('FCM token obtained from JavaScript sync retry: ${_fcmToken!.substring(0, 20)}...');
-                }
-              }
+          // Try to get token from JavaScript side as fallback (web only)
+          if (kIsWeb) {
+            _fcmToken = await platform.getFCMTokenFromJS();
+            if (_fcmToken != null) {
+              debugLog('FCM token obtained from JavaScript: ${_fcmToken!.substring(0, 20)}...');
             }
-          } catch (jsError) {
-            debugLogError('Failed to get FCM token from JavaScript', jsError);
           }
         }
       } catch (e) {
         debugLogError('Continue without FCM token', e);
-        print('Error getting FCM token from Dart: $e');
       }
 
       // Listen for token refresh
@@ -166,11 +133,13 @@ class NotificationService {
         debugLogError('Error setting up foreground message handler', e);
       }
 
-      // Handle background messages
-      try {
-        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-      } catch (e) {
-        debugLogError('Continue without background message handling', e);
+      // Handle background messages (not supported on web)
+      if (!kIsWeb) {
+        try {
+          FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+        } catch (e) {
+          debugLogError('Continue without background message handling', e);
+        }
       }
 
       // Handle notification taps when app is opened from background
@@ -225,40 +194,44 @@ class NotificationService {
       await _localNotifications.initialize(initSettings);
 
       // Create notification channel for Android (iOS doesn't use channels)
-      try {
-        const androidChannel = AndroidNotificationChannel(
-          'stripcall_channel',
-          'StripCall Notifications',
-          description: 'Notifications for StripCall app',
-          importance: Importance.high,
-          playSound: true,
-          enableVibration: true,
-        );
+      if (platform.isAndroid()) {
+        try {
+          const androidChannel = AndroidNotificationChannel(
+            'stripcall_channel',
+            'StripCall Notifications',
+            description: 'Notifications for StripCall app',
+            importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
+          );
 
-        final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+          final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-        if (androidPlugin != null) {
-          await androidPlugin.createNotificationChannel(androidChannel);
+          if (androidPlugin != null) {
+            await androidPlugin.createNotificationChannel(androidChannel);
+          }
+        } catch (e) {
+          debugLogError('Error creating Android notification channel', e);
         }
-      } catch (e) {
-        debugLogError('Error creating Android notification channel', e);
       }
 
       // Request permissions explicitly for iOS
-      try {
-        final iosPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
+      if (platform.isIOS()) {
+        try {
+          final iosPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
 
-        if (iosPlugin != null) {
-          await iosPlugin.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+          if (iosPlugin != null) {
+            await iosPlugin.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+          }
+        } catch (e) {
+          debugLogError('Continue without iOS permissions', e);
         }
-      } catch (e) {
-        debugLogError('Continue without iOS permissions', e);
       }
     } catch (e) {
       debugLogError('Continue without local notifications', e);
@@ -271,6 +244,8 @@ class NotificationService {
     String body,
     Map<String, dynamic>? data,
   ) async {
+    if (kIsWeb) return; // Local notifications not supported on web
+
     try {
       const androidDetails = AndroidNotificationDetails(
         'stripcall_channel',
@@ -317,10 +292,9 @@ class NotificationService {
       }
 
       debugLog('Current user ID: $userId');
-      debugLog('User ID type: ${userId.runtimeType}');
 
-      final platform = kIsWeb ? 'web' : (Platform.isIOS ? 'ios' : 'android');
-      debugLog('Platform: $platform');
+      final platformName = platform.getPlatformName();
+      debugLog('Platform: $platformName');
 
       // First, let's check if the device_tokens table exists by trying to query it
       try {
@@ -346,13 +320,13 @@ class NotificationService {
 
       if (existingToken == null) {
         debugLog('Token does not exist, inserting new token...');
-        debugLog('Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platform"}');
+        debugLog('Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platformName"}');
 
         // Insert new token
         final result = await _supabase.from('device_tokens').insert({
           'user_id': userId,
           'device_token': token,
-          'platform': platform,
+          'platform': platformName,
         });
         debugLog('Insert result: $result');
       } else {
@@ -378,8 +352,6 @@ class NotificationService {
 
   /// Check if notifications are available
   bool get isAvailable => _isInitialized && _fcmToken != null;
-
-
 
   /// Send a notification to specific users via the Edge Function
   Future<bool> sendNotification({
@@ -676,7 +648,7 @@ class NotificationService {
   }
 }
 
-// Background message handler
+// Background message handler - only used on mobile platforms
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize Firebase for background processing

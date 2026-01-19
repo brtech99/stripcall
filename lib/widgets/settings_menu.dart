@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:js' as js;
 import '../utils/auth_helpers.dart';
 import '../routes.dart';
 import '../pages/database_page.dart';
-import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
+
+// Conditional import for web notification functionality
+import 'settings_menu_stub.dart'
+    if (dart.library.html) 'settings_menu_web.dart' as web_notifications;
 
 class SettingsMenu extends StatefulWidget {
   const SettingsMenu({super.key});
@@ -150,27 +152,29 @@ class _SettingsMenuState extends State<SettingsMenu> {
           ),
         );
 
-        // Add Request Permission option for all users
-        items.add(
-          const PopupMenuItem<String>(
-            value: 'request_permission',
-            child: ListTile(
-              leading: Icon(Icons.notification_add),
-              title: Text('Request Notification Permission'),
+        // Add Request Permission option for all users (web only shows these)
+        if (kIsWeb) {
+          items.add(
+            const PopupMenuItem<String>(
+              value: 'request_permission',
+              child: ListTile(
+                leading: Icon(Icons.notification_add),
+                title: Text('Request Notification Permission'),
+              ),
             ),
-          ),
-        );
+          );
 
-        // Add Test Notification option for all users
-        items.add(
-          const PopupMenuItem<String>(
-            value: 'test_notification',
-            child: ListTile(
-              leading: Icon(Icons.notifications),
-              title: Text('Test Notification'),
+          // Add Test Notification option for all users
+          items.add(
+            const PopupMenuItem<String>(
+              value: 'test_notification',
+              child: ListTile(
+                leading: Icon(Icons.notifications),
+                title: Text('Test Notification'),
+              ),
             ),
-          ),
-        );
+          );
+        }
 
         return items;
       },
@@ -180,19 +184,19 @@ class _SettingsMenuState extends State<SettingsMenu> {
   Future<void> _testNotification() async {
     try {
       debugLog('Testing notification...');
-      
+
       if (kIsWeb) {
-        // Check current permission status
-        final permission = js.context.callMethod('eval', ['Notification.permission']);
+        final permission = web_notifications.getNotificationPermission();
         debugLog('Current notification permission: $permission');
-        
+
         if (permission == 'granted') {
-          // Show a test notification immediately
-          js.context.callMethod('eval', [
-            'new Notification("Test Notification", {body: "This is a test notification from StripCall!", icon: "/icons/Icon-192.png"})'
-          ]);
+          web_notifications.showTestNotification(
+            'Test Notification',
+            'This is a test notification from StripCall!',
+            '/icons/Icon-192.png',
+          );
           debugLog('Test notification sent');
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Test notification sent! Check for browser notification.')),
@@ -226,11 +230,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
   Future<void> _requestNotificationPermission() async {
     try {
       debugLog('Requesting notification permission...');
-      
+
       if (kIsWeb) {
         try {
-          // Simple direct permission request
-          js.context.callMethod('eval', ['Notification.requestPermission()']);
+          web_notifications.requestNotificationPermission();
           debugLog('Notification permission request sent');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -261,4 +264,4 @@ class _SettingsMenuState extends State<SettingsMenu> {
       }
     }
   }
-} 
+}

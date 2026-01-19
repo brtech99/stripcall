@@ -202,6 +202,8 @@ class ProblemService {
           .select('problem, user_id, responded_at, user:user_id(firstname, lastname)')
           .inFilter('problem', problemIds);
 
+      print('DEBUG loadResponders: Raw response = $response');
+
       final respondersMap = <int, List<Map<String, dynamic>>>{};
       for (final responder in response) {
         final problemId = responder['problem'] as int;
@@ -211,8 +213,10 @@ class ProblemService {
         respondersMap[problemId]!.add(responder);
       }
 
+      print('DEBUG loadResponders: Final map = $respondersMap');
       return respondersMap;
     } catch (e) {
+      print('DEBUG loadResponders: Error = $e');
       return {};
     }
   }
@@ -501,5 +505,51 @@ class ProblemService {
       return 'en_route';
     }
     return 'new';
+  }
+
+  /// Change the symptom of a problem, recording the old value in oldproblemsymptom
+  Future<void> changeSymptom({
+    required int problemId,
+    required int oldSymptomId,
+    required int newSymptomId,
+    required String userId,
+  }) async {
+    try {
+      // Record the old symptom in oldproblemsymptom table
+      await Supabase.instance.client.from('oldproblemsymptom').insert({
+        'problem': problemId,
+        'oldsymptom': oldSymptomId,
+        'changedby': userId,
+        'changedat': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      // Update the problem with the new symptom
+      await Supabase.instance.client.from('problem').update({
+        'symptom': newSymptomId,
+      }).eq('id', problemId);
+    } catch (e) {
+      debugLogError('Failed to change symptom', e);
+      throw Exception('Failed to change symptom: $e');
+    }
+  }
+
+  /// Load the symptom change history for a problem
+  Future<List<Map<String, dynamic>>> loadSymptomHistory(int problemId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('oldproblemsymptom')
+          .select('''
+            *,
+            symptom:oldsymptom(id, symptomstring),
+            user:changedby(supabase_id, firstname, lastname)
+          ''')
+          .eq('problem', problemId)
+          .order('changedat', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugLogError('Failed to load symptom history', e);
+      return [];
+    }
   }
 }

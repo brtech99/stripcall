@@ -16,6 +16,7 @@ class ProblemCard extends StatefulWidget {
   final VoidCallback onResolve;
   final VoidCallback onGoOnMyWay;
   final VoidCallback onLoadMissingData;
+  final VoidCallback? onEditSymptom;
 
   const ProblemCard({
     super.key,
@@ -31,6 +32,7 @@ class ProblemCard extends StatefulWidget {
     required this.onResolve,
     required this.onGoOnMyWay,
     required this.onLoadMissingData,
+    this.onEditSymptom,
   });
 
   @override
@@ -195,12 +197,33 @@ class _ProblemCardState extends State<ProblemCard> {
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          'Problem: ${widget.problem.symptomString ?? 'Unknown'}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'Problem: ${widget.problem.symptomString ?? 'Unknown'}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            // Show Edit button for crew members and superusers on unresolved problems
+            if (widget.onEditSymptom != null &&
+                (widget.isSuperUser || widget.userCrewId == widget.problem.crewId) &&
+                !widget.problem.isResolved)
+              TextButton.icon(
+                onPressed: widget.onEditSymptom,
+                icon: const Icon(Icons.edit, size: 16),
+                label: const Text('Edit'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+          ],
         ),
         if (widget.problem.actionString != null) ...[
           const SizedBox(height: 4),

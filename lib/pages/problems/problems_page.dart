@@ -10,6 +10,7 @@ import '../../utils/debug_utils.dart';
 
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
+import 'edit_symptom_dialog.dart';
 
 class ProblemsPage extends StatefulWidget {
   final int eventId;
@@ -477,6 +478,37 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
   }
 
+  Future<void> _showEditSymptomDialog(ProblemWithDetails problem) async {
+    // Get the crew type ID for filtering symptoms
+    int? crewTypeId;
+    try {
+      final crewResponse = await Supabase.instance.client
+          .from('crews')
+          .select('crew_type')
+          .eq('id', problem.crewId)
+          .maybeSingle();
+      crewTypeId = crewResponse?['crew_type'] as int?;
+    } catch (e) {
+      // If we can't get the crew type, we'll show all symptoms
+    }
+
+    if (!mounted) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => EditSymptomDialog(
+        problemId: problem.id,
+        currentSymptomId: problem.symptomId,
+        currentSymptomString: problem.symptomString,
+        crewTypeId: crewTypeId,
+      ),
+    );
+
+    if (result == true) {
+      _loadProblems();
+    }
+  }
+
   Future<void> _determineUserCrewInfo() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -778,6 +810,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                                       onResolve: () => _showResolveDialog(problem.id),
                                       onGoOnMyWay: () => _goOnMyWay(problem.id),
                                       onLoadMissingData: () => _loadMissingData(problem),
+                                      onEditSymptom: () => _showEditSymptomDialog(problem),
                                     ),
                                     if (!isUserCrew)
                                       Positioned(
