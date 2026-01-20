@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/auth/login_page.dart';
@@ -16,6 +17,39 @@ import 'providers/problems_page_provider.dart';
 
 final router = GoRouter(
   initialLocation: '/',
+  errorBuilder: (context, state) {
+    // Handle auth callback URLs that come back with tokens or messages
+    // These show up as "no route" errors because the path includes query params
+    final location = state.matchedLocation;
+    print('=== ROUTER ERROR: No route for: $location ===');
+
+    // If it looks like an auth callback (has access_token, message, error, etc.)
+    // just redirect to the app - Supabase client will handle the token
+    if (location.contains('access_token') ||
+        location.contains('message=') ||
+        location.contains('error=') ||
+        location.contains('type=email')) {
+      print('=== ROUTER: Looks like auth callback, redirecting to home ===');
+      // Return a simple page that redirects
+      Future.microtask(() {
+        if (context.mounted) {
+          final session = Supabase.instance.client.auth.currentSession;
+          if (session != null) {
+            GoRouter.of(context).go(Routes.selectEvent);
+          } else {
+            GoRouter.of(context).go(Routes.login);
+          }
+        }
+      });
+    }
+
+    // Show a simple loading/redirect page
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  },
   redirect: (context, state) async {
     print('=== ROUTER REDIRECT: ${state.matchedLocation} ===');
     final session = Supabase.instance.client.auth.currentSession;

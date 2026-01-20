@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/auth_helpers.dart';
 import '../routes.dart';
 import '../pages/database_page.dart';
+import '../pages/account_page.dart';
 import '../utils/debug_utils.dart';
 
 // Conditional import for web notification functionality
@@ -60,9 +61,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
       onSelected: (value) async {
         switch (value) {
           case 'account':
-            // TODO: Navigate to Account page when implemented
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Account page not yet implemented')),
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const AccountPage()),
             );
             break;
           case 'manage_events':
