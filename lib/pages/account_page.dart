@@ -13,7 +13,7 @@ class AccountPage extends StatefulWidget {
   State<AccountPage> createState() => _AccountPageState();
 }
 
-class _AccountPageState extends State<AccountPage> {
+class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
 
   bool _isLoading = true;
@@ -47,17 +47,52 @@ class _AccountPageState extends State<AccountPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _firstNameController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _otpController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh user data when app comes back to foreground
+    // This handles the case where email was changed in another tab (mobile)
+    if (state == AppLifecycleState.resumed && _isVerifyingEmail) {
+      _refreshUserEmail();
+    }
+  }
+
+  Future<void> _refreshUserEmail() async {
+    // Refresh the auth session to get updated email
+    try {
+      await _supabase.auth.refreshSession();
+      final user = _supabase.auth.currentUser;
+      if (user != null && mounted) {
+        final newEmail = user.email ?? '';
+        if (newEmail != _email && newEmail.isNotEmpty) {
+          setState(() {
+            _email = newEmail;
+            _emailController.text = _email;
+            _isVerifyingEmail = false;
+            _pendingEmail = '';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Email updated successfully')),
+          );
+        }
+      }
+    } catch (e) {
+      debugLogError('Error refreshing user email', e);
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -326,7 +361,7 @@ class _AccountPageState extends State<AccountPage> {
       // Supabase will send a confirmation email to the new address
       await _supabase.auth.updateUser(
         UserAttributes(email: newEmail),
-        emailRedirectTo: 'https://stripcall.us/app',
+        emailRedirectTo: 'https://stripcall.us/app/email-changed.html',
       );
 
       setState(() {
@@ -339,8 +374,8 @@ class _AccountPageState extends State<AccountPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Confirmation email sent. Please check your inbox and click the link to confirm.'),
-            duration: Duration(seconds: 5),
+            content: Text('Confirmation emails sent to both addresses. Click the link in BOTH emails to complete the change.'),
+            duration: Duration(seconds: 8),
           ),
         );
       }
@@ -653,12 +688,12 @@ class _AccountPageState extends State<AccountPage> {
             const SizedBox(height: 8),
             if (_isVerifyingEmail) ...[
               const Text(
-                'A confirmation email has been sent to your new address. '
-                'Please click the link in the email to confirm the change.',
+                'Confirmation emails have been sent to BOTH your old and new addresses. '
+                'You must click the link in BOTH emails to complete the change.',
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 8),
-              Text('Pending: $_pendingEmail'),
+              Text('New email: $_pendingEmail'),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
