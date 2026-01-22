@@ -8,7 +8,7 @@ import 'config/firebase_config.dart';
 import 'utils/debug_utils.dart';
 
 void main() async {
-  print('=== MAIN: App starting ===');
+  print('=== STRIPCALL BUILD 2026-01-21-TEST ===');
   WidgetsFlutterBinding.ensureInitialized();
 
   debugLog('=== APP STARTING ===');

@@ -2,12 +2,15 @@
 -- Enables SMS-to-App bridge for legacy Twilio-based crew communication
 
 -- 1. SMS reply slots (tracks +n assignments per crew, 1-4 rotating)
+-- Each incoming message from a non-crew member gets assigned a +n slot
+-- Crew members reply with "+n message" to route their reply to that problem/message
 CREATE TABLE IF NOT EXISTS public.sms_reply_slots (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   crew_id BIGINT NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
   slot SMALLINT NOT NULL CHECK (slot >= 1 AND slot <= 4),
-  phone TEXT NOT NULL,
+  phone TEXT NOT NULL,  -- The non-crew reporter's phone
   problem_id BIGINT REFERENCES problem(id) ON DELETE SET NULL,
+  message_id BIGINT,  -- The specific message this slot was assigned to (for context)
   assigned_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours'),
   UNIQUE (crew_id, slot)
@@ -16,6 +19,14 @@ CREATE TABLE IF NOT EXISTS public.sms_reply_slots (
 CREATE INDEX IF NOT EXISTS idx_sms_reply_slots_phone ON sms_reply_slots(phone);
 CREATE INDEX IF NOT EXISTS idx_sms_reply_slots_expires ON sms_reply_slots(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sms_reply_slots_problem ON sms_reply_slots(problem_id);
+
+-- Track the next slot number per crew (1-4, rotating)
+CREATE TABLE IF NOT EXISTS public.sms_crew_slot_counter (
+  crew_id BIGINT PRIMARY KEY REFERENCES crews(id) ON DELETE CASCADE,
+  next_slot SMALLINT NOT NULL DEFAULT 1 CHECK (next_slot >= 1 AND next_slot <= 4)
+);
+
+ALTER TABLE sms_crew_slot_counter ENABLE ROW LEVEL SECURITY;
 
 -- RLS: Service role only (edge functions use service role key)
 ALTER TABLE sms_reply_slots ENABLE ROW LEVEL SECURITY;

@@ -8,6 +8,7 @@ import 'pages/events/select_event_page.dart';
 import 'package:provider/provider.dart';
 import 'pages/problems/problems_page.dart';
 import 'pages/crews/select_crew_page.dart';
+import 'pages/sms_simulator_page.dart';
 import 'routes.dart';
 import 'pages/auth/create_account_page.dart';
 import 'pages/auth/forgot_password_page.dart';
@@ -323,6 +324,10 @@ final router = GoRouter(
     GoRoute(
       path: Routes.selectCrew,
       builder: (context, state) => const SelectCrewPage(),
+    ),
+    GoRoute(
+      path: Routes.smsSimulator,
+      builder: (context, state) => const SmsSimulatorPage(),
     ),
   ],
 );

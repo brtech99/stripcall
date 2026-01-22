@@ -1,194 +1,382 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
-// Twilio phone -> crew type mapping
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+// Map Twilio phone to crew type name
 const PHONE_TO_CREW_TYPE: Record<string, string> = {
   "+17542276679": "Armorer",
   "+13127577223": "Medical",
   "+16504803067": "Natloff",
 };
 
-// Strip parsing patterns
-const STRIP_PATTERNS = [
-  /strip\s*#?\s*(\d+|[A-Z]\d+|Finals)/i, // "strip 5", "strip #5", "strip A3", "strip Finals"
-  /\b([A-Z]\d+)\s*strip/i, // "A3 strip"
-  /\bL(\d+)\b/i, // "L4" -> "4"
-  /\b([A-Z]\d+)\b/, // "A3", "B2" standalone
-  /\bstrip\s+(\w+)/i, // "strip finals"
-];
-
 serve(async (req) => {
-  try {
-    // Verify Twilio signature
-    const isValid = await verifyTwilioSignature(req);
-    if (!isValid) {
-      console.error("Invalid Twilio signature");
-      return new Response("Forbidden", { status: 403 });
-    }
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-    // Parse Twilio webhook (application/x-www-form-urlencoded)
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Parse Twilio webhook form data
     const formData = await req.formData();
-    const from = formData.get("From") as string;
-    const to = formData.get("To") as string;
+    const from = formData.get("From") as string; // Sender's phone
+    const to = formData.get("To") as string; // Our Twilio number
     const body = ((formData.get("Body") as string) || "").trim();
 
     console.log(`SMS received: From=${from}, To=${to}, Body=${body}`);
 
-    // Create Supabase client with service role
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    if (!from || !to || !body) {
+      return twimlResponse("Invalid message received");
+    }
+
+    // Normalize phone numbers (remove +1 prefix variations)
+    const normalizedFrom = normalizePhone(from);
+    const normalizedTo = normalizePhone(to);
+
+    console.log(
+      `Normalized phones: from=${normalizedFrom}, to=${normalizedTo}`,
     );
 
-    // Determine target crew type from Twilio number
-    const crewTypeName = PHONE_TO_CREW_TYPE[to];
+    // Determine crew type from the "To" number
+    const crewTypeName =
+      PHONE_TO_CREW_TYPE[to] || PHONE_TO_CREW_TYPE["+1" + normalizedTo];
+    console.log(`Crew type lookup: to=${to}, crewTypeName=${crewTypeName}`);
     if (!crewTypeName) {
-      console.error(`Unknown Twilio number: ${to}`);
-      return twimlResponse("Sorry, this number is not configured.");
+      console.log("Unknown Twilio number:", to);
+      return twimlResponse("Unknown crew number");
     }
 
-    // Find the crew for the current active event
-    const crew = await findCrewByType(supabase, crewTypeName);
+    // Find the crew for this crew type (most recent/active)
+    const crew = await findCrewByType(adminClient, crewTypeName);
     if (!crew) {
-      console.error(`No crew found for type: ${crewTypeName}`);
-      return twimlResponse("No active crew found for this number.");
+      console.log("No active crew found for type:", crewTypeName);
+      return twimlResponse("No active crew found");
     }
 
-    // Check if sender is a crew member (has profile with matching phone)
-    const normalizedPhone = normalizePhone(from);
-    const { data: crewMemberUser } = await supabase
-      .from("users")
-      .select("supabase_id, firstname, lastname, phonenbr")
-      .or(`phonenbr.eq.${normalizedPhone},phonenbr.eq.${from}`)
-      .limit(1)
-      .single();
+    console.log(`Found crew: id=${crew.id}, type=${crewTypeName}`);
 
-    let isCrewMember = false;
-    if (crewMemberUser) {
-      const { data: membership } = await supabase
-        .from("crewmembers")
-        .select("id")
-        .eq("crewmember", crewMemberUser.supabase_id)
-        .eq("crew", crew.id)
-        .single();
-      isCrewMember = !!membership;
-    }
+    // Check if sender is a crew member (by phone number)
+    const crewMember = await findCrewMemberByPhone(
+      adminClient,
+      crew.id,
+      normalizedFrom,
+    );
 
-    // Parse +N prefix for routing
-    const prefixMatch = body.match(/^\+(\d)\s*(.*)/);
-    const replySlot = prefixMatch ? parseInt(prefixMatch[1]) : null;
-    const messageBody = prefixMatch ? prefixMatch[2].trim() : body;
-
-    if (isCrewMember && crewMemberUser) {
-      // CREW MEMBER SMS
-      if (replySlot) {
-        // Route to specific problem via reply slot
-        return await handleCrewMemberReply(
-          supabase,
-          crew.id,
-          crewMemberUser,
-          replySlot,
-          messageBody,
-          from,
-        );
-      } else {
-        // Broadcast to crew_messages
-        return await handleCrewBroadcast(
-          supabase,
-          crew.id,
-          crewMemberUser,
-          messageBody,
-        );
-      }
-    } else {
-      // REFEREE/EXTERNAL SMS
-      return await handleRefereeMessage(
-        supabase,
-        crew.id,
-        crew.event,
-        from,
-        messageBody,
+    if (crewMember) {
+      // CREW MEMBER MESSAGE
+      console.log(
+        `CREW MEMBER DETECTED: ${crewMember.firstname} ${crewMember.lastname} (supabase_id: ${crewMember.supabase_id})`,
       );
+      console.log(
+        `Routing to handleCrewMemberMessage (will create crew_message, NOT problem)`,
+      );
+      return await handleCrewMemberMessage(
+        adminClient,
+        crew,
+        crewMember,
+        body,
+        from,
+      );
+    } else {
+      // NON-CREW MEMBER (REFEREE/REPORTER) MESSAGE
+      console.log(
+        "NON-CREW MEMBER DETECTED - Routing to handleReporterMessage (will create problem)",
+      );
+      return await handleReporterMessage(adminClient, crew, from, body);
     }
   } catch (error) {
-    console.error("Error processing SMS:", error);
-    return twimlResponse("An error occurred. Please try again.");
+    console.error("receive-sms error:", error);
+    return twimlResponse("An error occurred processing your message");
   }
 });
 
-async function verifyTwilioSignature(req: Request): Promise<boolean> {
-  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
-  if (!authToken) {
-    console.error("TWILIO_AUTH_TOKEN not set");
-    return false;
+// Handle message from a crew member
+async function handleCrewMemberMessage(
+  adminClient: any,
+  crew: any,
+  crewMember: any,
+  body: string,
+  fromPhone: string,
+): Promise<Response> {
+  // Check for +n prefix (reply to specific problem)
+  const plusNMatch = body.match(/^\+(\d)\s*(.*)$/s);
+
+  if (plusNMatch) {
+    // +n message - route to most recent open problem from the reporter who was assigned that slot
+    const slot = parseInt(plusNMatch[1]);
+    const message = plusNMatch[2].trim();
+
+    if (slot < 1 || slot > 4) {
+      return twimlResponse("Invalid slot number. Use +1, +2, +3, or +4");
+    }
+
+    // Look up the slot to get the reporter's phone
+    const { data: slotData } = await adminClient
+      .from("sms_reply_slots")
+      .select("phone")
+      .eq("crew_id", crew.id)
+      .eq("slot", slot)
+      .maybeSingle();
+
+    if (!slotData || !slotData.phone) {
+      return twimlResponse(`No active reporter for +${slot}`);
+    }
+
+    // Find the most recent open problem from this reporter for this crew
+    const { data: problem } = await adminClient
+      .from("problem")
+      .select("id, reporter_phone, strip")
+      .eq("crew", crew.id)
+      .eq("reporter_phone", slotData.phone)
+      .is("enddatetime", null)
+      .order("startdatetime", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!problem) {
+      return twimlResponse(`No open problem for +${slot}`);
+    }
+
+    // Insert message into the problem's messages table
+    const { error: msgError } = await adminClient.from("messages").insert({
+      problem: problem.id,
+      crew: crew.id,
+      author: crewMember.supabase_id,
+      message: message,
+      include_reporter: true, // Crew member replies should be visible to reporter
+    });
+
+    if (msgError) {
+      console.error("Error inserting message:", msgError);
+      return twimlResponse("Failed to send message");
+    }
+
+    // Also send the message as SMS to the reporter
+    if (problem.reporter_phone) {
+      await sendSmsToReporter(
+        adminClient,
+        problem.reporter_phone,
+        message,
+        crewMember,
+        crew,
+      );
+    }
+
+    // No response to SMS crew member - matches legacy behavior
+    return emptyTwimlResponse();
+  } else {
+    // No +n prefix - treat as crew broadcast message
+    const { error: crewMsgError } = await adminClient
+      .from("crew_messages")
+      .insert({
+        crew: crew.id,
+        author: crewMember.supabase_id,
+        message: body,
+      });
+
+    if (crewMsgError) {
+      console.error("Error inserting crew message:", crewMsgError);
+      return twimlResponse("Failed to send crew message");
+    }
+
+    // No response to SMS crew member - matches legacy behavior
+    return emptyTwimlResponse();
   }
-
-  const signature = req.headers.get("X-Twilio-Signature");
-  if (!signature) {
-    console.error("No X-Twilio-Signature header");
-    return false;
-  }
-
-  // Clone request to read body without consuming it
-  const clonedReq = req.clone();
-  const formData = await clonedReq.formData();
-
-  // Build the validation URL - use the actual Twilio webhook URL, not the internal URL
-  // Twilio signs with the URL you configured in their console
-  const webhookUrl =
-    "https://wpytorahphbnzgikowgz.supabase.co/functions/v1/receive-sms";
-
-  // Sort form params and concatenate
-  const params: [string, string][] = [];
-  formData.forEach((value, key) => {
-    params.push([key, value as string]);
-  });
-  params.sort((a, b) => a[0].localeCompare(b[0]));
-
-  const paramString = params.map(([k, v]) => `${k}${v}`).join("");
-  const dataToSign = webhookUrl + paramString;
-
-  // HMAC-SHA1
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(authToken);
-  const messageData = encoder.encode(dataToSign);
-
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-1" },
-    false,
-    ["sign"],
-  );
-
-  const signatureBuffer = await crypto.subtle.sign(
-    "HMAC",
-    cryptoKey,
-    messageData,
-  );
-  const computedSignature = base64Encode(new Uint8Array(signatureBuffer));
-
-  return computedSignature === signature;
 }
 
-async function findCrewByType(supabase: any, crewTypeName: string) {
+// Handle message from non-crew member (referee/reporter)
+async function handleReporterMessage(
+  adminClient: any,
+  crew: any,
+  fromPhone: string,
+  body: string,
+): Promise<Response> {
+  const normalizedFrom = normalizePhone(fromPhone);
+
+  // Look up reporter name - check users table first, then sms_reporters
+  let reporterName = normalizedFrom;
+
+  // Try users table first (by phone number) - need to check multiple formats
+  // Users might have phone stored as "2025551234", "+12025551234", "202-555-1234", etc.
+  const { data: users } = await adminClient
+    .from("users")
+    .select("firstname, lastname, phonenbr");
+
+  const matchedUser = users?.find((u: any) => {
+    if (!u.phonenbr) return false;
+    return normalizePhone(u.phonenbr) === normalizedFrom;
+  });
+
+  if (matchedUser) {
+    const fullName =
+      `${matchedUser.firstname || ""} ${matchedUser.lastname || ""}`.trim();
+    if (fullName) {
+      reporterName = fullName;
+      console.log(`Found user name for ${normalizedFrom}: ${reporterName}`);
+    }
+  } else {
+    // Try sms_reporters table - also need to normalize phone format
+    const { data: reporters } = await adminClient
+      .from("sms_reporters")
+      .select("name, phone");
+
+    const matchedReporter = reporters?.find((r: any) => {
+      if (!r.phone) return false;
+      return normalizePhone(r.phone) === normalizedFrom;
+    });
+
+    if (matchedReporter?.name) {
+      reporterName = matchedReporter.name;
+      console.log(
+        `Found sms_reporter name for ${normalizedFrom}: ${reporterName}`,
+      );
+    } else {
+      console.log(`No name found for ${normalizedFrom}, using phone number`);
+    }
+  }
+
+  // Check if there's an existing unresolved problem from this phone for this crew
+  const { data: existingProblem } = await adminClient
+    .from("problem")
+    .select("id, strip")
+    .eq("crew", crew.id)
+    .eq("reporter_phone", normalizedFrom)
+    .is("enddatetime", null)
+    .order("startdatetime", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingProblem) {
+    // Add message to existing problem
+    const { error: msgError } = await adminClient.from("messages").insert({
+      problem: existingProblem.id,
+      crew: crew.id,
+      author: null, // null author indicates SMS message
+      message: `${reporterName}: ${body}`,
+      include_reporter: true,
+    });
+
+    if (msgError) {
+      console.error("Error inserting message:", msgError);
+      return twimlResponse("Failed to add message");
+    }
+
+    // Assign a new +n slot for this message (increments per message, not per problem)
+    const slot = await assignSlot(adminClient, crew.id, normalizedFrom);
+
+    // Notify SMS crew members about the new message
+    await notifySmsModeCrewMembers(
+      adminClient,
+      crew.id,
+      existingProblem.id,
+      existingProblem.strip,
+      reporterName,
+      body,
+      slot,
+    );
+
+    // No response to reporter - matches legacy behavior
+    return emptyTwimlResponse();
+  } else {
+    // Create new problem
+    console.log(`Creating new problem for reporter ${normalizedFrom}`);
+
+    // Parse strip from message (regex: "L4", "strip 5", "A3", "Finals", etc.)
+    const strip = parseStripFromMessage(body);
+    console.log(`Parsed strip: ${strip} from message: ${body}`);
+
+    // Find the "SMS Report - Needs Triage" symptom for this crew type
+    console.log(`Looking for SMS symptom for crew_type: ${crew.crew_type}`);
+    const symptomId = await findSmsSymptom(adminClient, crew.crew_type);
+    if (!symptomId) {
+      console.error(
+        "Could not find SMS symptom for crew type:",
+        crew.crew_type,
+      );
+      return twimlResponse("Configuration error - please contact support");
+    }
+    console.log(`Found symptom ID: ${symptomId}`);
+
+    // Create the problem
+    console.log(
+      `Inserting problem: event=${crew.event}, crew=${crew.id}, strip=${strip}, symptom=${symptomId}`,
+    );
+    const { data: newProblem, error: problemError } = await adminClient
+      .from("problem")
+      .insert({
+        event: crew.event,
+        crew: crew.id,
+        strip: strip,
+        symptom: symptomId,
+        reporter_phone: normalizedFrom,
+        startdatetime: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (problemError) {
+      console.error("Error creating problem:", problemError);
+      return twimlResponse("Failed to report problem");
+    }
+    console.log(`Created problem ID: ${newProblem.id}`);
+
+    // Add the initial message
+    await adminClient.from("messages").insert({
+      problem: newProblem.id,
+      crew: crew.id,
+      author: null,
+      message: `${reporterName}: ${body}`,
+      include_reporter: true,
+    });
+
+    // Assign a +n slot for this reporter (increments per message)
+    const slot = await assignSlot(adminClient, crew.id, normalizedFrom);
+
+    // Notify SMS crew members about the new problem
+    await notifySmsModeCrewMembers(
+      adminClient,
+      crew.id,
+      newProblem.id,
+      strip,
+      reporterName,
+      body,
+      slot,
+    );
+
+    // No response to reporter - matches legacy behavior
+    return emptyTwimlResponse();
+  }
+}
+
+// Find crew by crew type name
+async function findCrewByType(
+  adminClient: any,
+  crewTypeName: string,
+): Promise<any> {
   // Get crew type ID
-  const { data: crewType } = await supabase
+  const { data: crewType } = await adminClient
     .from("crewtypes")
     .select("id")
     .eq("crewtype", crewTypeName)
     .single();
 
-  if (!crewType) {
-    console.error(`Crew type not found: ${crewTypeName}`);
-    return null;
-  }
+  if (!crewType) return null;
 
-  // Find the most recent crew of this type (assumes current event)
-  const { data: crew } = await supabase
+  // Find the most recent crew of this type (assumes one active per event)
+  // In a real scenario, you might filter by active event
+  const { data: crew } = await adminClient
     .from("crews")
-    .select("id, event")
+    .select("id, event, crew_type")
     .eq("crew_type", crewType.id)
     .order("id", { ascending: false })
     .limit(1)
@@ -197,357 +385,437 @@ async function findCrewByType(supabase: any, crewTypeName: string) {
   return crew;
 }
 
-async function handleRefereeMessage(
-  supabase: any,
+// Find crew member by phone number
+async function findCrewMemberByPhone(
+  adminClient: any,
   crewId: number,
-  eventId: number,
   phone: string,
-  message: string,
-) {
-  // Try to find the user by phone number in the users table first
-  const normalizedPhone = normalizePhone(phone);
-  const { data: userByPhone } = await supabase
+): Promise<any> {
+  console.log(`Looking for crew member with phone ${phone} in crew ${crewId}`);
+
+  // Get all crew members for this crew
+  // Query crewmembers and then fetch user data separately to avoid FK ambiguity
+  const { data: crewMembers, error } = await adminClient
+    .from("crewmembers")
+    .select("crewmember")
+    .eq("crew", crewId);
+
+  if (error) {
+    console.error("Error fetching crew members:", error);
+    return null;
+  }
+
+  if (!crewMembers || crewMembers.length === 0) {
+    console.log(`No crew members found for crew ${crewId}`);
+    return null;
+  }
+
+  console.log(
+    `Found ${crewMembers.length} crew members, fetching user data...`,
+  );
+
+  // Fetch user data for each crew member
+  const memberIds = crewMembers.map((cm: any) => cm.crewmember);
+  const { data: users, error: usersError } = await adminClient
     .from("users")
-    .select("firstname, lastname, phonenbr")
-    .or(`phonenbr.eq.${normalizedPhone},phonenbr.eq.${phone}`)
-    .limit(1)
-    .single();
+    .select("supabase_id, firstname, lastname, phonenbr")
+    .in("supabase_id", memberIds);
 
-  let reporterName: string;
-  if (userByPhone) {
-    // Found user in database - use their name
-    reporterName =
-      `${userByPhone.firstname || ""} ${userByPhone.lastname || ""}`.trim() ||
-      normalizedPhone;
-  } else {
-    // Not found in users table - try sms_reporters table
-    const { data: reporter } = await supabase
-      .from("sms_reporters")
-      .select("name")
-      .eq("phone", phone)
-      .single();
-
-    // Use reporter name, or just the phone number (digits only, no formatting)
-    reporterName = reporter?.name || normalizedPhone;
+  if (usersError) {
+    console.error("Error fetching user data:", usersError);
+    return null;
   }
 
-  // Check for existing active problem from this phone for this crew
-  const { data: existingProblem } = await supabase
-    .from("problem")
-    .select("id, strip")
-    .eq("reporter_phone", phone)
-    .eq("crew", crewId)
-    .is("enddatetime", null)
-    .order("startdatetime", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (existingProblem) {
-    // Add message to existing problem
-    // Format: "username: message" to match app message format
-    await supabase.from("messages").insert({
-      problem: existingProblem.id,
-      crew: crewId,
-      author: null, // SMS messages have no app user author
-      message: `${reporterName}: ${message}`,
-      include_reporter: true,
-      created_at: new Date().toISOString(),
-    });
-
-    console.log(`Added message to existing problem ${existingProblem.id}`);
-    return twimlResponse(
-      `Message added to your report for Strip ${existingProblem.strip}. ` +
-        `A crew member will respond shortly.`,
-    );
+  if (!users || users.length === 0) {
+    console.log(`No user data found for crew members`);
+    return null;
   }
 
-  // Create new problem
-  const strip = parseStrip(message) || "Unknown";
+  console.log(`Found ${users.length} users, checking phones...`);
 
-  // Get SMS symptom ID
-  const { data: smsSymptom } = await supabase
-    .from("symptom")
-    .select("id, symptomclass!inner(crewType)")
-    .eq("symptomstring", "SMS Report - Needs Triage")
-    .limit(1)
-    .single();
-
-  if (!smsSymptom) {
-    console.error("SMS symptom not found - migration may not have run");
-    return twimlResponse("System configuration error. Please contact support.");
-  }
-
-  // Create the problem - use a placeholder originator since SMS users don't have accounts
-  // We'll use the reporter_phone to track them
-  const { data: newProblem, error: problemError } = await supabase
-    .from("problem")
-    .insert({
-      event: eventId,
-      crew: crewId,
-      originator: null, // No app user - tracked via reporter_phone
-      strip: strip,
-      symptom: smsSymptom.id,
-      startdatetime: new Date().toISOString(),
-      reporter_phone: phone,
-    })
-    .select("id")
-    .single();
-
-  if (problemError) {
-    console.error("Error creating problem:", problemError);
-    return twimlResponse("Error creating report. Please try again.");
-  }
-
-  // Assign reply slot
-  const slot = await assignReplySlot(supabase, crewId, phone, newProblem.id);
-
-  // Add initial message - format: "username: message" to match app message format
-  await supabase.from("messages").insert({
-    problem: newProblem.id,
-    crew: crewId,
-    author: null,
-    message: `${reporterName}: ${message}`,
-    include_reporter: true,
-    created_at: new Date().toISOString(),
-  });
-
-  console.log(
-    `Created new problem ${newProblem.id} for strip ${strip}, slot +${slot}`,
-  );
-
-  return twimlResponse(
-    `Problem reported for Strip ${strip}. ` +
-      `Reply with +${slot} to add updates. ` +
-      `A crew member will respond shortly.`,
-  );
-}
-
-async function handleCrewMemberReply(
-  supabase: any,
-  crewId: number,
-  user: any,
-  slot: number,
-  message: string,
-  senderPhone: string,
-) {
-  // Find problem by reply slot
-  const { data: slotData } = await supabase
-    .from("sms_reply_slots")
-    .select("problem_id, phone")
-    .eq("crew_id", crewId)
-    .eq("slot", slot)
-    .single();
-
-  if (!slotData?.problem_id) {
-    return twimlResponse(`No active problem in slot +${slot}.`);
-  }
-
-  const senderName =
-    `${user.firstname} ${user.lastname}`.trim() || "Crew Member";
-
-  // Add message to problem (include_reporter so SMS sender sees it)
-  await supabase.from("messages").insert({
-    problem: slotData.problem_id,
-    crew: crewId,
-    author: user.supabase_id,
-    message: message,
-    include_reporter: true,
-    created_at: new Date().toISOString(),
-  });
-
-  // Send SMS to the reporter
-  await sendSmsToReporter(supabase, slotData.problem_id, senderName, message);
-
-  console.log(
-    `Crew member ${senderName} replied to problem ${slotData.problem_id} via slot +${slot}`,
-  );
-
-  return twimlResponse(
-    `Message sent to reporter for problem in slot +${slot}.`,
-  );
-}
-
-async function handleCrewBroadcast(
-  supabase: any,
-  crewId: number,
-  user: any,
-  message: string,
-) {
-  const senderName =
-    `${user.firstname} ${user.lastname}`.trim() || "Crew Member";
-
-  await supabase.from("crew_messages").insert({
-    crew: crewId,
-    author: user.supabase_id,
-    message: `[SMS from ${senderName}] ${message}`,
-    created_at: new Date().toISOString(),
-  });
-
-  console.log(`Crew member ${senderName} broadcast message to crew ${crewId}`);
-
-  return twimlResponse("Message broadcast to crew.");
-}
-
-async function assignReplySlot(
-  supabase: any,
-  crewId: number,
-  phone: string,
-  problemId: number,
-): Promise<number> {
-  // Clean up expired slots first
-  await supabase
-    .from("sms_reply_slots")
-    .delete()
-    .lt("expires_at", new Date().toISOString());
-
-  // Try each slot 1-4
-  for (let slot = 1; slot <= 4; slot++) {
-    const { error } = await supabase.from("sms_reply_slots").upsert(
-      {
-        crew_id: crewId,
-        slot: slot,
-        phone: phone,
-        problem_id: problemId,
-        assigned_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        onConflict: "crew_id,slot",
-      },
-    );
-
-    if (!error) {
-      return slot;
+  // Find user whose phone matches
+  for (const user of users) {
+    if (user.phonenbr) {
+      const memberPhone = normalizePhone(user.phonenbr);
+      console.log(
+        `  Comparing ${memberPhone} with ${phone} (${user.firstname} ${user.lastname})`,
+      );
+      if (memberPhone === phone) {
+        console.log(`  MATCH FOUND: ${user.firstname} ${user.lastname}`);
+        return user;
+      }
+    } else {
+      console.log(`  User ${user.supabase_id} has no phone number`);
     }
   }
 
-  // All slots in use - reuse the oldest one
-  const { data: oldest } = await supabase
-    .from("sms_reply_slots")
-    .select("slot")
-    .eq("crew_id", crewId)
-    .order("assigned_at", { ascending: true })
-    .limit(1)
-    .single();
-
-  const slot = oldest?.slot || 1;
-
-  await supabase
-    .from("sms_reply_slots")
-    .update({
-      phone: phone,
-      problem_id: problemId,
-      assigned_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    })
-    .eq("crew_id", crewId)
-    .eq("slot", slot);
-
-  return slot;
+  console.log(`No crew member found with phone ${phone}`);
+  return null;
 }
 
-async function sendSmsToReporter(
-  supabase: any,
-  problemId: number,
-  senderName: string,
-  message: string,
-) {
-  // Get problem details
-  const { data: problem } = await supabase
-    .from("problem")
-    .select("reporter_phone, strip, crew(crew_type(crewtype))")
-    .eq("id", problemId)
-    .single();
+// Parse strip number from message text
+function parseStripFromMessage(body: string): string {
+  // Try various patterns
+  // "L4", "L 4", "left 4"
+  const leftMatch = body.match(/\b[Ll](?:eft)?\s*(\d+)\b/);
+  if (leftMatch) return `L${leftMatch[1]}`;
 
-  if (!problem?.reporter_phone) {
-    return;
+  // "R4", "R 4", "right 4"
+  const rightMatch = body.match(/\b[Rr](?:ight)?\s*(\d+)\b/);
+  if (rightMatch) return `R${rightMatch[1]}`;
+
+  // "A3", "B2", etc.
+  const letterMatch = body.match(/\b([A-Za-z])(\d+)\b/);
+  if (letterMatch) return `${letterMatch[1].toUpperCase()}${letterMatch[2]}`;
+
+  // "strip 5", "Strip #5", "strip#5"
+  const stripMatch = body.match(/\bstrip\s*#?\s*(\d+)\b/i);
+  if (stripMatch) return stripMatch[1];
+
+  // Just a number at the start
+  const numMatch = body.match(/^(\d+)\b/);
+  if (numMatch) return numMatch[1];
+
+  // "finals", "final"
+  if (/\bfinals?\b/i.test(body)) return "Finals";
+
+  // Default
+  return "Unknown";
+}
+
+// Find the SMS symptom for a crew type
+async function findSmsSymptom(
+  adminClient: any,
+  crewTypeId: number,
+): Promise<number | null> {
+  // Find General symptomclass for this crew type
+  const { data: symptomClass } = await adminClient
+    .from("symptomclass")
+    .select("id")
+    .eq("symptomclassstring", "General")
+    .eq("crewType", crewTypeId)
+    .maybeSingle();
+
+  if (!symptomClass) return null;
+
+  // Find SMS symptom in this class
+  const { data: symptom } = await adminClient
+    .from("symptom")
+    .select("id")
+    .eq("symptomclass", symptomClass.id)
+    .eq("symptomstring", "SMS Report - Needs Triage")
+    .maybeSingle();
+
+  return symptom?.id || null;
+}
+
+// Assign a +n slot for a reporter (increments on every message)
+async function assignSlot(
+  adminClient: any,
+  crewId: number,
+  phone: string,
+): Promise<number> {
+  console.log(`Assigning slot for crew ${crewId}, phone ${phone}`);
+
+  // Get or initialize the slot counter for this crew
+  const { data: counter, error: counterError } = await adminClient
+    .from("sms_crew_slot_counter")
+    .select("next_slot")
+    .eq("crew_id", crewId)
+    .maybeSingle();
+
+  if (counterError) {
+    console.error("Error fetching slot counter:", counterError);
   }
 
-  const crewTypeName = problem.crew?.crew_type?.crewtype;
+  let nextSlot = counter?.next_slot || 1;
+  console.log(
+    `Current slot counter: ${counter?.next_slot}, using slot: ${nextSlot}`,
+  );
+
+  // Upsert the slot assignment (tracks reporter phone, not problem)
+  const { error: slotError } = await adminClient.from("sms_reply_slots").upsert(
+    {
+      crew_id: crewId,
+      slot: nextSlot,
+      phone: phone,
+      assigned_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+    { onConflict: "crew_id,slot" },
+  );
+
+  if (slotError) {
+    console.error("Error upserting slot:", slotError);
+  }
+
+  // Update the counter (rotate 1-4)
+  const newNextSlot = (nextSlot % 4) + 1;
+  console.log(`Updating counter to: ${newNextSlot}`);
+
+  const { data: updateData, error: updateError } = await adminClient
+    .from("sms_crew_slot_counter")
+    .upsert(
+      { crew_id: crewId, next_slot: newNextSlot },
+      { onConflict: "crew_id" },
+    )
+    .select();
+
+  if (updateError) {
+    console.error("Error updating slot counter:", updateError);
+  } else {
+    console.log(`Counter update result:`, updateData);
+  }
+
+  return nextSlot;
+}
+
+// Notify SMS mode crew members about a new message
+async function notifySmsModeCrewMembers(
+  adminClient: any,
+  crewId: number,
+  problemId: number,
+  strip: string,
+  reporterName: string,
+  message: string,
+  slot: number | undefined,
+): Promise<void> {
+  console.log(
+    `notifySmsModeCrewMembers called: crewId=${crewId}, problemId=${problemId}, strip=${strip}`,
+  );
+
+  const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+
+  if (!twilioAccountSid || !twilioAuthToken) {
+    console.log("Twilio not configured, skipping SMS notifications");
+    return;
+  }
+  console.log("Twilio credentials found");
+
+  // Get crew info for the From phone
+  const { data: crew } = await adminClient
+    .from("crews")
+    .select(
+      `
+      crewtypes:crew_type (crewtype)
+    `,
+    )
+    .eq("id", crewId)
+    .single();
+
+  const crewTypeName = crew?.crewtypes?.crewtype;
   const CREW_TYPE_TO_PHONE: Record<string, string> = {
     Armorer: "+17542276679",
     Medical: "+13127577223",
     Natloff: "+16504803067",
   };
+  const fromPhone = crewTypeName ? CREW_TYPE_TO_PHONE[crewTypeName] : null;
 
-  const fromPhone = CREW_TYPE_TO_PHONE[crewTypeName];
   if (!fromPhone) {
-    console.error(`No phone mapping for crew type: ${crewTypeName}`);
+    console.log("No From phone for crew type:", crewTypeName);
     return;
   }
 
-  const smsBody = `[Strip ${problem.strip}] ${senderName}: ${message}`;
+  // Get SMS mode crew members - query separately to avoid FK ambiguity
+  const { data: crewMembers, error: cmError } = await adminClient
+    .from("crewmembers")
+    .select("crewmember")
+    .eq("crew", crewId);
 
-  await sendTwilioSms(fromPhone, problem.reporter_phone, smsBody);
+  console.log(
+    `Found ${crewMembers?.length || 0} crew members for notifications`,
+    cmError,
+  );
+
+  if (!crewMembers || crewMembers.length === 0) return;
+
+  // Get user data for these crew members
+  const memberIds = crewMembers.map((cm: any) => cm.crewmember);
+  const { data: users, error: usersError } = await adminClient
+    .from("users")
+    .select("supabase_id, phonenbr, is_sms_mode")
+    .in("supabase_id", memberIds);
+
+  console.log(
+    `Found ${users?.length || 0} users, checking is_sms_mode...`,
+    usersError,
+  );
+  if (users) {
+    for (const u of users) {
+      console.log(
+        `  User ${u.supabase_id}: phone=${u.phonenbr}, is_sms_mode=${u.is_sms_mode}`,
+      );
+    }
+  }
+
+  if (!users) return;
+
+  // Format: "<name or number>: <message>, +n to reply"
+  const slotSuffix = slot ? `, +${slot} to reply` : "";
+  const smsBody = `${reporterName}: ${message}${slotSuffix}`;
+
+  for (const user of users) {
+    if (user.is_sms_mode && user.phonenbr) {
+      try {
+        await sendTwilioSms(
+          twilioAccountSid,
+          twilioAuthToken,
+          fromPhone,
+          user.phonenbr,
+          smsBody,
+          adminClient,
+        );
+        console.log("Notified crew member:", user.phonenbr);
+      } catch (e) {
+        console.error("Failed to notify crew member:", user.phonenbr, e);
+      }
+    }
+  }
 }
 
-async function sendTwilioSms(from: string, to: string, body: string) {
-  const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-  const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
+// Send SMS to reporter
+async function sendSmsToReporter(
+  adminClient: any,
+  reporterPhone: string,
+  message: string,
+  crewMember: any,
+  crew: any,
+): Promise<void> {
+  const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+
+  if (!twilioAccountSid || !twilioAuthToken) return;
+
+  // Get the From phone
+  const { data: crewData } = await adminClient
+    .from("crews")
+    .select(`crewtypes:crew_type (crewtype)`)
+    .eq("id", crew.id)
+    .single();
+
+  const crewTypeName = crewData?.crewtypes?.crewtype;
+  const CREW_TYPE_TO_PHONE: Record<string, string> = {
+    Armorer: "+17542276679",
+    Medical: "+13127577223",
+    Natloff: "+16504803067",
+  };
+  const fromPhone = crewTypeName ? CREW_TYPE_TO_PHONE[crewTypeName] : null;
+
+  if (!fromPhone) return;
+
+  // Use full name (first + last)
+  const fullName =
+    `${crewMember.firstname || ""} ${crewMember.lastname || ""}`.trim() ||
+    "Crew";
+  const smsBody = `${fullName}: ${message}`;
 
   try {
-    const response = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ From: from, To: to, Body: body }),
-      },
+    await sendTwilioSms(
+      twilioAccountSid,
+      twilioAuthToken,
+      fromPhone,
+      reporterPhone,
+      smsBody,
+      adminClient,
     );
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`SMS sent: ${data.sid}`);
-    } else {
-      const error = await response.text();
-      console.error("Twilio error:", error);
-    }
-  } catch (err) {
-    console.error("Error sending SMS:", err);
+    console.log("SMS sent to reporter:", reporterPhone);
+  } catch (e) {
+    console.error("Failed to send SMS to reporter:", e);
   }
 }
 
-function parseStrip(message: string): string | null {
-  for (const pattern of STRIP_PATTERNS) {
-    const match = message.match(pattern);
-    if (match) {
-      let strip = match[1];
-      // Normalize "L4" to just "4"
-      if (/^L\d+$/i.test(strip)) {
-        strip = strip.substring(1);
-      }
-      return strip.toUpperCase();
-    }
-  }
-  return null;
+// Check if phone is a simulator phone (2025551001-2025551005)
+function isSimulatorPhone(phone: string): boolean {
+  const normalized = phone.replace(/\D/g, "").replace(/^1/, "");
+  return /^202555100[1-5]$/.test(normalized);
 }
 
+// Send Twilio SMS (or route to simulator)
+async function sendTwilioSms(
+  accountSid: string,
+  authToken: string,
+  from: string,
+  to: string,
+  body: string,
+  adminClient?: any,
+) {
+  // Check if this is a simulator phone number
+  if (isSimulatorPhone(to) && adminClient) {
+    const normalizedTo = to.replace(/\D/g, "").replace(/^1/, "");
+    console.log("Routing to SMS simulator:", normalizedTo);
+
+    // Insert into sms_simulator table as inbound (message coming TO the simulated phone)
+    await adminClient.from("sms_simulator").insert({
+      phone: normalizedTo,
+      direction: "inbound",
+      twilio_number: from,
+      message: body,
+    });
+
+    return { sid: "SIMULATOR", to: normalizedTo };
+  }
+
+  // Real Twilio send
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: "Basic " + btoa(`${accountSid}:${authToken}`),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ To: to, From: from, Body: body }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Twilio error: ${response.status} - ${errorText}`);
+  }
+
+  return await response.json();
+}
+
+// Normalize phone number to digits only
 function normalizePhone(phone: string): string {
-  // Remove all non-digits and take last 10
-  return phone.replace(/\D/g, "").slice(-10);
+  return phone.replace(/\D/g, "").replace(/^1/, ""); // Remove non-digits, strip leading 1
 }
 
-function formatPhoneForDisplay(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-  if (digits.length === 11 && digits[0] === "1") {
-    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
-  }
-  return phone;
+// Generate TwiML response
+function twimlResponse(message: string): Response {
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>${escapeXml(message)}</Message>
+</Response>`;
+
+  return new Response(twiml, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/xml",
+    },
+  });
 }
 
-function twimlResponse(_message?: string): Response {
-  // Return empty TwiML response - no auto-reply to SMS
-  // The original system didn't send confirmation messages back to the sender
+// Empty TwiML response - no message sent back
+function emptyTwimlResponse(): Response {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response></Response>`;
 
   return new Response(twiml, {
-    headers: { "Content-Type": "text/xml" },
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/xml",
+    },
   });
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }

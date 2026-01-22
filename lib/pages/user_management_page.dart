@@ -41,32 +41,32 @@ class _UserManagementPageState extends State<UserManagementPage> {
     try {
       // Debug: Check current user's superuser status
       await _checkCurrentUserStatus();
-      
+
       print('=== USER MANAGEMENT: Loading all user data via Edge Function ===');
-      
+
       // Load public and pending users using working Edge Function
       final publicResponse = await Supabase.instance.client.functions.invoke(
         'get-users-data-working',
       );
-      
+
       if (publicResponse.status != 200) {
         final errorData = publicResponse.data as Map<String, dynamic>?;
         throw Exception(errorData?['error'] ?? 'Failed to load public user data');
       }
-      
+
       // Load auth users using working auth function
       final authResponse = await Supabase.instance.client.functions.invoke(
         'get-auth-users-working',
       );
-      
+
       if (authResponse.status != 200) {
         final errorData = authResponse.data as Map<String, dynamic>?;
         throw Exception(errorData?['error'] ?? 'Failed to load auth user data');
       }
-      
+
       final publicData = publicResponse.data as Map<String, dynamic>;
       final authData = authResponse.data as Map<String, dynamic>;
-      
+
       final publicUsers = List<Map<String, dynamic>>.from(publicData['publicUsers'] ?? []);
       final pendingUsers = List<Map<String, dynamic>>.from(publicData['pendingUsers'] ?? []);
       final authUsers = List<Map<String, dynamic>>.from(authData['authUsers'] ?? []);
@@ -77,7 +77,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _pendingUsers = pendingUsers;
         _isLoading = false;
       });
-      
+
       print('=== USER MANAGEMENT: Loaded ${authUsers.length} auth users, ${publicUsers.length} public users, and ${pendingUsers.length} pending users ===');
     } catch (e) {
       debugLogError('Error loading users', e);
@@ -94,13 +94,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
       if (user != null) {
         print('=== CURRENT USER CHECK: User ID: ${user.id} ===');
         print('=== CURRENT USER CHECK: User Email: ${user.email} ===');
-        
+
         final userData = await Supabase.instance.client
             .from('users')
             .select('supabase_id, firstname, lastname, superuser, organizer')
             .eq('supabase_id', user.id)
             .single();
-        
+
         print('=== CURRENT USER CHECK: User Data: $userData ===');
         print('=== CURRENT USER CHECK: Superuser: ${userData['superuser']} ===');
         print('=== CURRENT USER CHECK: Organizer: ${userData['organizer']} ===');
@@ -113,22 +113,22 @@ class _UserManagementPageState extends State<UserManagementPage> {
   List<Map<String, dynamic>> get _filteredUsers {
     final searchTerm = _searchController.text.toLowerCase();
     List<Map<String, dynamic>> users;
-    
+
     switch (_selectedTable) {
       case 'auth_users':
-        users = _authUsers.where((user) => 
+        users = _authUsers.where((user) =>
           user['email']?.toString().toLowerCase().contains(searchTerm) ?? false
         ).toList();
         break;
       case 'public_users':
-        users = _publicUsers.where((user) => 
+        users = _publicUsers.where((user) =>
           (user['firstname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
           (user['lastname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
           (user['supabase_id']?.toString().toLowerCase().contains(searchTerm) ?? false)
         ).toList();
         break;
       case 'pending_users':
-        users = _pendingUsers.where((user) => 
+        users = _pendingUsers.where((user) =>
           (user['email']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
           (user['firstname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
           (user['lastname']?.toString().toLowerCase().contains(searchTerm) ?? false)
@@ -137,7 +137,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       default:
         users = [];
     }
-    
+
     return users;
   }
 
@@ -178,14 +178,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
               'phonenbr': _selectedUser!['public_user']?['phonenbr'],
               'superuser': _selectedUser!['public_user']?['superuser'],
               'organizer': _selectedUser!['public_user']?['organizer'],
+              'is_sms_mode': _selectedUser!['public_user']?['is_sms_mode'],
             }
           };
-          
+
           final response = await Supabase.instance.client.functions.invoke(
             'update-user',
             body: updateData,
           );
-          
+
           if (response.status != 200) {
             final errorData = response.data as Map<String, dynamic>?;
             throw Exception(errorData?['error'] ?? 'Failed to update auth user');
@@ -200,6 +201,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 'phonenbr': _selectedUser!['phonenbr'],
                 'superuser': _selectedUser!['superuser'],
                 'organizer': _selectedUser!['organizer'],
+                'is_sms_mode': _selectedUser!['is_sms_mode'],
               })
               .eq('supabase_id', _selectedUser!['supabase_id']);
           break;
@@ -260,26 +262,26 @@ class _UserManagementPageState extends State<UserManagementPage> {
       print('=== DELETE USER: Starting deletion process ===');
       print('=== DELETE USER: Selected table: $_selectedTable ===');
       print('=== DELETE USER: Selected user: $_selectedUser ===');
-      
+
       switch (_selectedTable) {
         case 'auth_users':
           // Delete from auth.users using Edge Function
           print('=== DELETE USER: Attempting to delete auth user with ID: ${_selectedUser!['id']} ===');
-          
+
           final response = await Supabase.instance.client.functions.invoke(
             'delete-user',
             body: {'user_id': _selectedUser!['id']},
           );
-          
+
           print('=== DELETE USER: Response status: ${response.status} ===');
           print('=== DELETE USER: Response data: ${response.data} ===');
-          
+
           if (response.status != 200) {
             final errorData = response.data as Map<String, dynamic>?;
             print('=== DELETE USER: Error response: $errorData ===');
             throw Exception(errorData?['error'] ?? 'Failed to delete user');
           }
-          
+
           print('=== DELETE USER: Auth user deletion successful ===');
           break;
         case 'public_users':
@@ -325,6 +327,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (result != null) {
       try {
         switch (_selectedTable) {
+          case 'auth_users':
+            // Auth user was created via edge function in the dialog
+            // result will be {'success': true} if successful
+            if (result['success'] == true) {
+              await _loadUsers();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('User created successfully')),
+              );
+            }
+            return;
           case 'public_users':
             await Supabase.instance.client
                 .from('users')
@@ -335,11 +347,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 .from('pending_users')
                 .insert(result);
             break;
-          case 'auth_users':
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Auth users must be created through signup process')),
-            );
-            return;
         }
 
         await _loadUsers();
@@ -357,14 +364,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildUserList() {
     final users = _filteredUsers;
-    
+
     return ListView.builder(
       itemCount: users.length,
       itemBuilder: (context, index) {
         final user = users[index];
-        final isSelected = _selectedUser != null && 
+        final isSelected = _selectedUser != null &&
             _getUserKey(user) == _getUserKey(_selectedUser!);
-        
+
         return Card(
           color: isSelected ? Colors.blue.shade50 : null,
           child: ListTile(
@@ -427,7 +434,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildUserTrailing(Map<String, dynamic> user) {
     final confirmed = user['email_confirmed_at'] != null;
-    
+
     switch (_selectedTable) {
       case 'auth_users':
         return Row(
@@ -535,6 +542,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _buildDetailField('Phone', _selectedUser!['public_user']?['phonenbr'] ?? '', isEditing: _isEditing),
           _buildDetailField('Super User', _selectedUser!['public_user']?['superuser']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
           _buildDetailField('Organizer', _selectedUser!['public_user']?['organizer']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
+          _buildDetailField('SMS Mode', _selectedUser!['public_user']?['is_sms_mode']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
           _buildDetailField('Confirmed At', _selectedUser!['email_confirmed_at']?.toString() ?? 'Not confirmed', isEditing: false),
           _buildDetailField('Created At', _selectedUser!['created_at']?.toString() ?? '', isEditing: false),
         ]);
@@ -547,6 +555,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _buildDetailField('Phone', _selectedUser!['phonenbr'], isEditing: _isEditing),
           _buildDetailField('Super User', _selectedUser!['superuser']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
           _buildDetailField('Organizer', _selectedUser!['organizer']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
+          _buildDetailField('SMS Mode', _selectedUser!['is_sms_mode']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
         ]);
         break;
       case 'pending_users':
@@ -561,6 +570,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
 
     return Column(children: fields);
+  }
+
+  // Map display labels to actual database field names
+  String _labelToFieldName(String label) {
+    switch (label) {
+      case 'Super User':
+        return 'superuser';
+      case 'SMS Mode':
+        return 'is_sms_mode';
+      case 'First Name':
+        return 'firstname';
+      case 'Last Name':
+        return 'lastname';
+      case 'Phone':
+        return 'phonenbr';
+      default:
+        return label.toLowerCase().replaceAll(' ', '_');
+    }
   }
 
   Widget _buildDetailField(String label, String value, {bool isEditing = false, bool isBoolean = false}) {
@@ -583,15 +610,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     value: value.toLowerCase() == 'true',
                     onChanged: (checked) {
                       setState(() {
+                        final fieldName = _labelToFieldName(label);
                         // Handle nested public_user fields for auth users
                         if (_selectedTable == 'auth_users') {
                           if (_selectedUser!['public_user'] == null) {
                             _selectedUser!['public_user'] = {};
                           }
-                          final fieldName = label.toLowerCase().replaceAll(' ', '_');
                           _selectedUser!['public_user'][fieldName] = checked;
                         } else {
-                          _selectedUser![label.toLowerCase().replaceAll(' ', '_')] = checked;
+                          _selectedUser![fieldName] = checked;
                         }
                       });
                     },
@@ -601,6 +628,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         initialValue: value,
                         onChanged: (newValue) {
                           setState(() {
+                            final fieldName = _labelToFieldName(label);
                             // Handle nested public_user fields for auth users
                             if (_selectedTable == 'auth_users') {
                               if (label == 'Email') {
@@ -610,11 +638,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                 if (_selectedUser!['public_user'] == null) {
                                   _selectedUser!['public_user'] = {};
                                 }
-                                final fieldName = label.toLowerCase().replaceAll(' ', '_');
                                 _selectedUser!['public_user'][fieldName] = newValue;
                               }
                             } else {
-                              _selectedUser![label.toLowerCase().replaceAll(' ', '_')] = newValue;
+                              _selectedUser![fieldName] = newValue;
                             }
                           });
                         },
@@ -752,9 +779,13 @@ class _AddUserDialogState extends State<AddUserDialog> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _supabaseIdController = TextEditingController();
   bool _isSuperUser = false;
   bool _isOrganizer = false;
+  bool _isSmsMode = false;
+  bool _isLoading = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -762,8 +793,46 @@ class _AddUserDialogState extends State<AddUserDialog> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
     _supabaseIdController.dispose();
     super.dispose();
+  }
+
+  Future<void> _createAuthUser() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'create-user',
+        body: {
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+          'firstname': _firstNameController.text.trim(),
+          'lastname': _lastNameController.text.trim(),
+          'phonenbr': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+          'superuser': _isSuperUser,
+          'is_sms_mode': _isSmsMode,
+          'skip_email_confirmation': true,
+        },
+      );
+
+      if (response.status != 200) {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['error'] ?? 'Failed to create user');
+      }
+
+      Navigator.of(context).pop({'success': true});
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -776,6 +845,101 @@ class _AddUserDialogState extends State<AddUserDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_error != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (widget.tableType == 'auth_users') ...[
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'Email *'),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter email';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: 'Password *'),
+                  obscureText: true,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _firstNameController,
+                  decoration: const InputDecoration(labelText: 'First Name *'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter first name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _lastNameController,
+                  decoration: const InputDecoration(labelText: 'Last Name *'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter last name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 16),
+                CheckboxListTile(
+                  title: const Text('Super User'),
+                  value: _isSuperUser,
+                  onChanged: (value) {
+                    setState(() {
+                      _isSuperUser = value ?? false;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  title: const Text('SMS Mode'),
+                  subtitle: const Text('Receive messages via SMS'),
+                  value: _isSmsMode,
+                  onChanged: (value) {
+                    setState(() {
+                      _isSmsMode = value ?? false;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
               if (widget.tableType == 'public_users') ...[
                 TextFormField(
                   controller: _supabaseIdController,
@@ -789,7 +953,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-              if (widget.tableType != 'auth_users') ...[
+              if (widget.tableType == 'public_users' || widget.tableType == 'pending_users') ...[
                 TextFormField(
                   controller: _firstNameController,
                   decoration: const InputDecoration(labelText: 'First Name *'),
@@ -826,7 +990,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-              if (widget.tableType != 'auth_users') ...[
+              if (widget.tableType == 'public_users' || widget.tableType == 'pending_users') ...[
                 TextFormField(
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone'),
@@ -842,6 +1006,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                       _isSuperUser = value ?? false;
                     });
                   },
+                  contentPadding: EdgeInsets.zero,
                 ),
                 CheckboxListTile(
                   title: const Text('Organizer'),
@@ -851,6 +1016,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                       _isOrganizer = value ?? false;
                     });
                   },
+                  contentPadding: EdgeInsets.zero,
                 ),
               ],
             ],
@@ -859,41 +1025,51 @@ class _AddUserDialogState extends State<AddUserDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              Map<String, dynamic> userData = {};
-              
-              switch (widget.tableType) {
-                case 'public_users':
-                  userData = {
-                    'supabase_id': _supabaseIdController.text,
-                    'firstname': _firstNameController.text,
-                    'lastname': _lastNameController.text,
-                    'phonenbr': _phoneController.text,
-                    'superuser': _isSuperUser,
-                    'organizer': _isOrganizer,
-                  };
-                  break;
-                case 'pending_users':
-                  userData = {
-                    'email': _emailController.text,
-                    'firstname': _firstNameController.text,
-                    'lastname': _lastNameController.text,
-                    'phone_number': _phoneController.text,
-                  };
-                  break;
-              }
-              
-              Navigator.of(context).pop(userData);
-            }
-          },
-          child: const Text('Add'),
+          onPressed: _isLoading
+              ? null
+              : () {
+                  if (widget.tableType == 'auth_users') {
+                    _createAuthUser();
+                  } else if (_formKey.currentState!.validate()) {
+                    Map<String, dynamic> userData = {};
+
+                    switch (widget.tableType) {
+                      case 'public_users':
+                        userData = {
+                          'supabase_id': _supabaseIdController.text,
+                          'firstname': _firstNameController.text,
+                          'lastname': _lastNameController.text,
+                          'phonenbr': _phoneController.text,
+                          'superuser': _isSuperUser,
+                          'organizer': _isOrganizer,
+                        };
+                        break;
+                      case 'pending_users':
+                        userData = {
+                          'email': _emailController.text,
+                          'firstname': _firstNameController.text,
+                          'lastname': _lastNameController.text,
+                          'phone_number': _phoneController.text,
+                        };
+                        break;
+                    }
+
+                    Navigator.of(context).pop(userData);
+                  }
+                },
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Add'),
         ),
       ],
     );
   }
-} 
+}

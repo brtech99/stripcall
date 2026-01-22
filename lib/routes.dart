@@ -12,4 +12,5 @@ class Routes {
   static const selectCrew = '/select-crew';
   static const profile = '/profile';
   static const problems = '/problems';
+  static const smsSimulator = '/sms-simulator';
 }

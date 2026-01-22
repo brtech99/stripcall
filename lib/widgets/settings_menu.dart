@@ -76,6 +76,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
               MaterialPageRoute(builder: (context) => const DatabasePage()),
             );
             break;
+          case 'sms_simulator':
+            context.push(Routes.smsSimulator);
+            break;
           case 'logout':
             Supabase.instance.client.auth.signOut();
             context.go(Routes.login);
@@ -136,6 +139,19 @@ class _SettingsMenuState extends State<SettingsMenu> {
               child: ListTile(
                 leading: Icon(Icons.storage),
                 title: Text('Database'),
+              ),
+            ),
+          );
+        }
+
+        // Add SMS Simulator option for superusers only
+        if (_isSuperUser) {
+          items.add(
+            const PopupMenuItem<String>(
+              value: 'sms_simulator',
+              child: ListTile(
+                leading: Icon(Icons.sms),
+                title: Text('SMS Simulator'),
               ),
             ),
           );

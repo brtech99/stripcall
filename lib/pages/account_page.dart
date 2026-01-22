@@ -24,6 +24,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   String _lastName = '';
   String _email = '';
   String _phoneNumber = '';
+  bool _isSmsMode = false;
 
   // Editing states
   bool _isEditingProfile = false;
@@ -117,7 +118,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       // Load user profile from users table
       final userData = await _supabase
           .from('users')
-          .select('firstname, lastname, phonenbr')
+          .select('firstname, lastname, phonenbr, is_sms_mode')
           .eq('supabase_id', user.id)
           .single();
 
@@ -125,6 +126,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
         _firstName = userData['firstname'] ?? '';
         _lastName = userData['lastname'] ?? '';
         _phoneNumber = userData['phonenbr'] ?? '';
+        _isSmsMode = userData['is_sms_mode'] ?? false;
         _firstNameController.text = _firstName;
         _lastNameController.text = _lastName;
         _phoneController.text = _phoneNumber;
@@ -419,6 +421,51 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _toggleSmsMode(bool value) async {
+    // Require phone number to enable SMS mode
+    if (value && _phoneNumber.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add a phone number first to enable SMS mode')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      await _supabase
+          .from('users')
+          .update({'is_sms_mode': value})
+          .eq('supabase_id', user.id);
+
+      setState(() {
+        _isSmsMode = value;
+        _isSaving = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value
+              ? 'SMS mode enabled. You will receive messages via SMS.'
+              : 'SMS mode disabled. You will receive messages in the app.'),
+          ),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error toggling SMS mode', e);
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating SMS mode: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _signOut() async {
     try {
       await _supabase.auth.signOut();
@@ -473,6 +520,8 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                       _buildProfileSection(),
                       const SizedBox(height: 16),
                       _buildPhoneSection(),
+                      const SizedBox(height: 16),
+                      _buildSmsModeSection(),
                       const SizedBox(height: 16),
                       _buildEmailSection(),
                       const SizedBox(height: 16),
@@ -656,6 +705,43 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                 leading: const Icon(Icons.phone),
                 title: Text(_phoneNumber.isNotEmpty ? _phoneNumber : 'Not set'),
                 subtitle: const Text('Used for SMS notifications when not logged in'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmsModeSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'SMS Mode',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.sms),
+              title: const Text('Receive messages via SMS'),
+              subtitle: Text(
+                _isSmsMode
+                    ? 'Messages will be sent to your phone via SMS'
+                    : 'Messages will appear in the app',
+              ),
+              value: _isSmsMode,
+              onChanged: _isSaving ? null : _toggleSmsMode,
+            ),
+            if (_phoneNumber.isEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Add a phone number above to enable SMS mode',
+                style: TextStyle(color: Colors.orange, fontSize: 12),
               ),
             ],
           ],

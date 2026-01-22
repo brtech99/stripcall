@@ -28,7 +28,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              *,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -45,6 +45,8 @@ class ProblemService {
         final problems = <ProblemWithDetails>[];
         for (final json in response) {
           try {
+            debugLog('RAW JSON keys: ${json.keys.toList()}');
+            debugLog('RAW JSON symptom: ${json['symptom']} (type: ${json['symptom'].runtimeType})');
             final problem = ProblemWithDetails.fromJson(json);
 
             // Filter out resolved problems that are older than 5 minutes
@@ -91,7 +93,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              *,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -139,7 +141,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              *,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -372,7 +374,7 @@ class ProblemService {
     try {
       // Use same filtering logic as loadProblems
       const selectFields = '''
-        *,
+        id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
         symptom_data:symptom(id, symptomstring),
         originator_data:originator(supabase_id, firstname, lastname),
         actionby_data:actionby(supabase_id, firstname, lastname),

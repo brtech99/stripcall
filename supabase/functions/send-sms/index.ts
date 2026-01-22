@@ -1,194 +1,314 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
-// Crew type -> Twilio phone mapping
+// Map crew type to Twilio phone number
 const CREW_TYPE_TO_PHONE: Record<string, string> = {
-  'Armorer': '+17542276679',
-  'Medical': '+13127577223',
-  'Natloff': '+16504803067',
-}
+  Armorer: "+17542276679",
+  Medical: "+13127577223",
+  Natloff: "+16504803067",
+};
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Verify authentication
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+    const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!twilioAccountSid || !twilioAuthToken) {
+      console.log("Twilio credentials not configured, skipping SMS");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: "Twilio not configured",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const { problemId, message, type } = await req.json()
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { problemId, message, type, senderName } = await req.json();
+    console.log(
+      `send-sms called: problemId=${problemId}, type=${type}, senderName=${senderName}, message=${message?.substring(0, 50)}`,
+    );
 
     if (!problemId) {
-      return new Response(JSON.stringify({ error: 'problemId is required' }), {
+      return new Response(JSON.stringify({ error: "Missing problemId" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Use service role for database operations
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-
-    // Get problem with reporter phone and crew type
-    const { data: problem, error: problemError } = await supabase
-      .from('problem')
-      .select(`
+    // Get problem details including reporter_phone and crew info
+    const { data: problem, error: problemError } = await adminClient
+      .from("problem")
+      .select(
+        `
         id,
         strip,
         reporter_phone,
-        crew:crews!inner(
+        crew,
+        crews:crew (
           id,
-          crew_type:crewtypes!inner(crewtype)
+          crew_type,
+          crewtypes:crew_type (
+            id,
+            crewtype
+          )
         )
-      `)
-      .eq('id', problemId)
-      .single()
+      `,
+      )
+      .eq("id", problemId)
+      .single();
 
     if (problemError || !problem) {
-      console.error('Problem not found:', problemError)
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Problem not found'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      console.log("Problem not found:", problemId, problemError);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: "Problem not found",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    if (!problem.reporter_phone) {
-      // Not an error - just means this problem wasn't created via SMS
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'No SMS reporter for this problem'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    console.log(
+      `Problem found: id=${problem.id}, reporter_phone=${problem.reporter_phone}, crew=${problem.crew}`,
+    );
+
+    // Get the Twilio "From" phone number based on crew type
+    const crewTypeName = problem.crews?.crewtypes?.crewtype;
+    const twilioFromPhone = crewTypeName
+      ? CREW_TYPE_TO_PHONE[crewTypeName]
+      : null;
+
+    if (!twilioFromPhone) {
+      console.log("No Twilio phone configured for crew type:", crewTypeName);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: "No Twilio phone for crew type",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    // Get sender name
-    const { data: sender } = await supabase
-      .from('users')
-      .select('firstname, lastname')
-      .eq('supabase_id', user.id)
-      .single()
+    const smsSent: string[] = [];
 
-    const senderName = sender
-      ? `${sender.firstname} ${sender.lastname}`.trim()
-      : 'Crew Member'
+    // 1. Send SMS to reporter_phone if present (non-app user who texted in)
+    if (problem.reporter_phone) {
+      let smsBody: string;
+      const displayName = senderName || "Crew";
+      if (type === "on_my_way") {
+        smsBody = `${displayName} is on the way to Strip ${problem.strip}`;
+      } else {
+        smsBody = `${displayName}: ${message || "New update on your report"}`;
+      }
 
-    // Get the Twilio phone number for this crew type
-    const crewTypeName = problem.crew?.crew_type?.crewtype
-    const fromPhone = CREW_TYPE_TO_PHONE[crewTypeName]
-
-    if (!fromPhone) {
-      console.error(`No phone mapping for crew type: ${crewTypeName}`)
-      return new Response(JSON.stringify({
-        success: false,
-        message: `No SMS number configured for ${crewTypeName} crew`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      try {
+        await sendTwilioSms(
+          twilioAccountSid,
+          twilioAuthToken,
+          twilioFromPhone,
+          problem.reporter_phone,
+          smsBody,
+          adminClient,
+        );
+        smsSent.push(problem.reporter_phone);
+        console.log("SMS sent to reporter:", problem.reporter_phone);
+      } catch (smsError) {
+        console.error("Failed to send SMS to reporter:", smsError);
+      }
     }
 
-    // Build SMS body based on type
-    let smsBody: string
-    if (type === 'on_my_way') {
-      smsBody = `${senderName} is on the way to Strip ${problem.strip}.`
-    } else {
-      // Regular message
-      smsBody = `[Strip ${problem.strip}] ${senderName}: ${message}`
+    // 2. Send SMS to crew members who have is_sms_mode enabled
+    // Query separately to avoid FK ambiguity
+    const { data: crewMembers, error: crewError } = await adminClient
+      .from("crewmembers")
+      .select("crewmember")
+      .eq("crew", problem.crew);
+
+    if (!crewError && crewMembers && crewMembers.length > 0) {
+      // Get user data for these crew members
+      const memberIds = crewMembers.map((cm: any) => cm.crewmember);
+      const { data: users } = await adminClient
+        .from("users")
+        .select("supabase_id, phonenbr, is_sms_mode, firstname, lastname")
+        .in("supabase_id", memberIds);
+
+      for (const user of users || []) {
+        if (user?.is_sms_mode && user?.phonenbr) {
+          let smsBody: string;
+          const displayName = senderName || "Crew";
+          if (type === "on_my_way") {
+            smsBody = `[Strip ${problem.strip}] ${displayName} is on the way`;
+          } else {
+            // App crew member sending message - just show username: message (no +n)
+            smsBody = `${displayName}: ${message}`;
+          }
+
+          try {
+            await sendTwilioSms(
+              twilioAccountSid,
+              twilioAuthToken,
+              twilioFromPhone,
+              user.phonenbr,
+              smsBody,
+              adminClient,
+            );
+            smsSent.push(user.phonenbr);
+            console.log("SMS sent to crew member:", user.phonenbr);
+          } catch (smsError) {
+            console.error(
+              "Failed to send SMS to crew member:",
+              user.phonenbr,
+              smsError,
+            );
+          }
+        }
+      }
     }
 
-    // Send via Twilio
-    const twilioResult = await sendTwilioSms(fromPhone, problem.reporter_phone, smsBody)
-
-    return new Response(JSON.stringify({
-      success: twilioResult.success,
-      message: twilioResult.message,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
+    return new Response(JSON.stringify({ success: true, smsSent }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('Error sending SMS:', error)
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
+    console.error("send-sms error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-})
+});
+
+// Check if phone is a simulator phone (2025551001-2025551005)
+function isSimulatorPhone(phone: string): boolean {
+  const normalized = phone.replace(/\D/g, "").replace(/^1/, "");
+  return /^202555100[1-5]$/.test(normalized);
+}
 
 async function sendTwilioSms(
+  accountSid: string,
+  authToken: string,
   from: string,
   to: string,
-  body: string
-): Promise<{ success: boolean; message: string }> {
-  const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
-  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN')
+  body: string,
+  adminClient?: any,
+) {
+  // Check if this is a simulator phone number
+  if (isSimulatorPhone(to) && adminClient) {
+    const normalizedTo = to.replace(/\D/g, "").replace(/^1/, "");
+    console.log("Routing to SMS simulator:", normalizedTo);
 
-  if (!accountSid || !authToken) {
-    console.error('Twilio credentials not configured')
-    return { success: false, message: 'Twilio credentials not configured' }
+    // Insert into sms_simulator table as inbound (message coming TO the simulated phone)
+    await adminClient.from("sms_simulator").insert({
+      phone: normalizedTo,
+      direction: "inbound",
+      twilio_number: from,
+      message: body,
+    });
+
+    return { sid: "SIMULATOR", to: normalizedTo };
   }
 
-  try {
-    const response = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          From: from,
-          To: to,
-          Body: body,
-        }),
-      }
-    )
+  // Real Twilio send
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
 
-    if (response.ok) {
-      const data = await response.json()
-      console.log(`SMS sent successfully: ${data.sid}`)
-      return { success: true, message: `SMS sent: ${data.sid}` }
-    } else {
-      const errorData = await response.json()
-      console.error('Twilio API error:', errorData)
-      return {
-        success: false,
-        message: `Twilio error: ${errorData.message || response.status}`
-      }
-    }
-  } catch (err) {
-    console.error('Error calling Twilio API:', err)
-    return { success: false, message: `Network error: ${err.message}` }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: "Basic " + btoa(`${accountSid}:${authToken}`),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      To: to,
+      From: from,
+      Body: body,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Twilio error: ${response.status} - ${errorText}`);
   }
+
+  return await response.json();
+}
+
+async function getOrAssignSlot(
+  adminClient: any,
+  crewId: number,
+  phone: string,
+  problemId: number,
+): Promise<number> {
+  // Check if slot already exists for this problem
+  const { data: existingSlot } = await adminClient
+    .from("sms_reply_slots")
+    .select("slot")
+    .eq("crew_id", crewId)
+    .eq("problem_id", problemId)
+    .maybeSingle();
+
+  if (existingSlot) {
+    return existingSlot.slot;
+  }
+
+  // Get or initialize the slot counter for this crew
+  const { data: counter } = await adminClient
+    .from("sms_crew_slot_counter")
+    .select("next_slot")
+    .eq("crew_id", crewId)
+    .maybeSingle();
+
+  let nextSlot = counter?.next_slot || 1;
+
+  // Upsert the slot assignment (overwriting if slot already used)
+  await adminClient.from("sms_reply_slots").upsert(
+    {
+      crew_id: crewId,
+      slot: nextSlot,
+      phone: phone,
+      problem_id: problemId,
+      assigned_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+    { onConflict: "crew_id,slot" },
+  );
+
+  // Update the counter (rotate 1-4)
+  const newNextSlot = (nextSlot % 4) + 1;
+  await adminClient
+    .from("sms_crew_slot_counter")
+    .upsert(
+      { crew_id: crewId, next_slot: newNextSlot },
+      { onConflict: "crew_id" },
+    );
+
+  return nextSlot;
 }

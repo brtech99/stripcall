@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'dart:developer' as developer;
 import '../../widgets/settings_menu.dart';
+import '../../widgets/user_name_display.dart';
 import '../../widgets/crew_message_window.dart';
 import '../../widgets/problem_card.dart';
 import '../../models/problem_with_details.dart';
@@ -52,14 +54,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _initialize() async {
+    print('DEBUG _initialize: START ${DateTime.now()}');
     await _checkSuperUserStatus(); // This loads crews for superusers and sets _selectedCrewId
+    print('DEBUG _initialize: after _checkSuperUserStatus, _isSuperUser=$_isSuperUser, _selectedCrewId=$_selectedCrewId');
     await _determineUserCrewInfo();
+    print('DEBUG _initialize: after _determineUserCrewInfo');
     await _loadCrewInfo();
+    print('DEBUG _initialize: after _loadCrewInfo, about to call _loadProblems with _selectedCrewId=$_selectedCrewId');
     await _loadProblems(); // This will use the _selectedCrewId set above
+    print('DEBUG _initialize: after _loadProblems, loaded ${_problems.length} problems');
 
     // Start timers
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) => _cleanupResolvedProblems());
     _updateTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkForUpdates());
+    print('DEBUG _initialize: DONE ${DateTime.now()}');
   }
 
   @override
@@ -638,9 +646,32 @@ class _ProblemsPageState extends State<ProblemsPage> {
           .order('crewtype(crewtype)');
 
       print('DEBUG: _loadAllCrews got ${response.length} crews');
+
+      // Sort crews in a standard order: Armorer, Medical, then others alphabetically
+      final crewList = List<Map<String, dynamic>>.from(response);
+      crewList.sort((a, b) {
+        final aType = (a['crewtype']?['crewtype'] as String?) ?? '';
+        final bType = (b['crewtype']?['crewtype'] as String?) ?? '';
+
+        // Define priority order
+        const priorityOrder = ['Armorer', 'Medical'];
+        final aIndex = priorityOrder.indexOf(aType);
+        final bIndex = priorityOrder.indexOf(bType);
+
+        if (aIndex != -1 && bIndex != -1) {
+          return aIndex.compareTo(bIndex);
+        } else if (aIndex != -1) {
+          return -1; // a comes first
+        } else if (bIndex != -1) {
+          return 1; // b comes first
+        } else {
+          return aType.compareTo(bType); // alphabetical for others
+        }
+      });
+
       if (mounted) {
         setState(() {
-          _allCrews = List<Map<String, dynamic>>.from(response);
+          _allCrews = crewList;
           if (_selectedCrewId == null && _allCrews.isNotEmpty) {
             _selectedCrewId = _allCrews.first['id'] as int;
             final firstCrewType = _allCrews.first['crewtype']?['crewtype'] ?? 'Unknown';
@@ -743,6 +774,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                 );
               }).toList(),
               onChanged: (value) async {
+                developer.log('DROPDOWN: selecting crew $value, _isSuperUser=$_isSuperUser', name: 'StripCall');
                 setState(() {
                   _selectedCrewId = value;
                   _isLoading = true;
@@ -752,6 +784,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
             )
           : Text(appBarTitle),
         actions: [
+          const UserNameDisplay(),
           const SettingsMenu(),
         ],
       ),

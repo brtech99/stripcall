@@ -342,6 +342,24 @@ class _ProblemChatState extends State<ProblemChat> {
                     try {
                       final session = Supabase.instance.client.auth.currentSession;
                       if (session != null) {
+                        // Get current user's name for the SMS
+                        String senderName = 'Crew';
+                        try {
+                          final userInfo = await Supabase.instance.client
+                              .from('users')
+                              .select('firstname, lastname')
+                              .eq('supabase_id', widget.currentUserId!)
+                              .maybeSingle();
+                          if (userInfo != null) {
+                            final firstName = userInfo['firstname'] ?? '';
+                            final lastName = userInfo['lastname'] ?? '';
+                            senderName = '$firstName $lastName'.trim();
+                            if (senderName.isEmpty) senderName = 'Crew';
+                          }
+                        } catch (e) {
+                          // Use default name if lookup fails
+                        }
+
                         const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
                         const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
                         final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
@@ -357,6 +375,7 @@ class _ProblemChatState extends State<ProblemChat> {
                             'problemId': widget.problemId,
                             'message': text,
                             'type': 'message',
+                            'senderName': senderName,
                           }),
                         );
                       }

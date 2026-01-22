@@ -25,19 +25,66 @@ class Problem {
 
   /// Create a Problem from a JSON map (typically from Supabase)
   factory Problem.fromJson(Map<String, dynamic> json) {
+    print('DEBUG Problem.fromJson ENTRY: symptom type=${json['symptom'].runtimeType}, value=${json['symptom']}');
+
+    // Handle symptom - could be int or Map from joined data
+    int symptomId;
+    final symptomVal = json['symptom'];
+    if (symptomVal is int) {
+      symptomId = symptomVal;
+    } else if (symptomVal is Map) {
+      symptomId = (symptomVal['id'] as num?)?.toInt() ?? 0;
+    } else if (symptomVal != null) {
+      symptomId = int.tryParse(symptomVal.toString()) ?? 0;
+    } else {
+      symptomId = 0;
+    }
+
+    // Handle action - could be int or Map from joined data
+    int? actionId;
+    final actionVal = json['action'];
+    if (actionVal is int) {
+      actionId = actionVal;
+    } else if (actionVal is Map) {
+      actionId = (actionVal['id'] as num?)?.toInt();
+    } else if (actionVal != null) {
+      actionId = int.tryParse(actionVal.toString());
+    }
+
+    // Handle originator - could be string or Map from joined data
+    String originatorId;
+    final originatorVal = json['originator'];
+    if (originatorVal is String) {
+      originatorId = originatorVal;
+    } else if (originatorVal is Map) {
+      originatorId = (originatorVal['supabase_id'] ?? '').toString();
+    } else {
+      originatorId = originatorVal?.toString() ?? '';
+    }
+
+    // Handle actionby - could be string or Map from joined data
+    String? actionById;
+    final actionByVal = json['actionby'];
+    if (actionByVal is String) {
+      actionById = actionByVal;
+    } else if (actionByVal is Map) {
+      final val = (actionByVal['supabase_id'] ?? '').toString();
+      actionById = val.isNotEmpty ? val : null;
+    } else if (actionByVal != null) {
+      actionById = actionByVal.toString();
+    }
+
     return Problem(
-      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
-      eventId: json['event'] is int ? json['event'] : int.parse(json['event'].toString()),
-      crewId: json['crew'] is int ? json['crew'] : int.parse(json['crew'].toString()),
-      originatorId: json['originator'] ?? '',
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      eventId: json['event'] is int ? json['event'] : int.tryParse(json['event'].toString()) ?? 0,
+      crewId: json['crew'] is int ? json['crew'] : int.tryParse(json['crew'].toString()) ?? 0,
+      originatorId: originatorId,
       strip: json['strip'] ?? '',
-      symptomId: json['symptom'] is int ? json['symptom'] : int.parse(json['symptom'].toString()),
+      symptomId: symptomId,
       startDateTime: DateTime.parse(json['startdatetime']),
-      actionId: json['action'] != null 
-          ? (json['action'] is int ? json['action'] : int.parse(json['action'].toString()))
-          : null,
-      actionById: json['actionby'],
-      endDateTime: json['enddatetime'] != null 
+      actionId: actionId,
+      actionById: actionById,
+      endDateTime: json['enddatetime'] != null
           ? DateTime.parse(json['enddatetime'])
           : null,
     );
@@ -99,4 +146,4 @@ class Problem {
   String toString() {
     return 'Problem(id: $id, eventId: $eventId, crewId: $crewId, originatorId: $originatorId, strip: $strip, symptomId: $symptomId, startDateTime: $startDateTime, actionId: $actionId, actionById: $actionById, endDateTime: $endDateTime)';
   }
-} 
+}
