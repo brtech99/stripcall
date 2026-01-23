@@ -97,7 +97,7 @@ class _SelectEventPageState extends State<SelectEventPage> {
           });
           return;
         }
-        
+
         final crewType = crew['crewtype'] as Map<String, dynamic>?;
         if (!mounted) return;
         context.push(Routes.problems, extra: {
@@ -127,7 +127,6 @@ class _SelectEventPageState extends State<SelectEventPage> {
           const SettingsMenu(),
         ],
       ),
-      drawer: const AppMenu(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

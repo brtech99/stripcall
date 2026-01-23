@@ -262,7 +262,7 @@ class _ProblemCardState extends State<ProblemCard> {
             ),
             if (widget.responders != null && widget.responders!.isNotEmpty)
               Text(
-                'Responding: ${widget.responders!.map((r) {
+                '${widget.problem.isResolved ? 'Responded' : 'Responding'}: ${widget.responders!.map((r) {
                   final user = r['user'] as Map<String, dynamic>?;
                   if (user != null) {
                     return '${user['firstname']} ${user['lastname']}';
@@ -270,7 +270,7 @@ class _ProblemCardState extends State<ProblemCard> {
                   return 'Unknown';
                 }).join(', ')}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.orange[700],
+                  color: widget.problem.isResolved ? Colors.grey[600] : Colors.orange[700],
                   fontWeight: FontWeight.w500,
                 ),
               ),

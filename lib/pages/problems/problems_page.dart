@@ -54,20 +54,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _initialize() async {
-    print('DEBUG _initialize: START ${DateTime.now()}');
     await _checkSuperUserStatus(); // This loads crews for superusers and sets _selectedCrewId
-    print('DEBUG _initialize: after _checkSuperUserStatus, _isSuperUser=$_isSuperUser, _selectedCrewId=$_selectedCrewId');
     await _determineUserCrewInfo();
-    print('DEBUG _initialize: after _determineUserCrewInfo');
     await _loadCrewInfo();
-    print('DEBUG _initialize: after _loadCrewInfo, about to call _loadProblems with _selectedCrewId=$_selectedCrewId');
     await _loadProblems(); // This will use the _selectedCrewId set above
-    print('DEBUG _initialize: after _loadProblems, loaded ${_problems.length} problems');
 
     // Start timers
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) => _cleanupResolvedProblems());
     _updateTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkForUpdates());
-    print('DEBUG _initialize: DONE ${DateTime.now()}');
   }
 
   @override
@@ -91,6 +85,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _checkForNewProblems(latestProblemTime);
       await _checkForNewMessages(latestProblemTime);
       await _checkForResolvedProblems(latestProblemTime);
+      await _loadResponders(); // Refresh responder data for "On my way" updates
     } catch (e) {
       debugLogError('Error checking for updates', e);
       // Error checking for updates
@@ -166,20 +161,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
             .toList();
 
         if (unresolvedProblemIds.isEmpty) {
-          debugLog('DEBUG: No unresolved problems to check for updates');
           return;
         }
 
-        debugLog('DEBUG: Checking for problem updates (reporter mode) on ${unresolvedProblemIds.length} unresolved problems since $since');
         final updatedProblems = await _problemService.checkForProblemUpdates(
           since: since,
           problemIds: unresolvedProblemIds,
         );
-
-        debugLog('DEBUG: Found ${updatedProblems.length} updated problems');
-        if (updatedProblems.isNotEmpty) {
-          debugLog('DEBUG: Updated problems data: $updatedProblems');
-        }
 
         if (mounted && updatedProblems.isNotEmpty) {
           for (final updated in updatedProblems) {
@@ -188,7 +176,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
               if (enddatetime != null) {
                 final resolvedTime = DateTime.parse(enddatetime);
                 final problemId = (updated['id'] as num).toInt();
-                debugLog('DEBUG: Handling updated problem $problemId with data: $updated');
                 await _handleProblemResolved(
                   problemId,
                   resolvedTime,
@@ -207,17 +194,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
 
     try {
-      debugLog('DEBUG: Checking for resolved problems since $since');
       final resolvedProblems = await _problemService.checkForResolvedProblems(
         eventId: widget.eventId,
         crewId: widget.crewId!,
         since: since,
       );
-
-      debugLog('DEBUG: Found ${resolvedProblems.length} resolved problems');
-      if (resolvedProblems.isNotEmpty) {
-        debugLog('DEBUG: Resolved problems data: $resolvedProblems');
-      }
 
       if (mounted && resolvedProblems.isNotEmpty) {
         for (final resolved in resolvedProblems) {
@@ -232,7 +213,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
             if (resolvedTimeStr != null) {
               final resolvedTime = DateTime.parse(resolvedTimeStr);
               final problemId = (resolved['id'] as num).toInt();
-              debugLog('DEBUG: Handling resolved problem $problemId with data: $resolved');
               await _handleProblemResolved(
                 problemId,
                 resolvedTime,
@@ -311,31 +291,21 @@ class _ProblemsPageState extends State<ProblemsPage> {
       if (problemIndex != -1) {
         final problem = _problems[problemIndex];
 
-        debugLog('DEBUG: Found problem at index $problemIndex, current action: ${problem.action}');
-        debugLog('DEBUG: resolvedData keys: ${resolvedData?.keys}');
-        debugLog('DEBUG: action_data: ${resolvedData?['action_data']}');
-        debugLog('DEBUG: actionby_data: ${resolvedData?['actionby_data']}');
-
         // If we have resolution data (action, actionby), update those too
         if (resolvedData != null && resolvedData.containsKey('action_data')) {
-          debugLog('DEBUG: Updating problem with action_data');
           _problems[problemIndex] = problem.copyWith(
             resolvedDateTime: resolvedTime.toIso8601String(),
             action: resolvedData['action_data'],
             actionBy: resolvedData['actionby_data'],
           );
         } else {
-          debugLog('DEBUG: No action_data found, only updating resolvedDateTime');
           // Fallback to just updating resolved time
           _problems[problemIndex] = problem.copyWith(
             resolvedDateTime: resolvedTime.toIso8601String(),
           );
         }
-
-        debugLog('DEBUG: After update, problem action: ${_problems[problemIndex].action}');
-      } else {
-        debugLog('DEBUG: Problem $problemId not found in current problems list');
       }
+      // Problem not in list is expected - may be from different crew or already cleaned up
     });
   }
 

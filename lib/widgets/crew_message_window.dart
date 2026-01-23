@@ -194,23 +194,21 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         debugLogError('Error loading messages after insert', loadError);
       }
 
-      // Send notification for the new message (skip on web to avoid type errors)
-      if (!kIsWeb) {
-        try {
-          await NotificationService().sendCrewNotification(
-            title: 'Crew Message',
-            body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
-            crewId: widget.crewId.toString(),
-            senderId: widget.currentUserId!,
-            data: {
-              'type': 'crew_message',
-              'crewId': widget.crewId.toString(),
-            },
-            includeReporter: false,
-          );
-        } catch (notifError) {
-          debugLogError('Error sending notification', notifError);
-        }
+      // Send notification for the new message
+      try {
+        await NotificationService().sendCrewNotification(
+          title: 'Crew Message',
+          body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
+          crewId: widget.crewId.toString(),
+          senderId: widget.currentUserId!,
+          data: {
+            'type': 'crew_message',
+            'crewId': widget.crewId.toString(),
+          },
+          includeReporter: false,
+        );
+      } catch (notifError) {
+        debugLogError('Error sending notification', notifError);
       }
 
     } catch (e) {
@@ -280,6 +278,28 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
               ],
             ),
           ),
+          // Show last message when collapsed (for context)
+          if (!_isExpanded && _messages.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${_messages.first.authorName ?? 'Unknown'}: ${_messages.first.message}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
           // Message input
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

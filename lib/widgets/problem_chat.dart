@@ -318,8 +318,8 @@ class _ProblemChatState extends State<ProblemChat> {
                     });
                   }
 
-                  // Send notification for the new message (skip on web to avoid type errors)
-                  if (!kIsWeb) {
+                  // Send notification for the new message
+                  try {
                     await NotificationService().sendCrewNotification(
                       title: 'New Message',
                       body: text.length > 50 ? '${text.substring(0, 50)}...' : text,
@@ -333,6 +333,8 @@ class _ProblemChatState extends State<ProblemChat> {
                       includeReporter: _includeReporter,
                       reporterId: widget.originator?.toString(), // Pass the reporter ID
                     );
+                  } catch (notifError) {
+                    debugLogError('Error sending notification', notifError);
                   }
 
                   // Send SMS to reporter if include_reporter is true

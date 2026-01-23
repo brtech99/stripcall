@@ -1,4 +1,4 @@
-package com.example.stripcall
+package com.brianrosen.stripcall
 
 import io.flutter.embedding.android.FlutterActivity
 

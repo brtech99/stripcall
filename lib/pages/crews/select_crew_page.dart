@@ -35,11 +35,14 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
       final isSuperUserRole = await isSuperUser();
 
       // Build the query based on user role
+      // Only show crews for events that haven't ended yet
+      final now = DateTime.now().toIso8601String();
+
       var query = Supabase.instance.client
           .from('crews')
           .select('''
             *,
-            event:events(
+            event:events!inner(
               id,
               name,
               startdatetime,
@@ -49,14 +52,15 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
               id,
               crewtype
             )
-          ''');
+          ''')
+          .gte('event.enddatetime', now);
 
       // If not superuser, only show crews where user is crew chief
       if (!isSuperUserRole) {
         query = query.eq('crew_chief', userId);
       }
 
-      final response = await query.order('event(startdatetime)', ascending: false);
+      final response = await query.order('event(startdatetime)', ascending: true);
 
       if (mounted) {
         setState(() {
@@ -107,7 +111,7 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
                         final crew = Crew.fromJson(crewData);
                         final eventData = crewData['event'] as Map<String, dynamic>?;
                         final crewTypeData = crewData['crewtype'] as Map<String, dynamic>?;
-                        
+
                         if (eventData == null || crewTypeData == null) {
                           return const Card(
                             child: ListTile(
@@ -116,10 +120,10 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
                             ),
                           );
                         }
-                        
+
                         final event = Event.fromJson(eventData);
                         final crewType = CrewType.fromJson(crewTypeData);
-                        
+
                         return Card(
                           child: ListTile(
                             title: Text(event.name),
@@ -146,4 +150,4 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
                     ),
     );
   }
-} 
+}

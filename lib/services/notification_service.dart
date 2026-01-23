@@ -364,14 +364,7 @@ class NotificationService {
     try {
       debugLog('Sending notification: $title - $body to ${userIds.length} users');
 
-      // For web, skip notifications for now due to interop issues
-      // The core functionality (messages, problems) works fine without them
-      if (kIsWeb) {
-        debugLog('Skipping web notification (web notifications temporarily disabled)');
-        return true; // Return success so the calling code doesn't think it failed
-      }
-
-      // For mobile, use the Edge Function (FCM)
+      // Use the Edge Function (FCM) for all platforms
       final session = _supabase.auth.currentSession;
       if (session == null) {
         debugLogError('No active session found');
@@ -530,10 +523,16 @@ class NotificationService {
   }) async {
     try {
       // Get all crew members
+      final crewIdInt = int.tryParse(crewId);
+      if (crewIdInt == null) {
+        debugLogError('Invalid crewId: $crewId');
+        return false;
+      }
+
       final crewMembers = await _supabase
           .from('crewmembers')
           .select('crewmember')
-          .eq('crew', crewId);
+          .eq('crew', crewIdInt);
 
       if (crewMembers.isEmpty && (reporterId == null || !includeReporter)) {
         return true; // Not an error, just no one to notify

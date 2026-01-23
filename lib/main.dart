@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'router.dart';
@@ -61,6 +62,11 @@ class _MyAppState extends State<MyApp> {
         SecretService().clearCache();
       }
     });
+
+    // If user is already logged in, initialize Firebase now
+    if (Supabase.instance.client.auth.currentSession != null) {
+      _initializeFirebaseAfterAuth();
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -82,24 +88,29 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initializeFirebaseAfterAuth() async {
     try {
-      debugLog('🔐 User authenticated, initializing Firebase with Vault secrets...');
+      debugLog('🔐 User authenticated, initializing Firebase...');
 
-      // Get Firebase config from Vault
-      final firebaseConfig = await FirebaseConfig.getWebConfig();
-
-      // Initialize Firebase with secrets from Vault
-      await Firebase.initializeApp(
-        options: FirebaseOptions(
-          apiKey: firebaseConfig['apiKey'],
-          authDomain: firebaseConfig['authDomain'],
-          projectId: firebaseConfig['projectId'],
-          storageBucket: firebaseConfig['storageBucket'],
-          messagingSenderId: firebaseConfig['messagingSenderId'],
-          appId: firebaseConfig['appId'],
-        ),
-      );
-
-      debugLog('✅ Firebase initialized with secrets from Vault');
+      // On mobile (iOS/Android), Firebase uses native config files (google-services.json / GoogleService-Info.plist)
+      // On web, we need to pass the config explicitly from Vault
+      if (kIsWeb) {
+        // Get Firebase config from Vault for web
+        final firebaseConfig = await FirebaseConfig.getWebConfig();
+        await Firebase.initializeApp(
+          options: FirebaseOptions(
+            apiKey: firebaseConfig['apiKey'],
+            authDomain: firebaseConfig['authDomain'],
+            projectId: firebaseConfig['projectId'],
+            storageBucket: firebaseConfig['storageBucket'],
+            messagingSenderId: firebaseConfig['messagingSenderId'],
+            appId: firebaseConfig['appId'],
+          ),
+        );
+        debugLog('✅ Firebase initialized with Vault secrets (web)');
+      } else {
+        // On mobile, just initialize - it will use google-services.json / GoogleService-Info.plist
+        await Firebase.initializeApp();
+        debugLog('✅ Firebase initialized with native config (mobile)');
+      }
 
       // Initialize notification service
       try {
@@ -110,7 +121,7 @@ class _MyAppState extends State<MyApp> {
       }
 
     } catch (e) {
-      debugLogError('Firebase initialization with Vault secrets failed', e);
+      debugLogError('Firebase initialization failed', e);
       // Continue without Firebase - the app should still work
     }
   }

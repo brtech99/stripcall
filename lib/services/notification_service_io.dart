@@ -1,7 +1,7 @@
 // Mobile platform (iOS/Android) implementation
 import 'dart:io' show Platform;
 
-bool shouldRequestPermission() => Platform.isIOS;
+bool shouldRequestPermission() => true; // Both iOS and Android 13+ need permission
 
 bool isIOS() => Platform.isIOS;
 
