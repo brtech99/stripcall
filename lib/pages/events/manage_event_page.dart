@@ -328,14 +328,17 @@ class _ManageEventPageState extends State<ManageEventPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       TextFormField(
+                        key: const ValueKey('manage_event_name_field'),
                         controller: _nameController,
                         decoration: const InputDecoration(labelText: 'Event Name'),
                       ),
                       TextFormField(
+                        key: const ValueKey('manage_event_city_field'),
                         controller: _cityController,
                         decoration: const InputDecoration(labelText: 'City'),
                       ),
                       TextFormField(
+                        key: const ValueKey('manage_event_state_field'),
                         controller: _stateController,
                         decoration: const InputDecoration(labelText: 'State'),
                       ),
@@ -345,6 +348,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
                             child: Text(_startDate != null ? 'Start Date: ${_startDate!.toLocal().toString().split(' ')[0]}' : 'Start Date: Not set'),
                           ),
                           TextButton(
+                            key: const ValueKey('manage_event_start_date_button'),
                             onPressed: () => _pickDate(isStart: true),
                             child: const Text('Pick'),
                           ),
@@ -356,12 +360,14 @@ class _ManageEventPageState extends State<ManageEventPage> {
                             child: Text(_endDate != null ? 'End Date: ${_endDate!.toLocal().toString().split(' ')[0]}' : 'End Date: Not set'),
                           ),
                           TextButton(
+                            key: const ValueKey('manage_event_end_date_button'),
                             onPressed: () => _pickDate(isStart: false),
                             child: const Text('Pick'),
                           ),
                         ],
                       ),
                       DropdownButtonFormField<String>(
+                        key: const ValueKey('manage_event_strip_numbering_dropdown'),
                         value: _stripNumbering,
                         decoration: const InputDecoration(labelText: 'Strip Numbering'),
                         items: const [
@@ -373,6 +379,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
                         },
                       ),
                       TextFormField(
+                        key: const ValueKey('manage_event_count_field'),
                         initialValue: _count > 0 ? _count.toString() : '',
                         decoration: InputDecoration(
                           labelText: _stripNumbering == 'Pods' ? 'Number of Pods' : 'Number of Strips',
@@ -385,6 +392,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
+                        key: const ValueKey('manage_event_save_button'),
                         onPressed: _isLoading ? null : _saveEvent,
                         child: Text(widget.event == null ? 'Create Event' : 'Save'),
                       ),
@@ -396,6 +404,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
                             const Text('Crews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                             if (_availableCrewTypes.isNotEmpty)
                               IconButton(
+                                key: const ValueKey('manage_event_add_crew_button'),
                                 onPressed: _addCrew,
                                 icon: const Icon(Icons.add),
                                 tooltip: 'Add Crew',

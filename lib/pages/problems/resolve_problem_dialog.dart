@@ -191,6 +191,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      key: const ValueKey('resolve_problem_dialog'),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Padding(
@@ -228,6 +229,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                       SizedBox(
                         width: double.infinity,
                         child: DropdownButtonFormField<String>(
+                          key: const ValueKey('resolve_problem_action_dropdown'),
                           value: _selectedAction,
                           decoration: const InputDecoration(
                             labelText: 'Resolution',
@@ -258,6 +260,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                       ),
                       const SizedBox(height: 16),
                       TextField(
+                        key: const ValueKey('resolve_problem_notes_field'),
                         controller: _notesController,
                         decoration: const InputDecoration(
                           labelText: 'Notes (Optional)',
@@ -274,11 +277,13 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
+                    key: const ValueKey('resolve_problem_cancel_button'),
                     onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
+                    key: const ValueKey('resolve_problem_submit_button'),
                     onPressed: _isLoading ? null : _submitAction,
                     child: _isLoading
                         ? const SizedBox(

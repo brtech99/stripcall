@@ -152,6 +152,7 @@ class _ProblemCardState extends State<ProblemCard> {
             if ((widget.isSuperUser || widget.userCrewId == widget.problem.crewId) && widget.problem.actionString == null && !widget.problem.isResolved) ...[
               if (!widget.isUserResponding)
                 ElevatedButton(
+                  key: ValueKey('problem_onmyway_button_${widget.problem.id}'),
                   onPressed: widget.onGoOnMyWay,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -161,6 +162,7 @@ class _ProblemCardState extends State<ProblemCard> {
                 )
               else
                 ElevatedButton(
+                  key: ValueKey('problem_enroute_button_${widget.problem.id}'),
                   onPressed: null, // Disabled
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -172,6 +174,7 @@ class _ProblemCardState extends State<ProblemCard> {
                 ),
               const SizedBox(width: 20),
               ElevatedButton(
+                key: ValueKey('problem_resolve_button_${widget.problem.id}'),
                 onPressed: widget.onResolve,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -214,6 +217,7 @@ class _ProblemCardState extends State<ProblemCard> {
                 (widget.isSuperUser || widget.userCrewId == widget.problem.crewId) &&
                 !widget.problem.isResolved)
               TextButton.icon(
+                key: ValueKey('problem_edit_symptom_button_${widget.problem.id}'),
                 onPressed: widget.onEditSymptom,
                 icon: const Icon(Icons.edit, size: 16),
                 label: const Text('Edit'),
@@ -290,6 +294,7 @@ class _ProblemCardState extends State<ProblemCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
+      key: ValueKey('problem_card_${widget.problem.id}'),
       child: InkWell(
         onTap: () {
           setState(() => _isExpanded = !_isExpanded);

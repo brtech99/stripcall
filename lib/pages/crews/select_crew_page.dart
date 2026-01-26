@@ -104,6 +104,7 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
                       child: Text('You are not a crew chief for any crews'),
                     )
                   : ListView.builder(
+                      key: const ValueKey('select_crew_list'),
                       padding: const EdgeInsets.all(16),
                       itemCount: _crews.length,
                       itemBuilder: (context, index) {
@@ -125,6 +126,7 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
                         final crewType = CrewType.fromJson(crewTypeData);
 
                         return Card(
+                          key: ValueKey('select_crew_item_${crew.id}'),
                           child: ListTile(
                             title: Text(event.name),
                             subtitle: Text(

@@ -32,8 +32,9 @@ target 'Runner' do
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  target 'RunnerTests' do
+  target 'RunnerUITests' do
     inherit! :search_paths
+    pod 'patrol', :path => File.join('.symlinks', 'plugins', 'patrol', 'darwin')
   end
 end
 

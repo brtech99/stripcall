@@ -279,6 +279,7 @@ class _ProblemChatState extends State<ProblemChat> {
           children: [
             Expanded(
               child: TextField(
+                key: ValueKey('problem_chat_message_field_${widget.problemId}'),
                 controller: _messageController,
                 decoration: const InputDecoration(
                   hintText: 'Type a message...',
@@ -291,6 +292,7 @@ class _ProblemChatState extends State<ProblemChat> {
             ),
             const SizedBox(width: 8),
             IconButton(
+              key: ValueKey('problem_chat_send_button_${widget.problemId}'),
               icon: const Icon(Icons.send, size: 24),
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
@@ -406,6 +408,7 @@ class _ProblemChatState extends State<ProblemChat> {
           Row(
             children: [
               Checkbox(
+                key: ValueKey('problem_chat_include_reporter_${widget.problemId}'),
                 value: _includeReporter,
                 onChanged: (val) => setState(() => _includeReporter = val ?? false),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

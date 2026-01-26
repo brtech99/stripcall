@@ -61,22 +61,37 @@ DROP POLICY IF EXISTS "events_read_policy" ON "public"."events";
 DROP POLICY IF EXISTS "events_update_policy" ON "public"."events";
 DROP POLICY IF EXISTS "messages_create_policy" ON "public"."messages";
 DROP POLICY IF EXISTS "messages_read_policy" ON "public"."messages";
-DROP POLICY IF EXISTS "notification_preferences_policy" ON "public"."notification_preferences";
+-- notification_preferences table may not exist yet (created in later migration)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notification_preferences') THEN
+    DROP POLICY IF EXISTS "notification_preferences_policy" ON "public"."notification_preferences";
+  END IF;
+END $$;
 DROP POLICY IF EXISTS "oldproblemsymptom_read_policy" ON "public"."oldproblemsymptom";
 DROP POLICY IF EXISTS "oldproblemsymptom_insert_policy" ON "public"."oldproblemsymptom";
 DROP POLICY IF EXISTS "oldproblemsymptom_update_policy" ON "public"."oldproblemsymptom";
 DROP POLICY IF EXISTS "oldproblemsymptom_delete_policy" ON "public"."oldproblemsymptom";
-DROP POLICY IF EXISTS "PendingUsersDeletePolicy" ON "public"."pending_users";
-DROP POLICY IF EXISTS "PendingUsersInsertPolicy" ON "public"."pending_users";
-DROP POLICY IF EXISTS "PendingUsersReadPolicy" ON "public"."pending_users";
+-- pending_users table may not exist yet (created in later migration)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pending_users') THEN
+    DROP POLICY IF EXISTS "PendingUsersDeletePolicy" ON "public"."pending_users";
+    DROP POLICY IF EXISTS "PendingUsersInsertPolicy" ON "public"."pending_users";
+    DROP POLICY IF EXISTS "PendingUsersReadPolicy" ON "public"."pending_users";
+  END IF;
+END $$;
 DROP POLICY IF EXISTS "problem_create_policy" ON "public"."problem";
 DROP POLICY IF EXISTS "problem_delete_policy" ON "public"."problem";
 DROP POLICY IF EXISTS "problem_read_policy" ON "public"."problem";
 DROP POLICY IF EXISTS "problem_update_policy" ON "public"."problem";
-DROP POLICY IF EXISTS "responders_create_policy" ON "public"."responders";
-DROP POLICY IF EXISTS "responders_read_policy" ON "public"."responders";
-DROP POLICY IF EXISTS "responders_update_policy" ON "public"."responders";
-DROP POLICY IF EXISTS "responders_delete_policy" ON "public"."responders";
+-- responders table may not exist yet (created in later migration)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'responders') THEN
+    DROP POLICY IF EXISTS "responders_create_policy" ON "public"."responders";
+    DROP POLICY IF EXISTS "responders_read_policy" ON "public"."responders";
+    DROP POLICY IF EXISTS "responders_update_policy" ON "public"."responders";
+    DROP POLICY IF EXISTS "responders_delete_policy" ON "public"."responders";
+  END IF;
+END $$;
 DROP POLICY IF EXISTS "symptom_read_policy" ON "public"."symptom";
 DROP POLICY IF EXISTS "symptom_write_policy" ON "public"."symptom";
 DROP POLICY IF EXISTS "symptomclass_read_policy" ON "public"."symptomclass";
@@ -196,7 +211,7 @@ ON "public"."device_tokens"
 AS PERMISSIVE
 FOR ALL
 TO public
-USING ((user_id = (auth.uid())::text));
+USING ((user_id = auth.uid()));
 
 -- EVENTS table policies - organizers and superusers manage events
 CREATE POLICY "events_create_policy"
@@ -243,13 +258,17 @@ FOR SELECT
 TO public
 USING ((auth.role() = 'authenticated'::text));
 
--- NOTIFICATION_PREFERENCES table policies - authenticated users only
-CREATE POLICY "notification_preferences_policy"
-ON "public"."notification_preferences"
-AS PERMISSIVE
-FOR ALL
-TO public
-USING ((auth.role() = 'authenticated'::text));
+-- NOTIFICATION_PREFERENCES table policies - authenticated users only (table may not exist yet)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notification_preferences') THEN
+    CREATE POLICY "notification_preferences_policy"
+    ON "public"."notification_preferences"
+    AS PERMISSIVE
+    FOR ALL
+    TO public
+    USING ((auth.role() = 'authenticated'::text));
+  END IF;
+END $$;
 
 -- OLDPROBLEMSYMPTOM table policies - read for all, write for superusers only
 CREATE POLICY "oldproblemsymptom_read_policy"
@@ -281,27 +300,31 @@ FOR DELETE
 TO public
 USING (((auth.role() = 'authenticated'::text) AND is_superuser(auth.uid())));
 
--- PENDING_USERS table policies - public insert, authenticated management
-CREATE POLICY "PendingUsersDeletePolicy"
-ON "public"."pending_users"
-AS PERMISSIVE
-FOR DELETE
-TO public
-USING ((auth.role() = 'authenticated'::text));
+-- PENDING_USERS table policies - public insert, authenticated management (table may not exist yet)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'pending_users') THEN
+    CREATE POLICY "PendingUsersDeletePolicy"
+    ON "public"."pending_users"
+    AS PERMISSIVE
+    FOR DELETE
+    TO public
+    USING ((auth.role() = 'authenticated'::text));
 
-CREATE POLICY "PendingUsersInsertPolicy"
-ON "public"."pending_users"
-AS PERMISSIVE
-FOR INSERT
-TO public
-WITH CHECK (true);
+    CREATE POLICY "PendingUsersInsertPolicy"
+    ON "public"."pending_users"
+    AS PERMISSIVE
+    FOR INSERT
+    TO public
+    WITH CHECK (true);
 
-CREATE POLICY "PendingUsersReadPolicy"
-ON "public"."pending_users"
-AS PERMISSIVE
-FOR SELECT
-TO public
-USING ((auth.role() = 'authenticated'::text));
+    CREATE POLICY "PendingUsersReadPolicy"
+    ON "public"."pending_users"
+    AS PERMISSIVE
+    FOR SELECT
+    TO public
+    USING ((auth.role() = 'authenticated'::text));
+  END IF;
+END $$;
 
 -- PROBLEM table policies - authenticated users can manage
 CREATE POLICY "problem_create_policy"
@@ -333,35 +356,39 @@ TO public
 USING ((auth.role() = 'authenticated'::text))
 WITH CHECK ((auth.role() = 'authenticated'::text));
 
--- RESPONDERS table policies - authenticated users can manage
-CREATE POLICY "responders_create_policy"
-ON "public"."responders"
-AS PERMISSIVE
-FOR INSERT
-TO public
-WITH CHECK ((auth.role() = 'authenticated'::text));
+-- RESPONDERS table policies - authenticated users can manage (table may not exist yet)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'responders') THEN
+    CREATE POLICY "responders_create_policy"
+    ON "public"."responders"
+    AS PERMISSIVE
+    FOR INSERT
+    TO public
+    WITH CHECK ((auth.role() = 'authenticated'::text));
 
-CREATE POLICY "responders_read_policy"
-ON "public"."responders"
-AS PERMISSIVE
-FOR SELECT
-TO public
-USING ((auth.role() = 'authenticated'::text));
+    CREATE POLICY "responders_read_policy"
+    ON "public"."responders"
+    AS PERMISSIVE
+    FOR SELECT
+    TO public
+    USING ((auth.role() = 'authenticated'::text));
 
-CREATE POLICY "responders_update_policy"
-ON "public"."responders"
-AS PERMISSIVE
-FOR UPDATE
-TO public
-USING (((auth.role() = 'authenticated'::text) AND is_superuser(auth.uid())))
-WITH CHECK (((auth.role() = 'authenticated'::text) AND is_superuser(auth.uid())));
+    CREATE POLICY "responders_update_policy"
+    ON "public"."responders"
+    AS PERMISSIVE
+    FOR UPDATE
+    TO public
+    USING (((auth.role() = 'authenticated'::text) AND is_superuser(auth.uid())))
+    WITH CHECK (((auth.role() = 'authenticated'::text) AND is_superuser(auth.uid())));
 
-CREATE POLICY "responders_delete_policy"
-ON "public"."responders"
-AS PERMISSIVE
-FOR DELETE
-TO public
-USING ((auth.role() = 'authenticated'::text));
+    CREATE POLICY "responders_delete_policy"
+    ON "public"."responders"
+    AS PERMISSIVE
+    FOR DELETE
+    TO public
+    USING ((auth.role() = 'authenticated'::text));
+  END IF;
+END $$;
 
 -- SYMPTOM table policies - read for all, write for superusers only
 CREATE POLICY "symptom_read_policy"
@@ -455,4 +482,4 @@ FOR SELECT
 TO public
 USING ((EXISTS ( SELECT 1
    FROM crewmembers cm
-  WHERE ((cm.crew = crew_messages.crew) AND (cm.crewmember = (auth.uid())::text))))); 
+  WHERE ((cm.crew = crew_messages.crew) AND (cm.crewmember = (auth.uid())::text)))));

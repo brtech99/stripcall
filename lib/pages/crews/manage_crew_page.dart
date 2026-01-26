@@ -239,12 +239,13 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                               child: Text('No crew members yet'),
                             )
                           : ListView.builder(
+                              key: const ValueKey('manage_crew_members_list'),
                               padding: const EdgeInsets.all(16),
                               itemCount: _crewMembers.length,
                               itemBuilder: (context, index) {
                                 final member = _crewMembers[index];
                                 final user = member.user;
-                                
+
                                 if (user == null) {
                                   return const Card(
                                     child: ListTile(
@@ -253,12 +254,14 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                                     ),
                                   );
                                 }
-                                
+
                                 return Card(
+                                  key: ValueKey('manage_crew_member_${user.supabaseId}'),
                                   child: ListTile(
                                     title: Text(user.fullName),
                                     subtitle: Text(user.phoneNumber ?? 'No phone'),
                                     trailing: IconButton(
+                                      key: ValueKey('manage_crew_remove_${user.supabaseId}'),
                                       icon: const Icon(Icons.delete),
                                       onPressed: () => _removeCrewMember(user.supabaseId),
                                     ),
@@ -270,9 +273,10 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                   ],
                 ),
       floatingActionButton: FloatingActionButton(
+        key: const ValueKey('manage_crew_add_member_button'),
         onPressed: _addCrewMember,
         child: const Icon(Icons.add),
       ),
     );
   }
-} 
+}

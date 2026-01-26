@@ -407,6 +407,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      key: const ValueKey('new_problem_dialog'),
       insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       content: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -436,6 +437,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   final crewId = crew['id'] as int;
                   return IntrinsicWidth(
                     child: RadioListTile<int>(
+                      key: ValueKey('new_problem_crew_radio_$crewId'),
                       title: Text(crewType.isNotEmpty ? crewType : 'Unknown Crew'),
                       value: crewId,
                       groupValue: _selectedCrewId,
@@ -463,6 +465,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
               const SizedBox(height: 12),
               (_selectedCrewId == null)
                 ? DropdownButtonFormField<String>(
+                    key: const ValueKey('new_problem_symptom_class_dropdown_disabled'),
                     value: null,
                     decoration: const InputDecoration(
                       labelText: 'Problem Area',
@@ -476,6 +479,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                     onChanged: null,
                   )
                 : DropdownButtonFormField<String>(
+                    key: const ValueKey('new_problem_symptom_class_dropdown'),
                     value: _selectedSymptomClass,
                     decoration: const InputDecoration(
                       labelText: 'Problem Area',
@@ -498,6 +502,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                key: const ValueKey('new_problem_symptom_dropdown'),
                 value: _selectedSymptom,
                 decoration: const InputDecoration(
                   labelText: 'Problem',
@@ -525,10 +530,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
           spacing: 4,
           children: [
             TextButton(
+              key: const ValueKey('new_problem_cancel_button'),
               onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
+              key: const ValueKey('new_problem_submit_button'),
               onPressed: _isLoading || !_canSubmit ? null : _submitProblem,
               child: _isLoading
                   ? const SizedBox(

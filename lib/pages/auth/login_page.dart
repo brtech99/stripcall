@@ -29,14 +29,14 @@ class _LoginPageState extends State<LoginPage> {
       debugLog('Testing Supabase connection...');
       final session = Supabase.instance.client.auth.currentSession;
       debugLog('Current session: ${session != null ? "exists" : "none"}');
-      
+
       // Test a simple database query
       await Supabase.instance.client
           .from('users')
           .select('count')
           .limit(1);
       debugLog('Database connection test successful');
-      
+
     } catch (e) {
       debugLogError('Supabase connection test failed', e);
     }
@@ -57,17 +57,17 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       debugLog('Attempting login for $email');
-      
+
       final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
-      
+
       if (response.user != null) {
         debugLog('Login successful for ${response.user!.email}');
-        
+
         if (!mounted) return;
-        
+
         // Force router to refresh and redirect
         context.go('/');
       }
@@ -112,6 +112,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               TextFormField(
+                key: const ValueKey('login_email_field'),
                 controller: _emailController,
                 decoration: const InputDecoration(
                   labelText: 'Email',
@@ -133,6 +134,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 16),
               TextFormField(
+                key: const ValueKey('login_password_field'),
                 controller: _passwordController,
                 decoration: const InputDecoration(
                   labelText: 'Password',
@@ -151,6 +153,7 @@ class _LoginPageState extends State<LoginPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  key: const ValueKey('login_submit_button'),
                   onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -169,11 +172,13 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
+                    key: const ValueKey('login_forgot_password_button'),
                     onPressed: _isLoading ? null : () => context.go(Routes.forgotPassword),
                     child: const Text('Forgot Password'),
                   ),
                   const SizedBox(width: 16),
                   TextButton(
+                    key: const ValueKey('login_create_account_button'),
                     onPressed: _isLoading ? null : () => context.go(Routes.register),
                     child: const Text('Create Account'),
                   ),
@@ -192,4 +197,4 @@ class _LoginPageState extends State<LoginPage> {
     _passwordController.dispose();
     super.dispose();
   }
-} 
+}

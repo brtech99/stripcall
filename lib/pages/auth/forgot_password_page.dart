@@ -13,7 +13,7 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _emailController = TextEditingController();
-  
+
   bool _isLoading = false;
   String? _error;
   bool _isValidInput = false;
@@ -40,7 +40,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
   Future<void> _handleSubmit() async {
     if (!mounted) return;
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -48,10 +48,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     try {
       final email = _emailController.text.trim();
-      
+
       print('=== PASSWORD RESET: Attempting to send reset email to: $email ===');
       debugLog('Attempting to send password reset email to: $email');
-      
+
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
         redirectTo: 'https://stripcall.us/auth/reset-password',
@@ -119,6 +119,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   SizedBox(
                     height: 48,
                     child: ElevatedButton(
+                      key: const ValueKey('forgot_password_submit_button'),
                       onPressed: _isLoading || !_isValidInput ? null : _handleSubmit,
                       child: _isLoading
                           ? const SizedBox(
@@ -148,6 +149,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ),
       const SizedBox(height: 16),
       TextField(
+        key: const ValueKey('forgot_password_email_field'),
         controller: _emailController,
         decoration: const InputDecoration(labelText: 'Email'),
         keyboardType: TextInputType.emailAddress,

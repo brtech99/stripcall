@@ -14,6 +14,16 @@ alter table "public"."device_tokens" drop constraint "device_tokens_user_id_fkey
 
 drop function if exists "public"."search_users"(first_name_pattern text, last_name_pattern text);
 
+-- Drop foreign keys that depend on crews_pkey before modifying it
+alter table "public"."crewmembers" drop constraint if exists "crewmembers_crew_fkey";
+alter table "public"."problem" drop constraint if exists "problem_crew_fkey";
+alter table "public"."messages" drop constraint if exists "messages_crew_fkey";
+alter table "public"."crew_messages" drop constraint if exists "crew_messages_crew_fkey";
+
+-- Drop foreign keys that depend on events_pkey before modifying it
+alter table "public"."crews" drop constraint if exists "crew_event_fkey";
+alter table "public"."problem" drop constraint if exists "problem_event_fkey";
+
 alter table "public"."crews" drop constraint "crews_pkey";
 
 alter table "public"."events" drop constraint "events_pkey";
@@ -60,15 +70,19 @@ alter table "public"."action" add column "symptom" bigint;
 
 alter table "public"."crews" alter column "display_style" set data type displaystyletype using "display_style"::displaystyletype;
 
-alter table "public"."device_tokens" drop column "updated_at";
-
-alter table "public"."device_tokens" alter column "id" drop default;
-
-alter table "public"."device_tokens" alter column "id" add generated always as identity;
-
-alter table "public"."device_tokens" alter column "id" set data type bigint using "id"::bigint;
-
-alter table "public"."device_tokens" alter column "user_id" set data type text using "user_id"::text;
+-- Recreate device_tokens table with new structure (UUID->bigint id change requires recreation)
+DROP TABLE IF EXISTS "public"."device_tokens" CASCADE;
+CREATE TABLE "public"."device_tokens" (
+    "id" bigint generated always as identity primary key,
+    "user_id" text not null,
+    "device_token" text not null,
+    "platform" text not null,
+    "created_at" timestamp with time zone default now(),
+    UNIQUE(user_id, device_token)
+);
+ALTER TABLE "public"."device_tokens" ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_platform ON device_tokens(platform);
 
 alter table "public"."events" alter column "stripnumbering" set data type stripnumberingtype using "stripnumbering"::stripnumberingtype;
 
@@ -105,6 +119,22 @@ CREATE UNIQUE INDEX responders_problem_user_id_key ON public.responders USING bt
 alter table "public"."crews" add constraint "crew_pkey" PRIMARY KEY using index "crew_pkey";
 
 alter table "public"."events" add constraint "event_pkey" PRIMARY KEY using index "event_pkey";
+
+-- Re-add foreign keys that were dropped before modifying crews_pkey
+alter table "public"."crewmembers" add constraint "crewmembers_crew_fkey" FOREIGN KEY (crew) REFERENCES crews(id) not valid;
+alter table "public"."crewmembers" validate constraint "crewmembers_crew_fkey";
+alter table "public"."problem" add constraint "problem_crew_fkey" FOREIGN KEY (crew) REFERENCES crews(id) not valid;
+alter table "public"."problem" validate constraint "problem_crew_fkey";
+alter table "public"."messages" add constraint "messages_crew_fkey" FOREIGN KEY (crew) REFERENCES crews(id) not valid;
+alter table "public"."messages" validate constraint "messages_crew_fkey";
+alter table "public"."crew_messages" add constraint "crew_messages_crew_fkey" FOREIGN KEY (crew) REFERENCES crews(id) not valid;
+alter table "public"."crew_messages" validate constraint "crew_messages_crew_fkey";
+
+-- Re-add foreign keys that were dropped before modifying events_pkey
+alter table "public"."crews" add constraint "crew_event_fkey" FOREIGN KEY (event) REFERENCES events(id) not valid;
+alter table "public"."crews" validate constraint "crew_event_fkey";
+alter table "public"."problem" add constraint "problem_event_fkey" FOREIGN KEY (event) REFERENCES events(id) not valid;
+alter table "public"."problem" validate constraint "problem_event_fkey";
 
 alter table "public"."notification_preferences" add constraint "notification_preferences_pkey" PRIMARY KEY using index "notification_preferences_pkey";
 
@@ -473,6 +503,51 @@ grant truncate on table "public"."responders" to "service_role";
 
 grant update on table "public"."responders" to "service_role";
 
+-- Drop all existing policies before recreating (they may have been created by earlier migration)
+DROP POLICY IF EXISTS "action_read_policy" ON "public"."action";
+DROP POLICY IF EXISTS "action_write_policy" ON "public"."action";
+DROP POLICY IF EXISTS "crewmembers_create_policy" ON "public"."crewmembers";
+DROP POLICY IF EXISTS "crewmembers_delete_policy" ON "public"."crewmembers";
+DROP POLICY IF EXISTS "crewmembers_read_policy" ON "public"."crewmembers";
+DROP POLICY IF EXISTS "crewmembers_update_policy" ON "public"."crewmembers";
+DROP POLICY IF EXISTS "crews_create_policy" ON "public"."crews";
+DROP POLICY IF EXISTS "crews_delete_policy" ON "public"."crews";
+DROP POLICY IF EXISTS "crews_read_policy" ON "public"."crews";
+DROP POLICY IF EXISTS "crews_update_policy" ON "public"."crews";
+DROP POLICY IF EXISTS "crewtypes_read_policy" ON "public"."crewtypes";
+DROP POLICY IF EXISTS "crewtypes_write_policy" ON "public"."crewtypes";
+DROP POLICY IF EXISTS "device_tokens_policy" ON "public"."device_tokens";
+DROP POLICY IF EXISTS "events_create_policy" ON "public"."events";
+DROP POLICY IF EXISTS "events_delete_policy" ON "public"."events";
+DROP POLICY IF EXISTS "events_read_policy" ON "public"."events";
+DROP POLICY IF EXISTS "events_update_policy" ON "public"."events";
+DROP POLICY IF EXISTS "messages_create_policy" ON "public"."messages";
+DROP POLICY IF EXISTS "messages_read_policy" ON "public"."messages";
+DROP POLICY IF EXISTS "notification_preferences_policy" ON "public"."notification_preferences";
+DROP POLICY IF EXISTS "oldproblemsymptom_read_policy" ON "public"."oldproblemsymptom";
+DROP POLICY IF EXISTS "oldproblemsymptom_insert_policy" ON "public"."oldproblemsymptom";
+DROP POLICY IF EXISTS "oldproblemsymptom_update_policy" ON "public"."oldproblemsymptom";
+DROP POLICY IF EXISTS "oldproblemsymptom_delete_policy" ON "public"."oldproblemsymptom";
+DROP POLICY IF EXISTS "PendingUsersDeletePolicy" ON "public"."pending_users";
+DROP POLICY IF EXISTS "PendingUsersInsertPolicy" ON "public"."pending_users";
+DROP POLICY IF EXISTS "PendingUsersReadPolicy" ON "public"."pending_users";
+DROP POLICY IF EXISTS "problem_create_policy" ON "public"."problem";
+DROP POLICY IF EXISTS "problem_delete_policy" ON "public"."problem";
+DROP POLICY IF EXISTS "problem_read_policy" ON "public"."problem";
+DROP POLICY IF EXISTS "problem_update_policy" ON "public"."problem";
+DROP POLICY IF EXISTS "responders_create_policy" ON "public"."responders";
+DROP POLICY IF EXISTS "responders_read_policy" ON "public"."responders";
+DROP POLICY IF EXISTS "responders_update_policy" ON "public"."responders";
+DROP POLICY IF EXISTS "responders_delete_policy" ON "public"."responders";
+DROP POLICY IF EXISTS "symptom_read_policy" ON "public"."symptom";
+DROP POLICY IF EXISTS "symptom_write_policy" ON "public"."symptom";
+DROP POLICY IF EXISTS "symptomclass_read_policy" ON "public"."symptomclass";
+DROP POLICY IF EXISTS "symptomclass_write_policy" ON "public"."symptomclass";
+DROP POLICY IF EXISTS "users_create_policy" ON "public"."users";
+DROP POLICY IF EXISTS "users_delete_policy" ON "public"."users";
+DROP POLICY IF EXISTS "users_read_policy" ON "public"."users";
+DROP POLICY IF EXISTS "users_update_policy" ON "public"."users";
+
 create policy "action_read_policy"
 on "public"."action"
 as permissive
@@ -535,7 +610,7 @@ on "public"."crews"
 as permissive
 for delete
 to public
-using ((is_superuser(auth.uid()) OR 
+using ((is_superuser(auth.uid()) OR
         (EXISTS ( SELECT 1 FROM events e WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text)))) OR
         (crew_chief = (auth.uid())::text)));
 
@@ -553,7 +628,7 @@ on "public"."crews"
 as permissive
 for update
 to public
-using ((is_superuser(auth.uid()) OR 
+using ((is_superuser(auth.uid()) OR
         (EXISTS ( SELECT 1 FROM events e WHERE ((e.id = crews.event) AND (e.organizer = (auth.uid())::text)))) OR
         (crew_chief = (auth.uid())::text)));
 
@@ -745,7 +820,7 @@ to public
 with check (((auth.role() = 'authenticated'::text) AND (is_superuser(auth.uid()) OR ((user_id = (auth.uid())::text) AND (EXISTS ( SELECT 1
    FROM (problem p
      JOIN crewmembers cm ON ((p.crew = cm.crew)))
-  WHERE ((p.id = responders.problem) AND (cm.crewmember = (auth.uid())::text)))))));
+  WHERE ((p.id = responders.problem) AND (cm.crewmember = (auth.uid())::text))))))));
 
 
 create policy "responders_read_policy"

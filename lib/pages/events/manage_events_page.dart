@@ -127,10 +127,12 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
               : _events.isEmpty
                   ? const Center(child: Text('No events found'))
                   : ListView.builder(
+                      key: const ValueKey('manage_events_list'),
                       itemCount: _events.length,
                       itemBuilder: (context, index) {
                         final event = _events[index];
                         return ListTile(
+                          key: ValueKey('manage_events_item_${event.id}'),
                           title: Text(event.name),
                           subtitle: Text(_getOrganizerName(event)),
                           onTap: () {
@@ -142,6 +144,7 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
                       },
                     ),
       floatingActionButton: FloatingActionButton(
+        key: const ValueKey('manage_events_add_button'),
         onPressed: () {
           context.push(Routes.manageEvent);
         },

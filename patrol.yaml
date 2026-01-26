@@ -1,0 +1,6 @@
+app_name: StripCall
+android:
+  package_name: com.brianrosen.stripcall
+ios:
+  bundle_id: com.brianrosen.stripcall
+  app_name: Runner

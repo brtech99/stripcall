@@ -65,7 +65,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       if (response.user != null) {
         final userId = response.user!.id;
         print('User created successfully with ID: $userId');
-        
+
         try {
           print('Inserting user data into pending_users table...');
           await Supabase.instance.client
@@ -137,6 +137,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
             child: Column(
               children: [
                 TextFormField(
+                  key: const ValueKey('register_firstname_field'),
                   controller: _firstNameController,
                   decoration: const InputDecoration(labelText: 'First Name'),
                   textCapitalization: TextCapitalization.words,
@@ -149,6 +150,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: const ValueKey('register_lastname_field'),
                   controller: _lastNameController,
                   decoration: const InputDecoration(labelText: 'Last Name'),
                   textCapitalization: TextCapitalization.words,
@@ -161,6 +163,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: const ValueKey('register_phone_field'),
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone Number'),
                   keyboardType: TextInputType.phone,
@@ -177,6 +180,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: const ValueKey('register_email_field'),
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: 'Email'),
                   keyboardType: TextInputType.emailAddress,
@@ -200,6 +204,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: const ValueKey('register_password_field'),
                   controller: _passwordController,
                   decoration: const InputDecoration(labelText: 'Password'),
                   obscureText: true,
@@ -216,6 +221,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
+                  key: const ValueKey('register_submit_button'),
                   onPressed: _isLoading
                       ? null
                       : () {
@@ -239,6 +245,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                   children: [
                     const Text('Already have an account?'),
                     TextButton(
+                      key: const ValueKey('register_signin_button'),
                       onPressed: () => context.go(Routes.login),
                       child: const Text('Sign In'),
                     ),

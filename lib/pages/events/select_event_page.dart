@@ -134,10 +134,12 @@ class _SelectEventPageState extends State<SelectEventPage> {
               : _events.isEmpty
                   ? const Center(child: Text('No current events'))
                   : ListView.builder(
+                      key: const ValueKey('select_event_list'),
                       itemCount: _events.length,
                       itemBuilder: (context, index) {
                         final event = _events[index];
                         return ListTile(
+                          key: ValueKey('select_event_item_${event.id}'),
                           title: Text(event.name),
                           subtitle: Text(_formatDate(event.startDateTime)),
                           onTap: () => _navigateToProblems(event),

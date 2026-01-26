@@ -723,6 +723,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       appBar: AppBar(
         title: _isSuperUser
           ? DropdownButton<int>(
+              key: const ValueKey('problems_crew_dropdown'),
               value: _selectedCrewId,
               underline: Container(),
               style: TextStyle(
@@ -734,6 +735,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
               items: _allCrews.map((crew) {
                 final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
                 return DropdownMenuItem(
+                  key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
                   value: crew['id'] as int,
                   child: Text(
                     crewType,
@@ -788,6 +790,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                               : 'No problems reported yet'),
                           )
                         : ListView.builder(
+                            key: const ValueKey('problems_list'),
                             padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80), // Add bottom padding for bottom app bar
                             itemCount: _problems.length,
                             itemBuilder: (context, index) {
@@ -853,6 +856,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
               // Add Problem Button
               Expanded(
                 child: ElevatedButton.icon(
+                  key: const ValueKey('problems_report_button'),
                   onPressed: _showNewProblemDialog,
                   icon: const Icon(Icons.add),
                   label: const Text('Report Problem'),
@@ -864,6 +868,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
               const SizedBox(width: 8),
               // Refresh Button
               IconButton(
+                key: const ValueKey('problems_refresh_button'),
                 onPressed: () {
                   setState(() {
                     _isLoading = true;

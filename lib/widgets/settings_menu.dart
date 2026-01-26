@@ -56,6 +56,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
 
     return PopupMenuButton<String>(
+      key: const ValueKey('settings_menu_button'),
       icon: const Icon(Icons.settings),
       tooltip: 'Settings',
       onSelected: (value) async {
@@ -97,6 +98,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         // Add Account option for all users
         items.add(
           const PopupMenuItem<String>(
+            key: ValueKey('settings_menu_account'),
             value: 'account',
             child: ListTile(
               leading: Icon(Icons.person),
@@ -109,6 +111,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         if (_isSuperUser || _isOrganizer) {
           items.add(
             const PopupMenuItem<String>(
+              key: ValueKey('settings_menu_manage_events'),
               value: 'manage_events',
               child: ListTile(
                 leading: Icon(Icons.event),
@@ -122,6 +125,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         if (_isCrewChief || _isSuperUser) {
           items.add(
             const PopupMenuItem<String>(
+              key: ValueKey('settings_menu_manage_crews'),
               value: 'manage_crews',
               child: ListTile(
                 leading: Icon(Icons.people),
@@ -135,6 +139,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         if (_isSuperUser) {
           items.add(
             const PopupMenuItem<String>(
+              key: ValueKey('settings_menu_database'),
               value: 'database',
               child: ListTile(
                 leading: Icon(Icons.storage),
@@ -148,6 +153,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         if (_isSuperUser) {
           items.add(
             const PopupMenuItem<String>(
+              key: ValueKey('settings_menu_sms_simulator'),
               value: 'sms_simulator',
               child: ListTile(
                 leading: Icon(Icons.sms),
@@ -160,6 +166,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         // Always add logout option
         items.add(
           const PopupMenuItem<String>(
+            key: ValueKey('settings_menu_logout'),
             value: 'logout',
             child: ListTile(
               leading: Icon(Icons.logout),

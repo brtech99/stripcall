@@ -4,7 +4,7 @@ import '../../models/user.dart' as app_models;
 
 class NameFinderDialog extends StatefulWidget {
   final String title;
-  
+
   const NameFinderDialog({
     super.key,
     this.title = 'Find User',
@@ -35,9 +35,9 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
   void _onTextChanged() {
     final currentFirstName = _firstNameController.text;
     final currentLastName = _lastNameController.text;
-    
+
     // Re-enable search button if text has changed since last search
-    if (_searchButtonDisabled && 
+    if (_searchButtonDisabled &&
         (currentFirstName != _lastSearchedFirstName || currentLastName != _lastSearchedLastName)) {
       setState(() {
         _searchButtonDisabled = false;
@@ -104,6 +104,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      key: const ValueKey('name_finder_dialog'),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -118,6 +119,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
             ),
             const SizedBox(height: 16),
             TextField(
+              key: const ValueKey('name_finder_firstname_field'),
               controller: _firstNameController,
               decoration: const InputDecoration(
                 labelText: 'First Name',
@@ -127,6 +129,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
             ),
             const SizedBox(height: 8),
             TextField(
+              key: const ValueKey('name_finder_lastname_field'),
               controller: _lastNameController,
               decoration: const InputDecoration(
                 labelText: 'Last Name',
@@ -168,11 +171,13 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
+                  key: const ValueKey('name_finder_cancel_button'),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
+                  key: const ValueKey('name_finder_search_button'),
                   onPressed: _searchButtonDisabled ? null : _searchUsers,
                   child: const Text('Search'),
                 ),
@@ -183,4 +188,4 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
       ),
     );
   }
-} 
+}
