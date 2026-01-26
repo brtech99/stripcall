@@ -118,3 +118,8 @@ config/app_config.sh
 config/*.sh
 !config/*.template.sh
 !config/*.example.sh
+
+# Compiled web builds (contain embedded secrets)
+deploy/
+deploy/web/
+deploy/hostinger/
