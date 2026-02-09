@@ -1,0 +1,62 @@
+# Resolve Problem Flow - Smoke Test
+# Tests: User can resolve an existing problem
+# Prerequisites: Must have at least one unresolved problem visible
+# Tags: smoke, problems
+
+appId: com.stripcall.app
+tags:
+  - smoke
+  - problems
+
+---
+
+# Ensure we're on the problems page with problems visible
+- assertVisible:
+    id: "problems_list"
+
+# Tap on the resolve button for the first problem
+# Problem cards have resolve buttons with pattern: problem_resolve_button_{id}
+- tapOn:
+    id: "problem_resolve_button_.*"
+    index: 0
+
+# Wait for resolve dialog to appear
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "resolve_problem_dialog"
+    timeout: 5000
+
+# Verify dialog elements
+- assertVisible:
+    id: "resolve_problem_action_dropdown"
+
+# Select an action from dropdown
+- tapOn:
+    id: "resolve_problem_action_dropdown"
+- waitForAnimationToEnd
+
+# Select first action option
+- tapOn:
+    text: ".*"
+    index: 0
+
+# Optionally add notes (tap field and enter text)
+- tapOn:
+    id: "resolve_problem_notes_field"
+- inputText: "Resolved via Maestro smoke test"
+
+# Submit resolution
+- tapOn:
+    id: "resolve_problem_submit_button"
+
+# Wait for dialog to close
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "problems_list"
+    timeout: 10000
+
+# Verify we're back on problems page
+- assertVisible:
+    id: "problems_list"

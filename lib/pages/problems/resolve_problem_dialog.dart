@@ -149,35 +149,34 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
         'enddatetime': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', widget.problemId);
 
-      // Send notification
-      try {
-        final resolverName = '${userResponse['firstname']} ${userResponse['lastname']}';
-        final resolution = actionResponse['actionstring'] as String;
-        final strip = problemResponse['strip'] as String;
-        final crewId = problemResponse['crew'].toString();
-        final reporterId = problemResponse['originator'] as String?;
-
-        await NotificationService().sendCrewNotification(
-          title: 'Problem Resolved',
-          body: 'Strip $strip resolved by $resolverName: $resolution',
-          crewId: crewId,
-          senderId: userId,
-          data: {
-            'type': 'problem_resolved',
-            'problemId': widget.problemId.toString(),
-            'crewId': crewId,
-            'strip': strip,
-          },
-          includeReporter: true, // Include reporter so they know their problem is resolved
-          reporterId: reporterId,
-        );
-      } catch (notificationError) {
-        debugLogError('Failed to send notification (problem was resolved successfully)', notificationError);
-        // Continue - problem was resolved successfully even if notification failed
-      }
+      // Capture values needed for notification before popping
+      final resolverName = '${userResponse['firstname']} ${userResponse['lastname']}';
+      final resolution = actionResponse['actionstring'] as String;
+      final strip = problemResponse['strip'] as String;
+      final crewId = problemResponse['crew'].toString();
+      final reporterId = problemResponse['originator'] as String?;
+      final problemId = widget.problemId;
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
+
+      // Send notification (fire and forget - don't block UI)
+      NotificationService().sendCrewNotification(
+        title: 'Problem Resolved',
+        body: 'Strip $strip resolved by $resolverName: $resolution',
+        crewId: crewId,
+        senderId: userId,
+        data: {
+          'type': 'problem_resolved',
+          'problemId': problemId.toString(),
+          'crewId': crewId,
+          'strip': strip,
+        },
+        includeReporter: true, // Include reporter so they know their problem is resolved
+        reporterId: reporterId,
+      ).catchError((e) {
+        debugLogError('Failed to send notification (problem was resolved successfully)', e);
+      });
     } catch (e) {
       debugLogError('Failed to resolve problem', e);
       if (!mounted) return;

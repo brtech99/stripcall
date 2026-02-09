@@ -1,0 +1,68 @@
+# Report Problem Flow - Smoke Test
+# Tests: User can report a new problem
+# Prerequisites: User must be on the problems page (logged in, event/crew selected)
+# Tags: smoke, problems
+
+appId: com.stripcall.app
+tags:
+  - smoke
+  - problems
+
+---
+
+# Ensure we're on the problems page
+- assertVisible:
+    id: "problems_report_button"
+
+# Tap report button to open new problem dialog
+- tapOn:
+    id: "problems_report_button"
+
+# Wait for dialog to appear
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "new_problem_dialog"
+    timeout: 5000
+
+# Verify dialog elements are visible
+- assertVisible:
+    id: "new_problem_symptom_class_dropdown"
+
+# Select a symptom class (tap dropdown)
+- tapOn:
+    id: "new_problem_symptom_class_dropdown"
+- waitForAnimationToEnd
+
+# Select first option in dropdown
+- tapOn:
+    text: ".*"
+    index: 0
+
+# Wait for symptoms to load
+- waitForAnimationToEnd
+
+# Select a symptom
+- tapOn:
+    id: "new_problem_symptom_dropdown"
+- waitForAnimationToEnd
+
+# Select first symptom option
+- tapOn:
+    text: ".*"
+    index: 0
+
+# Submit the problem
+- tapOn:
+    id: "new_problem_submit_button"
+
+# Wait for dialog to close and problem to appear
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "problems_list"
+    timeout: 10000
+
+# Verify we're back on problems page
+- assertVisible:
+    id: "problems_list"

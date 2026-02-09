@@ -1,0 +1,28 @@
+# Maestro Configuration for StripCall
+# https://maestro.mobile.dev/
+
+# App configuration
+appId: com.stripcall.app
+
+# Default flow configuration
+flows:
+  - flows/
+
+# Environment variables for test credentials
+# These match the seeded test users in supabase/seed.sql
+env:
+  TEST_EMAIL: "e2e_superuser@test.com"
+  TEST_PASSWORD: "TestPassword123!"
+  TEST_EMAIL_ARMORER: "e2e_armorer1@test.com"
+  TEST_EMAIL_MEDICAL: "e2e_medical1@test.com"
+
+# Execution settings
+executionOrder:
+  continueOnFailure: false
+
+# Tags for organizing tests
+tags:
+  smoke: "Quick smoke tests for critical paths"
+  auth: "Authentication related flows"
+  problems: "Problem reporting and management"
+  crews: "Crew selection and management"

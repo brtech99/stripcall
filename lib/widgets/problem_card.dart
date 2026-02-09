@@ -280,13 +280,6 @@ class _ProblemCardState extends State<ProblemCard> {
               ),
           ],
         ),
-        if (widget.problem.isResolved && widget.problem.actionByName != null) ...[
-          const SizedBox(height: 1),
-          Text(
-            'Resolved by ${widget.problem.actionByName ?? 'Unknown'} ${_formatTime(widget.problem.resolvedDateTimeParsed!)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ],
     );
   }

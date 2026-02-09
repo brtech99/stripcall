@@ -172,6 +172,16 @@ async function handleCrewMemberMessage(
       );
     }
 
+    // Notify other SMS mode crew members about this reply
+    await notifyOtherSmsCrewMembers(
+      adminClient,
+      crew.id,
+      crewMember.supabase_id,
+      message,
+      crewMember,
+      problem.strip,
+    );
+
     // No response to SMS crew member - matches legacy behavior
     return emptyTwimlResponse();
   } else {
@@ -203,46 +213,22 @@ async function handleReporterMessage(
 ): Promise<Response> {
   const normalizedFrom = normalizePhone(fromPhone);
 
-  // Look up reporter name - check users table first, then sms_reporters
+  // Look up reporter name using database function
+  // This checks users table first, then sms_reporters, with proper phone normalization
   let reporterName = normalizedFrom;
 
-  // Try users table first (by phone number) - need to check multiple formats
-  // Users might have phone stored as "2025551234", "+12025551234", "202-555-1234", etc.
-  const { data: users } = await adminClient
-    .from("users")
-    .select("firstname, lastname, phonenbr");
+  const { data: nameResult, error: nameError } = await adminClient.rpc(
+    "get_reporter_name",
+    { reporter_phone: normalizedFrom },
+  );
 
-  const matchedUser = users?.find((u: any) => {
-    if (!u.phonenbr) return false;
-    return normalizePhone(u.phonenbr) === normalizedFrom;
-  });
-
-  if (matchedUser) {
-    const fullName =
-      `${matchedUser.firstname || ""} ${matchedUser.lastname || ""}`.trim();
-    if (fullName) {
-      reporterName = fullName;
-      console.log(`Found user name for ${normalizedFrom}: ${reporterName}`);
-    }
+  if (nameError) {
+    console.log(`Error looking up reporter name: ${nameError.message}`);
+  } else if (nameResult) {
+    reporterName = nameResult;
+    console.log(`Found reporter name for ${normalizedFrom}: ${reporterName}`);
   } else {
-    // Try sms_reporters table - also need to normalize phone format
-    const { data: reporters } = await adminClient
-      .from("sms_reporters")
-      .select("name, phone");
-
-    const matchedReporter = reporters?.find((r: any) => {
-      if (!r.phone) return false;
-      return normalizePhone(r.phone) === normalizedFrom;
-    });
-
-    if (matchedReporter?.name) {
-      reporterName = matchedReporter.name;
-      console.log(
-        `Found sms_reporter name for ${normalizedFrom}: ${reporterName}`,
-      );
-    } else {
-      console.log(`No name found for ${normalizedFrom}, using phone number`);
-    }
+    console.log(`No name found for ${normalizedFrom}, using phone number`);
   }
 
   // Check if there's an existing unresolved problem from this phone for this crew
@@ -568,6 +554,91 @@ async function assignSlot(
   }
 
   return nextSlot;
+}
+
+// Notify other SMS mode crew members about a crew member's reply (excludes the sender)
+async function notifyOtherSmsCrewMembers(
+  adminClient: any,
+  crewId: number,
+  senderUserId: string,
+  message: string,
+  senderMember: any,
+  strip: string,
+): Promise<void> {
+  console.log(
+    `notifyOtherSmsCrewMembers called: crewId=${crewId}, sender=${senderUserId}, strip=${strip}`,
+  );
+
+  const twilioAccountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+
+  if (!twilioAccountSid || !twilioAuthToken) {
+    console.log("Twilio not configured, skipping SMS notifications");
+    return;
+  }
+
+  // Get crew info for the From phone
+  const { data: crew } = await adminClient
+    .from("crews")
+    .select(`crewtypes:crew_type (crewtype)`)
+    .eq("id", crewId)
+    .single();
+
+  const crewTypeName = crew?.crewtypes?.crewtype;
+  const CREW_TYPE_TO_PHONE: Record<string, string> = {
+    Armorer: "+17542276679",
+    Medical: "+13127577223",
+    Natloff: "+16504803067",
+  };
+  const fromPhone = crewTypeName ? CREW_TYPE_TO_PHONE[crewTypeName] : null;
+
+  if (!fromPhone) {
+    console.log("No From phone for crew type:", crewTypeName);
+    return;
+  }
+
+  // Get SMS mode crew members - query separately to avoid FK ambiguity
+  const { data: crewMembers, error: cmError } = await adminClient
+    .from("crewmembers")
+    .select("crewmember")
+    .eq("crew", crewId);
+
+  if (cmError || !crewMembers || crewMembers.length === 0) return;
+
+  // Get user data for these crew members
+  const memberIds = crewMembers.map((cm: any) => cm.crewmember);
+  const { data: users } = await adminClient
+    .from("users")
+    .select("supabase_id, phonenbr, is_sms_mode, firstname, lastname")
+    .in("supabase_id", memberIds);
+
+  if (!users) return;
+
+  // Format: "SenderName: message"
+  const senderName =
+    `${senderMember.firstname || ""} ${senderMember.lastname || ""}`.trim() ||
+    "Crew";
+  const smsBody = `${senderName}: ${message}`;
+
+  for (const user of users) {
+    // Skip the sender and only send to SMS mode users
+    if (user.supabase_id === senderUserId) continue;
+    if (!user.is_sms_mode || !user.phonenbr) continue;
+
+    try {
+      await sendTwilioSms(
+        twilioAccountSid,
+        twilioAuthToken,
+        fromPhone,
+        user.phonenbr,
+        smsBody,
+        adminClient,
+      );
+      console.log("Notified other SMS crew member:", user.phonenbr);
+    } catch (e) {
+      console.error("Failed to notify SMS crew member:", user.phonenbr, e);
+    }
+  }
 }
 
 // Notify SMS mode crew members about a new message

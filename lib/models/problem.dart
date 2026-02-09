@@ -9,6 +9,7 @@ class Problem {
   final int? actionId;
   final String? actionById;
   final DateTime? endDateTime;
+  final String? reporterPhone;  // For SMS-originated problems
 
   const Problem({
     required this.id,
@@ -21,6 +22,7 @@ class Problem {
     this.actionId,
     this.actionById,
     this.endDateTime,
+    this.reporterPhone,
   });
 
   /// Create a Problem from a JSON map (typically from Supabase)
@@ -87,6 +89,7 @@ class Problem {
       endDateTime: json['enddatetime'] != null
           ? DateTime.parse(json['enddatetime'])
           : null,
+      reporterPhone: json['reporter_phone'] as String?,
     );
   }
 
@@ -103,6 +106,7 @@ class Problem {
       'action': actionId,
       'actionby': actionById,
       'enddatetime': endDateTime?.toIso8601String(),
+      'reporter_phone': reporterPhone,
     };
   }
 
@@ -118,6 +122,7 @@ class Problem {
     int? actionId,
     String? actionById,
     DateTime? endDateTime,
+    String? reporterPhone,
   }) {
     return Problem(
       id: id ?? this.id,
@@ -130,6 +135,7 @@ class Problem {
       actionId: actionId ?? this.actionId,
       actionById: actionById ?? this.actionById,
       endDateTime: endDateTime ?? this.endDateTime,
+      reporterPhone: reporterPhone ?? this.reporterPhone,
     );
   }
 

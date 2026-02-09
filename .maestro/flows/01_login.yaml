@@ -1,0 +1,52 @@
+# Login Flow - Smoke Test
+# Tests: User can log in with valid credentials
+# Tags: smoke, auth
+
+appId: com.stripcall.app
+tags:
+  - smoke
+  - auth
+
+---
+
+# Wait for app to load
+- waitForAnimationToEnd
+
+# Check if already logged in (on event select page)
+- runFlow:
+    when:
+      visible: "select_event_list"
+    commands:
+      - tapOn:
+          id: "settings_menu_button"
+      - tapOn:
+          id: "settings_menu_logout"
+      - waitForAnimationToEnd
+
+# Now we should be on login page
+- assertVisible:
+    id: "login_email_field"
+
+# Enter credentials
+- tapOn:
+    id: "login_email_field"
+- inputText: ${TEST_EMAIL}
+
+- tapOn:
+    id: "login_password_field"
+- inputText: ${TEST_PASSWORD}
+
+# Submit login
+- tapOn:
+    id: "login_submit_button"
+
+# Wait for navigation to complete
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "select_event_list"
+    timeout: 10000
+
+# Verify we're on the event selection page
+- assertVisible:
+    id: "select_event_list"

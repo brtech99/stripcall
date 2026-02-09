@@ -10,6 +10,7 @@ class ProblemWithDetails {
   final Map<String, dynamic>? crewType;
   final String? notes;
   final String? resolvedDateTime;
+  final Map<String, dynamic>? smsReporter;  // For SMS-originated problems
 
   const ProblemWithDetails({
     required this.problem,
@@ -21,26 +22,28 @@ class ProblemWithDetails {
     this.crewType,
     this.notes,
     this.resolvedDateTime,
+    this.smsReporter,
   });
 
   /// Create a ProblemWithDetails from a JSON map (typically from Supabase with joins)
   factory ProblemWithDetails.fromJson(Map<String, dynamic> json) {
     return ProblemWithDetails(
       problem: Problem.fromJson(json),
-      symptom: json['symptom_data'] is Map<String, dynamic> ? json['symptom_data'] as Map<String, dynamic> : 
+      symptom: json['symptom_data'] is Map<String, dynamic> ? json['symptom_data'] as Map<String, dynamic> :
               json['symptom'] is Map<String, dynamic> ? json['symptom'] as Map<String, dynamic> : null,
-      action: json['action_data'] is Map<String, dynamic> ? json['action_data'] as Map<String, dynamic> : 
+      action: json['action_data'] is Map<String, dynamic> ? json['action_data'] as Map<String, dynamic> :
              json['action'] is Map<String, dynamic> ? json['action'] as Map<String, dynamic> : null,
-      originator: json['originator_data'] is Map<String, dynamic> ? json['originator_data'] as Map<String, dynamic> : 
+      originator: json['originator_data'] is Map<String, dynamic> ? json['originator_data'] as Map<String, dynamic> :
                  json['originator'] is Map<String, dynamic> ? json['originator'] as Map<String, dynamic> : null,
-      actionBy: json['actionby_data'] is Map<String, dynamic> ? json['actionby_data'] as Map<String, dynamic> : 
+      actionBy: json['actionby_data'] is Map<String, dynamic> ? json['actionby_data'] as Map<String, dynamic> :
                json['actionby'] is Map<String, dynamic> ? json['actionby'] as Map<String, dynamic> : null,
       messages: json['messages_data'] != null ? List<Map<String, dynamic>>.from(json['messages_data']) :
                 json['messages'] != null ? List<Map<String, dynamic>>.from(json['messages']) : null,
-      crewType: json['crewtype_data'] is Map<String, dynamic> ? json['crewtype_data'] as Map<String, dynamic> : 
+      crewType: json['crewtype_data'] is Map<String, dynamic> ? json['crewtype_data'] as Map<String, dynamic> :
                json['crewtype'] is Map<String, dynamic> ? json['crewtype'] as Map<String, dynamic> : null,
       notes: json['notes'] as String?,
       resolvedDateTime: json['enddatetime'] as String?,
+      smsReporter: json['sms_reporter_data'] is Map<String, dynamic> ? json['sms_reporter_data'] as Map<String, dynamic> : null,
     );
   }
 
@@ -70,6 +73,7 @@ class ProblemWithDetails {
     Map<String, dynamic>? crewType,
     String? notes,
     String? resolvedDateTime,
+    Map<String, dynamic>? smsReporter,
   }) {
     return ProblemWithDetails(
       problem: problem ?? this.problem,
@@ -81,6 +85,7 @@ class ProblemWithDetails {
       crewType: crewType ?? this.crewType,
       notes: notes ?? this.notes,
       resolvedDateTime: resolvedDateTime ?? this.resolvedDateTime,
+      smsReporter: smsReporter ?? this.smsReporter,
     );
   }
 
@@ -121,13 +126,35 @@ class ProblemWithDetails {
   String? get actionString => action?['actionstring'] as String?;
 
   /// Get the originator name
+  /// For app users, this comes from the users table (via originator_data join)
+  /// For SMS reporters, this comes from the sms_reporters table (via sms_reporter_data join)
   String? get originatorName {
-    if (originator == null) return null;
-    final firstName = originator!['firstname'] as String?;
-    final lastName = originator!['lastname'] as String?;
-    if (firstName != null && lastName != null) {
-      return '$firstName $lastName';
+    // First try to get name from originator (app user)
+    if (originator != null) {
+      final firstName = originator!['firstname'] as String?;
+      final lastName = originator!['lastname'] as String?;
+      if (firstName != null && lastName != null) {
+        return '$firstName $lastName';
+      }
     }
+
+    // Fall back to SMS reporter name
+    if (smsReporter != null) {
+      final name = smsReporter!['name'] as String?;
+      if (name != null && name.isNotEmpty) {
+        return name;
+      }
+    }
+
+    // If we have a reporter phone but no name, show partial phone
+    if (problem.reporterPhone != null) {
+      final phone = problem.reporterPhone!;
+      if (phone.length >= 4) {
+        return 'SMS (***${phone.substring(phone.length - 4)})';
+      }
+      return 'SMS Reporter';
+    }
+
     return null;
   }
 
@@ -170,4 +197,4 @@ class ProblemWithDetails {
   String toString() {
     return 'ProblemWithDetails(problem: $problem, symptom: $symptom, action: $action, originator: $originator, actionBy: $actionBy, messages: $messages, crewType: $crewType, notes: $notes, resolvedDateTime: $resolvedDateTime)';
   }
-} 
+}

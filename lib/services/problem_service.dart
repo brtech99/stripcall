@@ -28,7 +28,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -68,8 +68,12 @@ class ProblemService {
         }
 
         print('DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total');
+
+        // Enrich with SMS reporter names
+        final enrichedProblems = await enrichWithSmsReporterNames(problems);
+
         print('DEBUG: Total loadProblems time (super user): ${DateTime.now().difference(startTime).inMilliseconds}ms');
-        return problems;
+        return enrichedProblems;
       }
 
       // First, check if user is part of a crew for this event
@@ -93,7 +97,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -131,8 +135,12 @@ class ProblemService {
         }
 
         print('DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total');
+
+        // Enrich with SMS reporter names
+        final enrichedProblems = await enrichWithSmsReporterNames(problems);
+
         print('DEBUG: Total loadProblems time (non-crew): ${DateTime.now().difference(startTime).inMilliseconds}ms');
-        return problems;
+        return enrichedProblems;
       } else {
         // User is part of the crew: show crew's problems + any problems user created for other crews
         print('DEBUG: User is in crew $crewId, loading crew problems + user\'s problems for other crews');
@@ -141,7 +149,7 @@ class ProblemService {
         final response = await Supabase.instance.client
             .from('problem')
             .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
+              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
               symptom_data:symptom(id, symptomstring),
               originator_data:originator(supabase_id, firstname, lastname),
               actionby_data:actionby(supabase_id, firstname, lastname),
@@ -187,8 +195,12 @@ class ProblemService {
         }
 
         print('DEBUG: Successfully parsed ${problems.length} unique problems out of ${response.length} total');
+
+        // Enrich with SMS reporter names
+        final enrichedProblems = await enrichWithSmsReporterNames(problems);
+
         print('DEBUG: Total loadProblems time (crew member): ${DateTime.now().difference(startTime).inMilliseconds}ms');
-        return problems;
+        return enrichedProblems;
       }
     } catch (e) {
       debugLogError('Failed to load problems', e);
@@ -252,66 +264,57 @@ class ProblemService {
       final crewId = problemResponse['crew'] as int;
       final reporterId = problemResponse['originator'] as String?;
 
-      // Send crew message
-      try {
-        await Supabase.instance.client.from('crew_messages').insert({
-          'crew': crewId,
-          'author': userId,
-          'message': '$responderName is on the way',
-        });
-      } catch (crewMessageError) {
-        debugLogError('Failed to send crew message (responder was recorded successfully)', crewMessageError);
-        // Continue - responder was recorded successfully even if crew message failed
-      }
+      // Send crew message (fire and forget - don't block UI)
+      Supabase.instance.client.from('crew_messages').insert({
+        'crew': crewId,
+        'author': userId,
+        'message': '$responderName is on the way',
+      }).catchError((e) {
+        debugLogError('Failed to send crew message (responder was recorded successfully)', e);
+      });
 
-      // Send notification using Edge Function (include reporter so they know someone is coming)
-      try {
-        await NotificationService().sendCrewNotification(
-          title: 'Crew Member En Route',
-          body: '$responderName is en route to Strip $strip',
-          crewId: crewId.toString(),
-          senderId: userId,
-          data: {
-            'type': 'problem_response',
-            'problemId': problemId.toString(),
-            'crewId': crewId.toString(),
-            'strip': strip,
-          },
-          includeReporter: true, // Include reporter so they know help is coming
-          reporterId: reporterId,
-        );
-      } catch (notificationError) {
-        debugLogError('Failed to send notification (responder was recorded successfully)', notificationError);
-        // Continue - responder was recorded successfully even if notification failed
-      }
+      // Send notification using Edge Function (fire and forget - don't block UI)
+      NotificationService().sendCrewNotification(
+        title: 'Crew Member En Route',
+        body: '$responderName is en route to Strip $strip',
+        crewId: crewId.toString(),
+        senderId: userId,
+        data: {
+          'type': 'problem_response',
+          'problemId': problemId.toString(),
+          'crewId': crewId.toString(),
+          'strip': strip,
+        },
+        includeReporter: true, // Include reporter so they know help is coming
+        reporterId: reporterId,
+      ).catchError((e) {
+        debugLogError('Failed to send notification (responder was recorded successfully)', e);
+      });
 
-      // Send SMS to reporter if problem was created via SMS
+      // Send SMS to reporter if problem was created via SMS (fire and forget - don't block UI)
       // (The send-sms function will check if reporter_phone exists)
-      // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
-      try {
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session != null) {
-          const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-          const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-          final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+        final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
 
-          await http.post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ${session.accessToken}',
-              'apikey': supabaseAnonKey,
-            },
-            body: jsonEncode({
-              'problemId': problemId,
-              'message': '',
-              'type': 'on_my_way',
-            }),
-          );
-        }
-      } catch (smsError) {
-        debugLogError('Failed to send SMS to reporter (responder was recorded successfully)', smsError);
-        // Continue - responder was recorded successfully even if SMS failed
+        http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${session.accessToken}',
+            'apikey': supabaseAnonKey,
+          },
+          body: jsonEncode({
+            'problemId': problemId,
+            'message': '',
+            'type': 'on_my_way',
+            'senderName': responderName,
+          }),
+        ).catchError((e) {
+          debugLogError('Failed to send SMS to reporter (responder was recorded successfully)', e);
+        });
       }
     } catch (e) {
       debugLogError('Error updating status (goOnMyWay)', e);
@@ -364,6 +367,57 @@ class ProblemService {
     }
   }
 
+  /// Load reporter names for problems that have reporter_phone set
+  /// Uses the database function get_reporter_name which checks:
+  /// 1) users table (app users), 2) sms_reporters table (legacy data)
+  Future<Map<String, Map<String, dynamic>>> loadReporterNamesByPhone(List<String> phoneNumbers) async {
+    if (phoneNumbers.isEmpty) return {};
+
+    final result = <String, Map<String, dynamic>>{};
+
+    try {
+      // Call the database function for each phone number
+      // The function handles normalization and lookup priority
+      for (final phone in phoneNumbers) {
+        final response = await Supabase.instance.client
+            .rpc('get_reporter_name', params: {'reporter_phone': phone});
+
+        if (response != null && response is String && response.isNotEmpty) {
+          result[phone] = {'phone': phone, 'name': response};
+        }
+      }
+
+      return result;
+    } catch (e) {
+      debugLogError('Failed to load reporter names by phone', e);
+      return {};
+    }
+  }
+
+  /// Enrich problems with SMS reporter data
+  Future<List<ProblemWithDetails>> enrichWithSmsReporterNames(List<ProblemWithDetails> problems) async {
+    // Collect phone numbers that need lookup
+    // Check for reporterPhone and no existing smsReporter or originator data
+    final phoneNumbers = problems
+        .where((p) => p.problem.reporterPhone != null && p.smsReporter == null && p.originator == null)
+        .map((p) => p.problem.reporterPhone!)
+        .toSet()
+        .toList();
+
+    if (phoneNumbers.isEmpty) return problems;
+
+    final reporters = await loadReporterNamesByPhone(phoneNumbers);
+    if (reporters.isEmpty) return problems;
+
+    // Update problems with reporter data
+    return problems.map((p) {
+      if (p.problem.reporterPhone != null && reporters.containsKey(p.problem.reporterPhone)) {
+        return p.copyWith(smsReporter: reporters[p.problem.reporterPhone]);
+      }
+      return p;
+    }).toList();
+  }
+
   Future<List<Map<String, dynamic>>> checkForNewProblems({
     required int eventId,
     required String userId,
@@ -374,7 +428,7 @@ class ProblemService {
     try {
       // Use same filtering logic as loadProblems
       const selectFields = '''
-        id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes,
+        id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
         symptom_data:symptom(id, symptomstring),
         originator_data:originator(supabase_id, firstname, lastname),
         actionby_data:actionby(supabase_id, firstname, lastname),

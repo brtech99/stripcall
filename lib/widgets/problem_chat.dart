@@ -339,54 +339,54 @@ class _ProblemChatState extends State<ProblemChat> {
                     debugLogError('Error sending notification', notifError);
                   }
 
-                  // Send SMS to reporter if include_reporter is true
-                  // (This will only send if the problem has a reporter_phone from SMS)
+                  // Send SMS notifications:
+                  // - To reporter (if include_reporter is checked and problem has reporter_phone)
+                  // - To SMS-mode crew members (always, regardless of include_reporter)
                   // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
-                  if (_includeReporter) {
-                    try {
-                      final session = Supabase.instance.client.auth.currentSession;
-                      if (session != null) {
-                        // Get current user's name for the SMS
-                        String senderName = 'Crew';
-                        try {
-                          final userInfo = await Supabase.instance.client
-                              .from('users')
-                              .select('firstname, lastname')
-                              .eq('supabase_id', widget.currentUserId!)
-                              .maybeSingle();
-                          if (userInfo != null) {
-                            final firstName = userInfo['firstname'] ?? '';
-                            final lastName = userInfo['lastname'] ?? '';
-                            senderName = '$firstName $lastName'.trim();
-                            if (senderName.isEmpty) senderName = 'Crew';
-                          }
-                        } catch (e) {
-                          // Use default name if lookup fails
+                  try {
+                    final session = Supabase.instance.client.auth.currentSession;
+                    if (session != null) {
+                      // Get current user's name for the SMS
+                      String senderName = 'Crew';
+                      try {
+                        final userInfo = await Supabase.instance.client
+                            .from('users')
+                            .select('firstname, lastname')
+                            .eq('supabase_id', widget.currentUserId!)
+                            .maybeSingle();
+                        if (userInfo != null) {
+                          final firstName = userInfo['firstname'] ?? '';
+                          final lastName = userInfo['lastname'] ?? '';
+                          senderName = '$firstName $lastName'.trim();
+                          if (senderName.isEmpty) senderName = 'Crew';
                         }
-
-                        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-                        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-                        final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
-
-                        await http.post(
-                          url,
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ${session.accessToken}',
-                            'apikey': supabaseAnonKey,
-                          },
-                          body: jsonEncode({
-                            'problemId': widget.problemId,
-                            'message': text,
-                            'type': 'message',
-                            'senderName': senderName,
-                          }),
-                        );
+                      } catch (e) {
+                        // Use default name if lookup fails
                       }
-                    } catch (smsError) {
-                      debugLogError('Error sending SMS to reporter', smsError);
-                      // Don't show error to user - SMS is best-effort
+
+                      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+                      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+                      final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
+
+                      await http.post(
+                        url,
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': 'Bearer ${session.accessToken}',
+                          'apikey': supabaseAnonKey,
+                        },
+                        body: jsonEncode({
+                          'problemId': widget.problemId,
+                          'message': text,
+                          'type': 'message',
+                          'senderName': senderName,
+                          'includeReporter': _includeReporter,
+                        }),
+                      );
                     }
+                  } catch (smsError) {
+                    debugLogError('Error sending SMS', smsError);
+                    // Don't show error to user - SMS is best-effort
                   }
 
                   messenger.showSnackBar(

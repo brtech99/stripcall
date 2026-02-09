@@ -410,41 +410,43 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
 
       await Supabase.instance.client.from('problem').update(updateData).eq('id', widget.problemId);
 
-      try {
-        final changerName = '${userResponse['firstname']} ${userResponse['lastname']}';
-        final displayStrip = stripChanged ? newStrip : (problemResponse['strip'] as String);
-        final crewId = problemResponse['crew'].toString();
-        final reporterId = problemResponse['originator'] as String?;
+      // Capture values needed for notification before popping
+      final changerName = '${userResponse['firstname']} ${userResponse['lastname']}';
+      final displayStrip = stripChanged ? newStrip : (problemResponse['strip'] as String);
+      final crewId = problemResponse['crew'].toString();
+      final reporterId = problemResponse['originator'] as String?;
+      final problemId = widget.problemId;
+      final currentStrip = widget.currentStrip;
 
-        String notificationBody;
-        if (stripChanged && symptomChanged) {
-          notificationBody = '$changerName changed strip to $newStrip and problem to "$newSymptomName"';
-        } else if (stripChanged) {
-          notificationBody = '$changerName changed strip from ${widget.currentStrip} to $newStrip';
-        } else {
-          notificationBody = 'Strip $displayStrip: $changerName changed problem to "$newSymptomName"';
-        }
-
-        await NotificationService().sendCrewNotification(
-          title: 'Problem Updated',
-          body: notificationBody,
-          crewId: crewId,
-          senderId: userId,
-          data: {
-            'type': 'problem_updated',
-            'problemId': widget.problemId.toString(),
-            'crewId': crewId,
-            'strip': displayStrip,
-          },
-          includeReporter: true,
-          reporterId: reporterId,
-        );
-      } catch (notificationError) {
-        debugLogError('Failed to send notification (problem was updated successfully)', notificationError);
+      String notificationBody;
+      if (stripChanged && symptomChanged) {
+        notificationBody = '$changerName changed strip to $newStrip and problem to "$newSymptomName"';
+      } else if (stripChanged) {
+        notificationBody = '$changerName changed strip from $currentStrip to $newStrip';
+      } else {
+        notificationBody = 'Strip $displayStrip: $changerName changed problem to "$newSymptomName"';
       }
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
+
+      // Send notification (fire and forget - don't block UI)
+      NotificationService().sendCrewNotification(
+        title: 'Problem Updated',
+        body: notificationBody,
+        crewId: crewId,
+        senderId: userId,
+        data: {
+          'type': 'problem_updated',
+          'problemId': problemId.toString(),
+          'crewId': crewId,
+          'strip': displayStrip,
+        },
+        includeReporter: true,
+        reporterId: reporterId,
+      ).catchError((e) {
+        debugLogError('Failed to send notification (problem was updated successfully)', e);
+      });
     } catch (e) {
       debugLogError('Failed to update problem', e);
       if (!mounted) return;
@@ -458,6 +460,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      key: const ValueKey('edit_symptom_dialog'),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
         child: Padding(
@@ -501,6 +504,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                         SizedBox(
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
+                            key: const ValueKey('edit_symptom_class_dropdown'),
                             value: _selectedSymptomClass,
                             decoration: const InputDecoration(
                               labelText: 'Problem Area',
@@ -541,6 +545,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                         SizedBox(
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
+                            key: const ValueKey('edit_symptom_dropdown'),
                             value: _selectedSymptom,
                             decoration: const InputDecoration(
                               labelText: 'Symptom',
@@ -580,11 +585,13 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
+                    key: const ValueKey('edit_symptom_cancel_button'),
                     onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
+                    key: const ValueKey('edit_symptom_submit_button'),
                     onPressed: _isLoading ? null : _submitChange,
                     child: _isLoading
                         ? const SizedBox(

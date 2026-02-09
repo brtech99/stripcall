@@ -1,0 +1,37 @@
+# Logout Flow - Smoke Test
+# Tests: User can log out from the app
+# Prerequisites: User must be logged in
+# Tags: smoke, auth
+
+appId: com.stripcall.app
+tags:
+  - smoke
+  - auth
+
+---
+
+# Open settings menu
+- tapOn:
+    id: "settings_menu_button"
+
+# Wait for menu to appear
+- waitForAnimationToEnd
+
+# Tap logout
+- tapOn:
+    id: "settings_menu_logout"
+
+# Wait for logout to complete
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 10000
+
+# Verify we're on the login page
+- assertVisible:
+    id: "login_email_field"
+- assertVisible:
+    id: "login_password_field"
+- assertVisible:
+    id: "login_submit_button"

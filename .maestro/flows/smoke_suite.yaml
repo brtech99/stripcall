@@ -1,0 +1,17 @@
+# Full Smoke Test Suite
+# Runs the complete smoke test flow: login -> select event/crew -> report problem -> resolve -> logout
+# Tags: smoke
+
+appId: com.stripcall.app
+tags:
+  - smoke
+  - suite
+
+---
+
+# Run all smoke tests in sequence
+- runFlow: 01_login.yaml
+- runFlow: 02_select_event_and_crew.yaml
+- runFlow: 03_report_problem.yaml
+- runFlow: 04_resolve_problem.yaml
+- runFlow: 05_logout.yaml

@@ -217,13 +217,25 @@ class _ManageEventPageState extends State<ManageEventPage> {
     if (!mounted) return;
     if (result != null) {
       try {
-        await Supabase.instance.client
+        // Create the crew and get the new crew ID
+        final crewResponse = await Supabase.instance.client
             .from('crews')
             .insert({
               'event': widget.event!.id,
               'crew_chief': result.supabaseId,
               'crew_type': selectedType.id,
+            })
+            .select('id')
+            .single();
+
+        // Add crew chief as a crew member so they appear in crew membership queries
+        await Supabase.instance.client
+            .from('crewmembers')
+            .insert({
+              'crew': crewResponse['id'],
+              'crewmember': result.supabaseId,
             });
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Crew added successfully')),
@@ -276,7 +288,119 @@ class _ManageEventPageState extends State<ManageEventPage> {
   }
 
   Future<void> _deleteCrew(int crewId) async {
+    // First check if crew has any problems or messages (has been active)
     try {
+      final problemCount = await Supabase.instance.client
+          .from('problem')
+          .select('id')
+          .eq('crew', crewId)
+          .count(CountOption.exact);
+
+      final messageCount = await Supabase.instance.client
+          .from('messages')
+          .select('id')
+          .eq('crew', crewId)
+          .count(CountOption.exact);
+
+      final crewMessageCount = await Supabase.instance.client
+          .from('crew_messages')
+          .select('id')
+          .eq('crew', crewId)
+          .count(CountOption.exact);
+
+      final hasActivity = (problemCount.count ?? 0) > 0 ||
+                          (messageCount.count ?? 0) > 0 ||
+                          (crewMessageCount.count ?? 0) > 0;
+
+      if (hasActivity) {
+        // Show confirmation dialog for active crews
+        if (!mounted) return;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Active Crew?'),
+            content: Text(
+              'This crew has been active with ${problemCount.count ?? 0} problems and '
+              '${(messageCount.count ?? 0) + (crewMessageCount.count ?? 0)} messages. '
+              'Deleting it will also delete all associated data.\n\n'
+              'Are you sure you want to delete this crew?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed != true) return;
+
+        // Delete related data first (in correct order to avoid FK violations)
+        // Delete messages first (references problem and crew)
+        await Supabase.instance.client
+            .from('messages')
+            .delete()
+            .eq('crew', crewId);
+
+        // Delete responders (references problem)
+        final problemIds = await Supabase.instance.client
+            .from('problem')
+            .select('id')
+            .eq('crew', crewId);
+
+        if (problemIds.isNotEmpty) {
+          final ids = problemIds.map((p) => p['id'] as int).toList();
+          await Supabase.instance.client
+              .from('responders')
+              .delete()
+              .inFilter('problem', ids);
+
+          // Delete old problem symptoms
+          await Supabase.instance.client
+              .from('oldproblemsymptom')
+              .delete()
+              .inFilter('problem', ids);
+        }
+
+        // Delete problems
+        await Supabase.instance.client
+            .from('problem')
+            .delete()
+            .eq('crew', crewId);
+
+        // crew_messages has ON DELETE CASCADE, but delete explicitly to be safe
+        await Supabase.instance.client
+            .from('crew_messages')
+            .delete()
+            .eq('crew', crewId);
+
+        // Delete crew members
+        await Supabase.instance.client
+            .from('crewmembers')
+            .delete()
+            .eq('crew', crewId);
+
+        // Delete SMS reply slots (has ON DELETE CASCADE but be explicit)
+        await Supabase.instance.client
+            .from('sms_reply_slots')
+            .delete()
+            .eq('crew_id', crewId);
+
+        await Supabase.instance.client
+            .from('sms_crew_slot_counter')
+            .delete()
+            .eq('crew_id', crewId);
+      }
+
+      // Now delete the crew
       await Supabase.instance.client
           .from('crews')
           .delete()
@@ -289,6 +413,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         _loadCrewsAndTypes();
       }
     } catch (e) {
+      debugLogError('Error deleting crew', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -372,7 +372,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
         final isSelected = _selectedUser != null &&
             _getUserKey(user) == _getUserKey(_selectedUser!);
 
+        final userKey = _getUserKey(user);
         return Card(
+          key: ValueKey('user_management_user_$userKey'),
           color: isSelected ? Colors.blue.shade50 : null,
           child: ListTile(
             title: _buildUserTitle(user),
@@ -491,11 +493,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   children: [
                     if (!_isEditing) ...[
                       IconButton(
+                        key: const ValueKey('user_management_edit_button'),
                         onPressed: _startEditing,
                         icon: const Icon(Icons.edit),
                         tooltip: 'Edit',
                       ),
                       IconButton(
+                        key: const ValueKey('user_management_delete_button'),
                         onPressed: _deleteUser,
                         icon: const Icon(Icons.delete),
                         tooltip: 'Delete',
@@ -503,12 +507,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       ),
                     ] else ...[
                       IconButton(
+                        key: const ValueKey('user_management_save_button'),
                         onPressed: _saveUser,
                         icon: const Icon(Icons.save),
                         tooltip: 'Save',
                         color: Colors.green,
                       ),
                       IconButton(
+                        key: const ValueKey('user_management_cancel_button'),
                         onPressed: _cancelEditing,
                         icon: const Icon(Icons.cancel),
                         tooltip: 'Cancel',

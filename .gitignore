@@ -123,3 +123,4 @@ config/*.sh
 deploy/
 deploy/web/
 deploy/hostinger/
+coverage/

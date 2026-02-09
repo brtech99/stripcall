@@ -228,33 +228,30 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         'startdatetime': DateTime.now().toUtc().toIso8601String(),
       }).select().single();
 
-      // Send notification to crew members
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+
+      // Send notification to crew members (fire and forget - don't block UI)
       final symptomName = _symptoms.firstWhere(
         (s) => s['id'].toString() == _selectedSymptom,
         orElse: () => {'symptomstring': 'Unknown'},
       )['symptomstring'] as String;
 
-      // Send notification using Edge Function
-      try {
-        await NotificationService().sendCrewNotification(
-          title: 'New Problem Reported',
-          body: 'Strip $_selectedStrip: $symptomName',
-          crewId: _selectedCrewId.toString(),
-          senderId: userId,
-          data: {
-            'type': 'new_problem',
-            'problemId': problemResponse['id'].toString(),
-            'crewId': _selectedCrewId.toString(),
-          },
-          includeReporter: true, // Include reporter for new problems
-        );
-      } catch (notificationError) {
-        debugLogError('Failed to send notification (problem was created successfully)', notificationError);
-        // Continue - problem was created successfully even if notification failed
-      }
-
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
+      // Send notification using Edge Function (don't await)
+      NotificationService().sendCrewNotification(
+        title: 'New Problem Reported',
+        body: 'Strip $_selectedStrip: $symptomName',
+        crewId: _selectedCrewId.toString(),
+        senderId: userId,
+        data: {
+          'type': 'new_problem',
+          'problemId': problemResponse['id'].toString(),
+          'crewId': _selectedCrewId.toString(),
+        },
+        includeReporter: true, // Include reporter for new problems
+      ).catchError((e) {
+        debugLogError('Failed to send notification (problem was created successfully)', e);
+      });
     } catch (e) {
       debugLogError('Failed to create problem', e);
       if (!mounted) return;

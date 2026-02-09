@@ -44,9 +44,10 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { problemId, message, type, senderName } = await req.json();
+    const { problemId, message, type, senderName, includeReporter } =
+      await req.json();
     console.log(
-      `send-sms called: problemId=${problemId}, type=${type}, senderName=${senderName}, message=${message?.substring(0, 50)}`,
+      `send-sms called: problemId=${problemId}, type=${type}, senderName=${senderName}, includeReporter=${includeReporter}, message=${message?.substring(0, 50)}`,
     );
 
     if (!problemId) {
@@ -120,8 +121,10 @@ serve(async (req) => {
 
     const smsSent: string[] = [];
 
-    // 1. Send SMS to reporter_phone if present (non-app user who texted in)
-    if (problem.reporter_phone) {
+    // 1. Send SMS to reporter_phone if present and includeReporter is true (or not specified for backwards compatibility)
+    // includeReporter defaults to true for backwards compatibility (on_my_way, etc.)
+    const shouldIncludeReporter = includeReporter !== false;
+    if (problem.reporter_phone && shouldIncludeReporter) {
       let smsBody: string;
       const displayName = senderName || "Crew";
       if (type === "on_my_way") {
@@ -166,9 +169,9 @@ serve(async (req) => {
           let smsBody: string;
           const displayName = senderName || "Crew";
           if (type === "on_my_way") {
-            smsBody = `[Strip ${problem.strip}] ${displayName} is on the way`;
+            smsBody = `${displayName} is on the way to Strip ${problem.strip}`;
           } else {
-            // App crew member sending message - just show username: message (no +n)
+            // App crew member sending message - just show name: message
             smsBody = `${displayName}: ${message}`;
           }
 
