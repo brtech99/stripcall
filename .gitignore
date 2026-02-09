@@ -98,6 +98,8 @@ pglite-debug.log
 # Shell scripts with embedded secrets
 run_*.sh
 deploy_*.sh
+!deploy_android_test.sh
+!deploy_to_hostinger.sh
 stop_*.sh
 
 # Service account keys (CRITICAL)
