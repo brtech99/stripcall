@@ -99,6 +99,7 @@ pglite-debug.log
 run_*.sh
 deploy_*.sh
 !deploy_android_test.sh
+!deploy_ios_testflight.sh
 !deploy_to_hostinger.sh
 stop_*.sh
 
