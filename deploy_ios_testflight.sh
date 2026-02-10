@@ -117,7 +117,7 @@ flutter pub get
 # Build iOS release
 echo ""
 echo "Step 2/5: Building Flutter iOS release..."
-flutter build ios --release --no-codesign
+flutter build ios --release
 
 # Archive
 echo ""
@@ -140,7 +140,10 @@ xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$IPA_PATH" \
     -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
-    -allowProvisioningUpdates
+    -allowProvisioningUpdates \
+    -authenticationKeyPath "$KEY_PATH" \
+    -authenticationKeyID "$KEY_ID" \
+    -authenticationKeyIssuerID "$ISSUER_ID"
 
 # Find the IPA file
 IPA_FILE=$(find "$IPA_PATH" -name "*.ipa" | head -1)
