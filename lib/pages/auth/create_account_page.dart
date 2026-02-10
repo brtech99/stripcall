@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class CreateAccountPage extends StatefulWidget {
   const CreateAccountPage({super.key});
@@ -52,13 +54,12 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
-        data: {
-          'firstname': firstName,
-          'lastname': lastName,
-        },
+        data: {'firstname': firstName, 'lastname': lastName},
       );
 
-      print('Signup response received: ${response.user != null ? 'User created' : 'No user'}');
+      print(
+        'Signup response received: ${response.user != null ? 'User created' : 'No user'}',
+      );
       print('Response error: ${response.session}');
       print('Response user: ${response.user?.id}');
 
@@ -68,14 +69,12 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
         try {
           print('Inserting user data into pending_users table...');
-          await Supabase.instance.client
-              .from('pending_users')
-              .insert({
-                'email': email,
-                'firstname': firstName,
-                'lastname': lastName,
-                'phone_number': _phoneController.text.trim(),
-              });
+          await Supabase.instance.client.from('pending_users').insert({
+            'email': email,
+            'firstname': firstName,
+            'lastname': lastName,
+            'phone_number': _phoneController.text.trim(),
+          });
           print('User data inserted successfully');
         } catch (dbError) {
           print('Database error during account creation: $dbError');
@@ -94,7 +93,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Account created! Please check your email and click the confirmation link.'),
+              content: Text(
+                'Account created! Please check your email and click the confirmation link.',
+              ),
               duration: Duration(seconds: 5),
             ),
           );
@@ -126,16 +127,31 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-      ),
+      appBar: AppBar(title: const Text('Create Account')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.screenPadding,
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
             child: Column(
               children: [
+                if (_error != null)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.md),
+                    child: Container(
+                      padding: AppSpacing.paddingSm,
+                      decoration: BoxDecoration(
+                        color: AppColors.errorContainer(context),
+                        borderRadius: AppSpacing.borderRadiusMd,
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: AppColors.onErrorContainer(context),
+                        ),
+                      ),
+                    ),
+                  ),
                 TextFormField(
                   key: const ValueKey('register_firstname_field'),
                   controller: _firstNameController,
@@ -148,7 +164,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 TextFormField(
                   key: const ValueKey('register_lastname_field'),
                   controller: _lastNameController,
@@ -161,7 +177,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 TextFormField(
                   key: const ValueKey('register_phone_field'),
                   controller: _phoneController,
@@ -171,14 +187,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your phone number';
                     }
-                    // Basic phone validation - can be enhanced
                     if (value.trim().length < 10) {
                       return 'Please enter a valid phone number';
                     }
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 TextFormField(
                   key: const ValueKey('register_email_field'),
                   controller: _emailController,
@@ -189,20 +204,17 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your email';
                     }
-                    // Proper email validation that allows + character
-                    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+                    final emailRegex = RegExp(
+                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                    );
                     final trimmedValue = value.trim();
-                    print('Validating email: $trimmedValue');
-                    print('Regex match result: ${emailRegex.hasMatch(trimmedValue)}');
                     if (!emailRegex.hasMatch(trimmedValue)) {
-                      print('Email validation failed for: $trimmedValue');
                       return 'Please enter a valid email address';
                     }
-                    print('Email validation passed for: $trimmedValue');
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 TextFormField(
                   key: const ValueKey('register_password_field'),
                   controller: _passwordController,
@@ -219,9 +231,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  key: const ValueKey('register_submit_button'),
+                AppSpacing.verticalLg,
+                AppButton(
+                  buttonKey: const ValueKey('register_submit_button'),
                   onPressed: _isLoading
                       ? null
                       : () {
@@ -229,23 +241,17 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                             _signUp();
                           }
                         },
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text('Create Account'),
+                  isLoading: _isLoading,
+                  expand: true,
+                  child: const Text('Create Account'),
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text('Already have an account?'),
-                    TextButton(
-                      key: const ValueKey('register_signin_button'),
+                    AppButton.secondary(
+                      buttonKey: const ValueKey('register_signin_button'),
                       onPressed: () => context.go(Routes.login),
                       child: const Text('Sign In'),
                     ),

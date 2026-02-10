@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/theme.dart';
 
 class MessageBubble extends StatelessWidget {
   final String text;
@@ -6,7 +7,7 @@ class MessageBubble extends StatelessWidget {
   final bool isMe;
   final DateTime createdAt;
   final String? displayStyle;
-  
+
   const MessageBubble({
     super.key,
     required this.text,
@@ -15,7 +16,7 @@ class MessageBubble extends StatelessWidget {
     required this.createdAt,
     this.displayStyle,
   });
-  
+
   String _formatSenderName(String fullName) {
     if (displayStyle == 'firstInitial-Last') {
       final parts = fullName.split(' ');
@@ -25,14 +26,15 @@ class MessageBubble extends StatelessWidget {
     }
     return fullName;
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: () {
-          final timeString = '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:${createdAt.toLocal().minute.toString().padLeft(2, '0')}';
+          final timeString =
+              '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:${createdAt.toLocal().minute.toString().padLeft(2, '0')}';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Sent at $timeString'),
@@ -41,20 +43,24 @@ class MessageBubble extends StatelessWidget {
           );
         },
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-          padding: const EdgeInsets.all(10),
+          margin: EdgeInsets.symmetric(vertical: 2, horizontal: AppSpacing.xs),
+          padding: EdgeInsets.all(AppSpacing.sm + 2),
           decoration: BoxDecoration(
-            color: isMe ? Theme.of(context).colorScheme.primary.withAlpha((0.2 * 255).toInt()) : Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
+            color: isMe
+                ? AppColors.chatBubbleSelf(context).withValues(alpha: 0.2)
+                : AppColors.chatBubbleOther(context),
+            borderRadius: AppSpacing.borderRadiusMd,
           ),
           child: Text(
             isMe ? text : '${_formatSenderName(senderName)}: $text',
-            style: TextStyle(
-              color: isMe ? Theme.of(context).colorScheme.onPrimary : null,
+            style: AppTypography.chatMessage(context).copyWith(
+              color: isMe
+                  ? AppColors.textPrimary(context)
+                  : AppColors.chatBubbleOtherText(context),
             ),
           ),
         ),
       ),
     );
   }
-} 
+}

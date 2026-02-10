@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
@@ -194,7 +196,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: AppSpacing.screenPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,7 +205,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                 'Resolve Problem',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
@@ -223,7 +225,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           'Available resolutions for this problem (${_actions.length} found)',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                         ),
-                        const SizedBox(height: 8),
+                        AppSpacing.verticalSm,
                       ],
                       SizedBox(
                         width: double.infinity,
@@ -257,8 +259,8 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           },
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      TextField(
+                      AppSpacing.verticalMd,
+                      AppTextField(
                         key: const ValueKey('resolve_problem_notes_field'),
                         controller: _notesController,
                         decoration: const InputDecoration(
@@ -271,7 +273,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -280,7 +282,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                     onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
+                  AppSpacing.horizontalSm,
                   TextButton(
                     key: const ValueKey('resolve_problem_submit_button'),
                     onPressed: _isLoading ? null : _submitAction,
@@ -288,7 +290,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoadingIndicator(),
                           )
                         : const Text('Resolve'),
                   ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
 import '../utils/debug_utils.dart';
+import '../theme/theme.dart';
+import 'adaptive/adaptive.dart';
 
 class UserSearchField extends StatefulWidget {
   final String label;
@@ -32,19 +34,19 @@ class _UserSearchFieldState extends State<UserSearchField> {
 
   Future<void> _loadInitialUser() async {
     if (widget.initialValue == null) return;
-    
+
     try {
       final response = await Supabase.instance.client
           .from('users')
           .select('supabase_id, firstname, lastname')
           .eq('supabase_id', widget.initialValue!)
           .maybeSingle();
-      
+
       if (response != null && mounted) {
         final firstName = response['firstname'] as String? ?? '';
         final lastName = response['lastname'] as String? ?? '';
         final fullName = '$firstName $lastName'.trim();
-        
+
         setState(() {
           _filteredUsers = [app_models.User.fromJson(response)];
           _searchController.text = fullName;
@@ -96,31 +98,30 @@ class _UserSearchFieldState extends State<UserSearchField> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextField(
+        AppTextField(
           controller: _searchController,
-          decoration: InputDecoration(
-            labelText: widget.label,
-            hintText: 'Start typing last name...',
-            suffixIcon: _isLoading ? 
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ) : null,
-          ),
+          label: widget.label,
+          hint: 'Start typing last name...',
+          suffixIcon: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: AppLoadingIndicator(),
+                )
+              : null,
           onChanged: _searchUsers,
         ),
         if (_filteredUsers.isNotEmpty)
           Container(
             constraints: const BoxConstraints(maxHeight: 200),
-            child: Card(
-              margin: const EdgeInsets.only(top: 4),
+            child: AppCard(
+              margin: EdgeInsets.only(top: AppSpacing.xs),
               child: ListView.builder(
                 shrinkWrap: true,
                 itemCount: _filteredUsers.length,
                 itemBuilder: (context, index) {
                   final user = _filteredUsers[index];
-                  return ListTile(
+                  return AppListTile(
                     dense: true,
                     title: Text(user.lastNameFirstName),
                     onTap: () {
@@ -142,4 +143,4 @@ class _UserSearchFieldState extends State<UserSearchField> {
     _searchController.dispose();
     super.dispose();
   }
-} 
+}

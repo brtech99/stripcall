@@ -7,6 +7,7 @@ import 'services/notification_service.dart';
 import 'services/secret_service.dart';
 import 'config/firebase_config.dart';
 import 'utils/debug_utils.dart';
+import 'theme/theme.dart';
 
 void main() async {
   print('=== STRIPCALL BUILD 2026-01-21-TEST ===');
@@ -26,13 +27,12 @@ void main() async {
   debugLog('Supabase URL: $supabaseUrl');
   debugLog('Supabase Anon Key: ${supabaseAnonKey.substring(0, 20)}...');
 
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   debugLog('Supabase initialized successfully');
-  debugLog('🔐 Firebase secrets will be fetched from Vault after user authentication');
+  debugLog(
+    '🔐 Firebase secrets will be fetched from Vault after user authentication',
+  );
 
   runApp(const MyApp());
 }
@@ -117,9 +117,11 @@ class _MyAppState extends State<MyApp> {
         await NotificationService().initialize();
         debugLog('✅ Notification service initialized');
       } catch (e) {
-        debugLogError('Notification service initialization failed, continuing without it', e);
+        debugLogError(
+          'Notification service initialization failed, continuing without it',
+          e,
+        );
       }
-
     } catch (e) {
       debugLogError('Firebase initialization failed', e);
       // Continue without Firebase - the app should still work
@@ -130,13 +132,16 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     if (!_isInitialized) {
       return MaterialApp(
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
         home: Scaffold(
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const CircularProgressIndicator(),
-                const SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 const Text('Initializing StripCall...'),
               ],
             ),
@@ -147,17 +152,23 @@ class _MyAppState extends State<MyApp> {
 
     if (_error != null) {
       return MaterialApp(
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
         home: Scaffold(
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error, color: Colors.red, size: 64),
-                SizedBox(height: 16),
-                Text('Initialization Error:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
+                Icon(Icons.error, color: AppColors.statusError, size: 64),
+                AppSpacing.verticalMd,
+                Text(
+                  'Initialization Error:',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                AppSpacing.verticalSm,
                 Text(_error!, textAlign: TextAlign.center),
-                SizedBox(height: 16),
+                AppSpacing.verticalMd,
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
@@ -177,10 +188,9 @@ class _MyAppState extends State<MyApp> {
 
     return MaterialApp.router(
       title: 'StripCall',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
       routerConfig: router,
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'user_search.dart';
 import '../models/user.dart' as app_models;
+import '../theme/theme.dart';
+import 'adaptive/adaptive.dart';
 
 class CrewDialog extends StatefulWidget {
   final Map<String, dynamic>? crew;
@@ -36,9 +38,9 @@ class _CrewDialogState extends State<CrewDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DropdownButtonFormField<int>(
+          AppDropdown<int>(
             value: _selectedCrewTypeId,
-            decoration: const InputDecoration(labelText: 'Crew Type'),
+            label: 'Crew Type',
             items: widget.crewTypes.map((type) {
               return DropdownMenuItem<int>(
                 value: type['id'] as int,
@@ -51,7 +53,7 @@ class _CrewDialogState extends State<CrewDialog> {
               }
             },
           ),
-          const SizedBox(height: 16),
+          AppSpacing.verticalMd,
           UserSearchField(
             label: 'Crew Chief',
             initialValue: _selectedChiefId,
@@ -61,28 +63,25 @@ class _CrewDialogState extends State<CrewDialog> {
           ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 16),
+              padding: EdgeInsets.only(top: AppSpacing.md),
               child: Text(
                 _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.statusError,
+                ),
               ),
             ),
         ],
       ),
       actions: [
-        TextButton(
+        AppButton.secondary(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
+        AppButton(
           onPressed: _isLoading ? null : _save,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save'),
+          isLoading: _isLoading,
+          child: const Text('Save'),
         ),
       ],
     );
@@ -99,4 +98,4 @@ class _CrewDialogState extends State<CrewDialog> {
       'crew_chief': _selectedChiefId,
     });
   }
-} 
+}

@@ -6,6 +6,8 @@ import 'dart:async';
 import '../models/crew_message.dart';
 import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
+import '../theme/theme.dart';
+import 'adaptive/adaptive.dart';
 
 class CrewMessageWindow extends StatefulWidget {
   final int crewId;
@@ -28,7 +30,6 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
   bool _isLoading = true;
   bool _isExpanded = false;
   Timer? _updateTimer;
-  // Removed unused field: _userNameCache
   Set<int> _readMessageIds = {}; // Track which messages the user has seen
 
   @override
@@ -58,7 +59,8 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
   Future<void> _loadReadMessageIds() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final readIds = prefs.getStringList('read_crew_messages_${widget.crewId}') ?? [];
+      final readIds =
+          prefs.getStringList('read_crew_messages_${widget.crewId}') ?? [];
       if (mounted) {
         setState(() {
           _readMessageIds = readIds.map((id) => int.parse(id)).toList().toSet();
@@ -98,7 +100,9 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
 
       if (mounted) {
         setState(() {
-          _messages = response.map((json) => CrewMessage.fromJson(json)).toList();
+          _messages = response
+              .map((json) => CrewMessage.fromJson(json))
+              .toList();
           _isLoading = false;
         });
         _scrollToBottom();
@@ -128,11 +132,15 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
           .order('created_at', ascending: false);
 
       if (mounted && response.isNotEmpty) {
-        final newMessages = response.map((json) => CrewMessage.fromJson(json)).toList();
+        final newMessages = response
+            .map((json) => CrewMessage.fromJson(json))
+            .toList();
         setState(() {
           // Filter out duplicates based on message ID
           final existingIds = _messages.map((m) => m.id).toSet();
-          final uniqueNewMessages = newMessages.where((m) => !existingIds.contains(m.id)).toList();
+          final uniqueNewMessages = newMessages
+              .where((m) => !existingIds.contains(m.id))
+              .toList();
 
           if (uniqueNewMessages.isNotEmpty) {
             _messages.insertAll(0, uniqueNewMessages);
@@ -172,9 +180,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
       };
 
       try {
-        await Supabase.instance.client
-            .from('crew_messages')
-            .insert(insertData);
+        await Supabase.instance.client.from('crew_messages').insert(insertData);
       } catch (insertError) {
         debugLogError('Error inserting crew message', insertError);
         throw insertError;
@@ -198,25 +204,23 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
       try {
         await NotificationService().sendCrewNotification(
           title: 'Crew Message',
-          body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
+          body: message.length > 50
+              ? '${message.substring(0, 50)}...'
+              : message,
           crewId: widget.crewId.toString(),
           senderId: widget.currentUserId!,
-          data: {
-            'type': 'crew_message',
-            'crewId': widget.crewId.toString(),
-          },
+          data: {'type': 'crew_message', 'crewId': widget.crewId.toString()},
           includeReporter: false,
         );
       } catch (notifError) {
         debugLogError('Error sending notification', notifError);
       }
-
     } catch (e) {
       debugLogError('Error sending message', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to send message: $e')));
       }
     }
   }
@@ -229,18 +233,20 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
   }
 
   int _getUnreadCount() {
-    return _messages.where((message) => !_readMessageIds.contains(message.id)).length;
+    return _messages
+        .where((message) => !_readMessageIds.contains(message.id))
+        .length;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.all(8.0),
+    return AppCard(
+      margin: AppSpacing.paddingSm,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Header with expand/collapse
-          ListTile(
+          AppListTile(
             leading: const Icon(Icons.chat_bubble_outline),
             title: const Text('Crew Messages'),
             trailing: Row(
@@ -248,23 +254,26 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
               children: [
                 if (_getUnreadCount() > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.primary(context),
+                      borderRadius: AppSpacing.borderRadiusLg,
                     ),
                     child: Text(
                       _getUnreadCount().toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppTypography.badge(
+                        context,
+                      ).copyWith(color: AppColors.onPrimary(context)),
                     ),
                   ),
-                const SizedBox(width: 8),
+                AppSpacing.horizontalSm,
                 IconButton(
-                  icon: Icon(_isExpanded ? Icons.expand_less : Icons.expand_more),
+                  icon: Icon(
+                    _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  ),
                   onPressed: () {
                     final willExpand = !_isExpanded;
                     setState(() {
@@ -281,20 +290,19 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
           // Show last message when collapsed (for context)
           if (!_isExpanded && _messages.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: AppSpacing.paddingHorizontalMd,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(8),
+                padding: AppSpacing.paddingSm,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.surfaceContainerLow(context),
+                  borderRadius: AppSpacing.borderRadiusMd,
                 ),
                 child: Text(
                   '${_messages.first.authorName ?? 'Unknown'}: ${_messages.first.message}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: AppTypography.bodySmall(
+                    context,
+                  ).copyWith(color: AppColors.textSecondary(context)),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -302,29 +310,30 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
             ),
           // Message input
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: AppTextField(
                     controller: _messageController,
                     decoration: const InputDecoration(
                       hintText: 'Type a crew message...',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       isDense: true,
                     ),
                     maxLines: 1,
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                AppSpacing.horizontalSm,
                 IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: _sendMessage,
                   style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primary(context),
+                    foregroundColor: AppColors.onPrimary(context),
                   ),
                 ),
               ],
@@ -336,98 +345,107 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
               constraints: const BoxConstraints(maxHeight: 200),
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: Colors.grey.shade300),
+                  top: BorderSide(color: AppColors.divider(context)),
                 ),
               ),
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: AppLoadingIndicator())
                   : _messages.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text(
-                            'No crew messages yet',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(8.0),
-                          itemCount: _messages.length,
-                          itemBuilder: (context, index) {
-                            final message = _messages[index];
-                            final isMe = message.authorId == widget.currentUserId;
+                  ? Padding(
+                      padding: AppSpacing.paddingMd,
+                      child: Text(
+                        'No crew messages yet',
+                        style: AppTypography.bodyMedium(
+                          context,
+                        ).copyWith(color: AppColors.textSecondary(context)),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: AppSpacing.paddingSm,
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final message = _messages[index];
+                        final isMe = message.authorId == widget.currentUserId;
 
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (!isMe) ...[
-                                    CircleAvatar(
-                                      radius: 12,
-                                      backgroundColor: Theme.of(context).colorScheme.primary,
-                                      child: Text(
-                                        message.authorName?.substring(0, 1).toUpperCase() ?? '?',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
+                        return Padding(
+                          padding: EdgeInsets.symmetric(vertical: 2.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (!isMe) ...[
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: AppColors.primary(context),
+                                  child: Text(
+                                    message.authorName
+                                            ?.substring(0, 1)
+                                            .toUpperCase() ??
+                                        '?',
+                                    style: AppTypography.labelSmall(context)
+                                        .copyWith(
+                                          color: AppColors.onPrimary(context),
                                           fontWeight: FontWeight.bold,
                                         ),
+                                  ),
+                                ),
+                                AppSpacing.horizontalSm,
+                              ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: isMe
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    if (!isMe)
+                                      Text(
+                                        message.authorName ?? 'Unknown',
+                                        style: AppTypography.chatSenderName(
+                                          context,
+                                        ),
+                                      ),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.sm + 4,
+                                        vertical: AppSpacing.sm - 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isMe
+                                            ? AppColors.chatBubbleSelf(context)
+                                            : AppColors.chatBubbleOther(
+                                                context,
+                                              ),
+                                        borderRadius: AppSpacing.borderRadiusLg,
+                                      ),
+                                      child: Text(
+                                        message.message,
+                                        style:
+                                            AppTypography.chatMessage(
+                                              context,
+                                            ).copyWith(
+                                              color: isMe
+                                                  ? AppColors.chatBubbleSelfText(
+                                                      context,
+                                                    )
+                                                  : AppColors.chatBubbleOtherText(
+                                                      context,
+                                                    ),
+                                            ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: isMe
-                                          ? CrossAxisAlignment.end
-                                          : CrossAxisAlignment.start,
-                                      children: [
-                                        if (!isMe)
-                                          Text(
-                                            message.authorName ?? 'Unknown',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isMe
-                                                ? Theme.of(context).colorScheme.primary
-                                                : Colors.grey.shade200,
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            message.message,
-                                            style: TextStyle(
-                                              color: isMe
-                                                  ? Colors.white
-                                                  : null,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          _formatTime(message.createdAt),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
-                                      ],
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _formatTime(message.createdAt),
+                                      style: AppTypography.timestamp(context),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            );
-                          },
-                        ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ],

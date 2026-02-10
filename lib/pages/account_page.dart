@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../routes.dart';
 import '../utils/debug_utils.dart';
+import '../theme/theme.dart';
+import '../widgets/adaptive/adaptive.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -19,26 +21,22 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   bool _isLoading = true;
   String? _error;
 
-  // User data
   String _firstName = '';
   String _lastName = '';
   String _email = '';
   String _phoneNumber = '';
   bool _isSmsMode = false;
 
-  // Editing states
   bool _isEditingProfile = false;
   bool _isEditingPhone = false;
   bool _isEditingEmail = false;
   bool _isSaving = false;
 
-  // Verification states
   bool _isVerifyingPhone = false;
   bool _isVerifyingEmail = false;
   String _pendingPhone = '';
   String _pendingEmail = '';
 
-  // Controllers
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -65,15 +63,12 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Refresh user data when app comes back to foreground
-    // This handles the case where email was changed in another tab (mobile)
     if (state == AppLifecycleState.resumed && _isVerifyingEmail) {
       _refreshUserEmail();
     }
   }
 
   Future<void> _refreshUserEmail() async {
-    // Refresh the auth session to get updated email
     try {
       await _supabase.auth.refreshSession();
       final user = _supabase.auth.currentUser;
@@ -115,7 +110,6 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       _email = user.email ?? '';
       _emailController.text = _email;
 
-      // Load user profile from users table
       final userData = await _supabase
           .from('users')
           .select('firstname, lastname, phonenbr, is_sms_mode')
@@ -211,7 +205,6 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
       final session = _supabase.auth.currentSession;
       if (session == null) {
         throw Exception('No active session');
@@ -360,7 +353,6 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      // Supabase will send a confirmation email to the new address
       await _supabase.auth.updateUser(
         UserAttributes(email: newEmail),
         emailRedirectTo: 'https://stripcall.us/app/email-changed.html',
@@ -422,7 +414,6 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleSmsMode(bool value) async {
-    // Require phone number to enable SMS mode
     if (value && _phoneNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add a phone number first to enable SMS mode')),
@@ -496,57 +487,82 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('Account'),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadUserData,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildProfileSection(),
-                      const SizedBox(height: 16),
-                      _buildPhoneSection(),
-                      const SizedBox(height: 16),
-                      _buildSmsModeSection(),
-                      const SizedBox(height: 16),
-                      _buildEmailSection(),
-                      const SizedBox(height: 16),
-                      _buildPasswordSection(),
-                      const SizedBox(height: 24),
-                      _buildSignOutButton(),
-                    ],
-                  ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.statusError,
+              ),
+              AppSpacing.verticalMd,
+              Text(
+                _error!,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.statusError,
                 ),
+                textAlign: TextAlign.center,
+              ),
+              AppSpacing.verticalLg,
+              AppButton(
+                onPressed: _loadUserData,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: AppSpacing.screenPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildProfileSection(),
+          AppSpacing.verticalMd,
+          _buildPhoneSection(),
+          AppSpacing.verticalMd,
+          _buildSmsModeSection(),
+          AppSpacing.verticalMd,
+          _buildEmailSection(),
+          AppSpacing.verticalMd,
+          _buildPasswordSection(),
+          AppSpacing.verticalLg,
+          _buildSignOutButton(),
+        ],
+      ),
     );
   }
 
   Widget _buildProfileSection() {
-    return Card(
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.paddingMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Profile',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: AppTypography.titleMedium(context).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (!_isEditingProfile)
                   IconButton(
@@ -555,20 +571,20 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             if (_isEditingProfile) ...[
-              TextField(
+              AppTextField(
                 controller: _firstNameController,
-                decoration: const InputDecoration(labelText: 'First Name'),
+                label: 'First Name',
                 textCapitalization: TextCapitalization.words,
               ),
-              const SizedBox(height: 8),
-              TextField(
+              AppSpacing.verticalSm,
+              AppTextField(
                 controller: _lastNameController,
-                decoration: const InputDecoration(labelText: 'Last Name'),
+                label: 'Last Name',
                 textCapitalization: TextCapitalization.words,
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -582,21 +598,16 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                           },
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
+                  AppSpacing.horizontalSm,
+                  AppButton(
                     onPressed: _isSaving ? null : _saveProfile,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
+                    isLoading: _isSaving,
+                    child: const Text('Save'),
                   ),
                 ],
               ),
             ] else ...[
-              ListTile(
+              AppListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person),
                 title: Text('$_firstName $_lastName'),
@@ -610,18 +621,20 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Widget _buildPhoneSection() {
-    return Card(
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.paddingMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Phone Number',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: AppTypography.titleMedium(context).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (!_isEditingPhone && !_isVerifyingPhone)
                   IconButton(
@@ -630,23 +643,23 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             if (_isVerifyingPhone) ...[
               Text(
                 'Enter the verification code sent to $_pendingPhone',
-                style: const TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _otpController,
-                decoration: const InputDecoration(
-                  labelText: 'Verification Code',
-                  hintText: '6-digit code',
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+              ),
+              AppSpacing.verticalSm,
+              AppTextField(
+                controller: _otpController,
+                label: 'Verification Code',
+                hint: '6-digit code',
                 keyboardType: TextInputType.number,
                 maxLength: 6,
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -654,26 +667,21 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                     onPressed: _isSaving ? null : _cancelPhoneVerification,
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
+                  AppSpacing.horizontalSm,
+                  AppButton(
                     onPressed: _isSaving ? null : _verifyPhoneOtp,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Verify'),
+                    isLoading: _isSaving,
+                    child: const Text('Verify'),
                   ),
                 ],
               ),
             ] else if (_isEditingPhone) ...[
-              TextField(
+              AppTextField(
                 controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
+                label: 'Phone Number',
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -686,21 +694,16 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                           },
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
+                  AppSpacing.horizontalSm,
+                  AppButton(
                     onPressed: _isSaving ? null : _sendPhoneOtp,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Send Code'),
+                    isLoading: _isSaving,
+                    child: const Text('Send Code'),
                   ),
                 ],
               ),
             ] else ...[
-              ListTile(
+              AppListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.phone),
                 title: Text(_phoneNumber.isNotEmpty ? _phoneNumber : 'Not set'),
@@ -714,17 +717,19 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Widget _buildSmsModeSection() {
-    return Card(
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.paddingMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'SMS Mode',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: AppTypography.titleMedium(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               secondary: const Icon(Icons.sms),
@@ -738,10 +743,12 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
               onChanged: _isSaving ? null : _toggleSmsMode,
             ),
             if (_phoneNumber.isEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
+              AppSpacing.verticalSm,
+              Text(
                 'Add a phone number above to enable SMS mode',
-                style: TextStyle(color: Colors.orange, fontSize: 12),
+                style: AppTypography.labelSmall(context).copyWith(
+                  color: AppColors.statusWarning,
+                ),
               ),
             ],
           ],
@@ -751,18 +758,20 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Widget _buildEmailSection() {
-    return Card(
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.paddingMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Email',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: AppTypography.titleMedium(context).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (!_isEditingEmail && !_isVerifyingEmail)
                   IconButton(
@@ -771,16 +780,18 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             if (_isVerifyingEmail) ...[
-              const Text(
+              Text(
                 'Confirmation emails have been sent to BOTH your old and new addresses. '
                 'You must click the link in BOTH emails to complete the change.',
-                style: TextStyle(color: Colors.grey),
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-              const SizedBox(height: 8),
+              AppSpacing.verticalSm,
               Text('New email: $_pendingEmail'),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -791,12 +802,12 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                 ],
               ),
             ] else if (_isEditingEmail) ...[
-              TextField(
+              AppTextField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+                label: 'Email',
                 keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -809,21 +820,16 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                           },
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
+                  AppSpacing.horizontalSm,
+                  AppButton(
                     onPressed: _isSaving ? null : _initiateEmailChange,
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Update Email'),
+                    isLoading: _isSaving,
+                    child: const Text('Update Email'),
                   ),
                 ],
               ),
             ] else ...[
-              ListTile(
+              AppListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.email),
                 title: Text(_email),
@@ -837,27 +843,29 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Widget _buildPasswordSection() {
-    return Card(
+    return AppCard(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.paddingMd,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Password',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: AppTypography.titleMedium(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 8),
-            ListTile(
+            AppSpacing.verticalSm,
+            AppListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.lock),
-              title: const Text('••••••••'),
+              title: const Text('********'),
               subtitle: const Text('Change your password via email'),
               trailing: _isSaving
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AppLoadingIndicator(),
                     )
                   : TextButton(
                       onPressed: _sendPasswordResetEmail,
@@ -871,14 +879,17 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   }
 
   Widget _buildSignOutButton() {
-    return ElevatedButton.icon(
+    return AppButton(
       onPressed: _signOut,
-      icon: const Icon(Icons.logout),
-      label: const Text('Sign Out'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
+      expand: true,
+      isDestructive: true,
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.logout),
+          SizedBox(width: 8),
+          Text('Sign Out'),
+        ],
       ),
     );
   }

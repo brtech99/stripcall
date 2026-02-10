@@ -7,6 +7,8 @@ import '../../models/event.dart';
 import '../../widgets/settings_menu.dart';
 import '../../utils/auth_helpers.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class SelectCrewPage extends StatefulWidget {
   const SelectCrewPage({super.key});
@@ -16,7 +18,7 @@ class SelectCrewPage extends StatefulWidget {
 }
 
 class _SelectCrewPageState extends State<SelectCrewPage> {
-  List<Map<String, dynamic>> _crews = []; // Keep as map for now since it includes joined data
+  List<Map<String, dynamic>> _crews = [];
   bool _isLoading = true;
   String? _error;
 
@@ -31,11 +33,8 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
-      // Check if user is superuser
       final isSuperUserRole = await isSuperUser();
 
-      // Build the query based on user role
-      // Only show crews for events that haven't ended yet
       final now = DateTime.now().toIso8601String();
 
       var query = Supabase.instance.client
@@ -55,7 +54,6 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
           ''')
           .gte('event.enddatetime', now);
 
-      // If not superuser, only show crews where user is crew chief
       if (!isSuperUserRole) {
         query = query.eq('crew_chief', userId);
       }
@@ -82,74 +80,109 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Crews'),
-        actions: [
-          const SettingsMenu(),
+        actions: const [
+          SettingsMenu(),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.statusError,
+              ),
+              AppSpacing.verticalMd,
+              Text(
+                _error!,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.statusError,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              AppSpacing.verticalLg,
+              AppButton(
+                onPressed: _loadCrews,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_crews.isEmpty) {
+      return const AppEmptyState(
+        icon: Icons.groups,
+        title: 'No crews found',
+        subtitle: 'You are not a crew chief for any crews',
+      );
+    }
+
+    return ListView.builder(
+      key: const ValueKey('select_crew_list'),
+      padding: AppSpacing.screenPadding,
+      itemCount: _crews.length,
+      itemBuilder: (context, index) {
+        final crewData = _crews[index];
+        final crew = Crew.fromJson(crewData);
+        final eventData = crewData['event'] as Map<String, dynamic>?;
+        final crewTypeData = crewData['crewtype'] as Map<String, dynamic>?;
+
+        if (eventData == null || crewTypeData == null) {
+          return AppCard(
+            child: AppListTile(
+              title: const Text('Invalid Crew Data'),
+              subtitle: const Text('Missing event or crew type information'),
+            ),
+          );
+        }
+
+        final event = Event.fromJson(eventData);
+        final crewType = CrewType.fromJson(crewTypeData);
+
+        return AppCard(
+          key: ValueKey('select_crew_item_${crew.id}'),
+          margin: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: AppListTile(
+            title: Text(event.name),
+            subtitle: Text(
+              '${crewType.crewType} Crew\n'
+              '${event.startDateTime.toLocal().toString().split(' ')[0]} - '
+              '${event.endDateTime.toLocal().toString().split(' ')[0]}',
+            ),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ManageCrewPage(
+                    crewId: crew.id.toString(),
+                    eventName: event.name,
+                    crewType: crewType.crewType,
                   ),
-                )
-              : _crews.isEmpty
-                  ? const Center(
-                      child: Text('You are not a crew chief for any crews'),
-                    )
-                  : ListView.builder(
-                      key: const ValueKey('select_crew_list'),
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _crews.length,
-                      itemBuilder: (context, index) {
-                        final crewData = _crews[index];
-                        final crew = Crew.fromJson(crewData);
-                        final eventData = crewData['event'] as Map<String, dynamic>?;
-                        final crewTypeData = crewData['crewtype'] as Map<String, dynamic>?;
-
-                        if (eventData == null || crewTypeData == null) {
-                          return const Card(
-                            child: ListTile(
-                              title: Text('Invalid Crew Data'),
-                              subtitle: Text('Missing event or crew type information'),
-                            ),
-                          );
-                        }
-
-                        final event = Event.fromJson(eventData);
-                        final crewType = CrewType.fromJson(crewTypeData);
-
-                        return Card(
-                          key: ValueKey('select_crew_item_${crew.id}'),
-                          child: ListTile(
-                            title: Text(event.name),
-                            subtitle: Text(
-                              '${crewType.crewType} Crew\n'
-                              '${event.startDateTime.toLocal().toString().split(' ')[0]} - '
-                              '${event.endDateTime.toLocal().toString().split(' ')[0]}',
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ManageCrewPage(
-                                    crewId: crew.id.toString(),
-                                    eventName: event.name,
-                                    crewType: crewType.crewType,
-                                  ),
-                                ),
-                              ).then((_) => _loadCrews());
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                ),
+              ).then((_) => _loadCrews());
+            },
+          ),
+        );
+      },
     );
   }
 }

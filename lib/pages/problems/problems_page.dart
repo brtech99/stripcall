@@ -9,6 +9,8 @@ import '../../widgets/problem_card.dart';
 import '../../models/problem_with_details.dart';
 import '../../services/problem_service.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
@@ -60,8 +62,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
     await _loadProblems(); // This will use the _selectedCrewId set above
 
     // Start timers
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) => _cleanupResolvedProblems());
-    _updateTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkForUpdates());
+    _cleanupTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _cleanupResolvedProblems(),
+    );
+    _updateTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _checkForUpdates(),
+    );
   }
 
   @override
@@ -79,7 +87,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
       if (userId == null) return;
 
       final latestProblemTime = _problems.isNotEmpty
-          ? _problems.map((p) => p.startDateTime).reduce((a, b) => a.isAfter(b) ? a : b)
+          ? _problems
+                .map((p) => p.startDateTime)
+                .reduce((a, b) => a.isAfter(b) ? a : b)
           : DateTime(1970);
 
       await _checkForNewProblems(latestProblemTime);
@@ -216,7 +226,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
               await _handleProblemResolved(
                 problemId,
                 resolvedTime,
-                resolvedData: resolved, // Pass the full resolved data including action and actionby
+                resolvedData:
+                    resolved, // Pass the full resolved data including action and actionby
               );
             }
           } catch (e) {
@@ -228,7 +239,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
         setState(() {
           _problems.removeWhere((problem) {
             if (problem.resolvedDateTimeParsed == null) return false;
-            return DateTime.now().difference(problem.resolvedDateTimeParsed!).inMinutes >= 5;
+            return DateTime.now()
+                    .difference(problem.resolvedDateTimeParsed!)
+                    .inMinutes >=
+                5;
           });
         });
       }
@@ -270,7 +284,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final problemIndex = _problems.indexWhere((p) => p.id == problemId);
       if (problemIndex != -1) {
         final problem = _problems[problemIndex];
-        final updatedMessages = <Map<String, dynamic>>[...(problem.messages ?? [])];
+        final updatedMessages = <Map<String, dynamic>>[
+          ...(problem.messages ?? []),
+        ];
 
         final messageId = message['id'] as int;
         final messageExists = updatedMessages.any((m) => m['id'] == messageId);
@@ -283,7 +299,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
     });
   }
 
-  Future<void> _handleProblemResolved(int problemId, DateTime resolvedTime, {Map<String, dynamic>? resolvedData}) async {
+  Future<void> _handleProblemResolved(
+    int problemId,
+    DateTime resolvedTime, {
+    Map<String, dynamic>? resolvedData,
+  }) async {
     if (!mounted) return;
 
     setState(() {
@@ -376,7 +396,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
       if (userId == null) throw Exception('User not logged in');
 
       final crewId = _isSuperUser ? _selectedCrewId : widget.crewId;
-      print('DEBUG: About to call loadProblems with crewId=$crewId, isSuperUser=$_isSuperUser');
+      print(
+        'DEBUG: About to call loadProblems with crewId=$crewId, isSuperUser=$_isSuperUser',
+      );
 
       final problems = await _problemService.loadProblems(
         eventId: widget.eventId,
@@ -386,7 +408,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
       );
 
       final afterLoadProblems = DateTime.now();
-      print('DEBUG: loadProblems completed in ${afterLoadProblems.difference(startTime).inMilliseconds}ms');
+      print(
+        'DEBUG: loadProblems completed in ${afterLoadProblems.difference(startTime).inMilliseconds}ms',
+      );
 
       if (mounted) {
         setState(() {
@@ -399,8 +423,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
         await _loadResponders();
 
         final afterLoadResponders = DateTime.now();
-        print('DEBUG: _loadResponders completed in ${afterLoadResponders.difference(afterLoadProblems).inMilliseconds}ms');
-        print('DEBUG: TOTAL _loadProblems time: ${afterLoadResponders.difference(startTime).inMilliseconds}ms');
+        print(
+          'DEBUG: _loadResponders completed in ${afterLoadResponders.difference(afterLoadProblems).inMilliseconds}ms',
+        );
+        print(
+          'DEBUG: TOTAL _loadProblems time: ${afterLoadResponders.difference(startTime).inMilliseconds}ms',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -533,12 +561,16 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _loadMissingData(ProblemWithDetails problem) async {
     // Load missing symptom data
     if (problem.symptom == null && problem.symptomId != 0) {
-      final symptomData = await _problemService.loadMissingSymptomData(problem.symptomId);
+      final symptomData = await _problemService.loadMissingSymptomData(
+        problem.symptomId,
+      );
       if (symptomData != null && mounted) {
         setState(() {
           final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
           if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(symptom: symptomData);
+            final updatedProblem = _problems[problemIndex].copyWith(
+              symptom: symptomData,
+            );
             _problems[problemIndex] = updatedProblem;
           }
         });
@@ -547,12 +579,16 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     // Load missing originator data
     if (problem.originator == null && problem.originatorId.isNotEmpty) {
-      final originatorData = await _problemService.loadMissingOriginatorData(problem.originatorId);
+      final originatorData = await _problemService.loadMissingOriginatorData(
+        problem.originatorId,
+      );
       if (originatorData != null && mounted) {
         setState(() {
           final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
           if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(originator: originatorData);
+            final updatedProblem = _problems[problemIndex].copyWith(
+              originator: originatorData,
+            );
             _problems[problemIndex] = updatedProblem;
           }
         });
@@ -561,12 +597,16 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     // Load missing resolver data
     if (problem.actionBy == null && problem.actionById != null) {
-      final resolverData = await _problemService.loadMissingResolverData(problem.actionById!);
+      final resolverData = await _problemService.loadMissingResolverData(
+        problem.actionById!,
+      );
       if (resolverData != null && mounted) {
         setState(() {
           final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
           if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(actionBy: resolverData);
+            final updatedProblem = _problems[problemIndex].copyWith(
+              actionBy: resolverData,
+            );
             _problems[problemIndex] = updatedProblem;
           }
         });
@@ -594,7 +634,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
         if (_isSuperUser) {
           await _loadAllCrews();
-          print('DEBUG: After _loadAllCrews, _selectedCrewId = $_selectedCrewId');
+          print(
+            'DEBUG: After _loadAllCrews, _selectedCrewId = $_selectedCrewId',
+          );
         }
       }
     } catch (e) {
@@ -644,8 +686,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
           _allCrews = crewList;
           if (_selectedCrewId == null && _allCrews.isNotEmpty) {
             _selectedCrewId = _allCrews.first['id'] as int;
-            final firstCrewType = _allCrews.first['crewtype']?['crewtype'] ?? 'Unknown';
-            print('DEBUG: Setting _selectedCrewId to ${_selectedCrewId} (${firstCrewType})');
+            final firstCrewType =
+                _allCrews.first['crewtype']?['crewtype'] ?? 'Unknown';
+            print(
+              'DEBUG: Setting _selectedCrewId to ${_selectedCrewId} (${firstCrewType})',
+            );
           }
         });
         // Note: Don't call _loadProblems() here during initialization
@@ -682,15 +727,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _loadResponders();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You are now en route')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('You are now en route')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -711,7 +756,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (_isSuperUser) {
       final selectedCrew = _allCrews.firstWhere(
         (crew) => crew['id'] == _selectedCrewId,
-        orElse: () => {'crewtype': {'crewtype': 'All Crews'}},
+        orElse: () => {
+          'crewtype': {'crewtype': 'All Crews'},
+        },
       );
       final crewType = selectedCrew['crewtype']?['crewtype'] ?? 'All Crews';
       appBarTitle = crewType;
@@ -722,43 +769,43 @@ class _ProblemsPageState extends State<ProblemsPage> {
     return Scaffold(
       appBar: AppBar(
         title: _isSuperUser
-          ? DropdownButton<int>(
-              key: const ValueKey('problems_crew_dropdown'),
-              value: _selectedCrewId,
-              underline: Container(),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
-              dropdownColor: Theme.of(context).colorScheme.surface,
-              items: _allCrews.map((crew) {
-                final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
-                return DropdownMenuItem(
-                  key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
-                  value: crew['id'] as int,
-                  child: Text(
-                    crewType,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
+            ? DropdownButton<int>(
+                key: const ValueKey('problems_crew_dropdown'),
+                value: _selectedCrewId,
+                underline: Container(),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+                dropdownColor: Theme.of(context).colorScheme.surface,
+                items: _allCrews.map((crew) {
+                  final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
+                  return DropdownMenuItem(
+                    key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
+                    value: crew['id'] as int,
+                    child: Text(
+                      crewType,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) async {
-                developer.log('DROPDOWN: selecting crew $value, _isSuperUser=$_isSuperUser', name: 'StripCall');
-                setState(() {
-                  _selectedCrewId = value;
-                  _isLoading = true;
-                });
-                await _loadProblems();
-              },
-            )
-          : Text(appBarTitle),
-        actions: [
-          const UserNameDisplay(),
-          const SettingsMenu(),
-        ],
+                  );
+                }).toList(),
+                onChanged: (value) async {
+                  developer.log(
+                    'DROPDOWN: selecting crew $value, _isSuperUser=$_isSuperUser',
+                    name: 'StripCall',
+                  );
+                  setState(() {
+                    _selectedCrewId = value;
+                    _isLoading = true;
+                  });
+                  await _loadProblems();
+                },
+              )
+            : Text(appBarTitle),
+        actions: [const UserNameDisplay(), const SettingsMenu()],
       ),
       body: Column(
         children: [
@@ -771,86 +818,114 @@ class _ProblemsPageState extends State<ProblemsPage> {
           // Problems List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: AppLoadingIndicator())
                 : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            _error!,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                    : _problems.isEmpty
-                        ? Center(
-                            child: Text(_isReferee
-                              ? 'You haven\'t reported any problems yet'
-                              : 'No problems reported yet'),
-                          )
-                        : ListView.builder(
-                            key: const ValueKey('problems_list'),
-                            padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80), // Add bottom padding for bottom app bar
-                            itemCount: _problems.length,
-                            itemBuilder: (context, index) {
-                              final problem = _problems[index];
-                              // For super users, compare against selected crew; for crew members, compare against their crew
-                              final userActiveCrew = _isSuperUser ? _selectedCrewId : _userCrewId;
-                              final isUserCrew = userActiveCrew != null && problem.crewId == userActiveCrew;
-                              final status = _problemService.getProblemStatus(problem, _responders);
-                              final isUserResponding = _responders[problem.id]?.any((r) => r['user_id'] == Supabase.instance.client.auth.currentUser?.id) ?? false;
+                ? Center(
+                    child: Padding(
+                      padding: AppSpacing.paddingMd,
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: AppColors.error(context)),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                : _problems.isEmpty
+                ? AppEmptyState(
+                    icon: Icons.check_circle_outline,
+                    title: _isReferee
+                        ? 'You haven\'t reported any problems yet'
+                        : 'No problems reported yet',
+                  )
+                : ListView.builder(
+                    key: const ValueKey('problems_list'),
+                    padding: EdgeInsets.only(
+                      left: AppSpacing.sm,
+                      right: AppSpacing.sm,
+                      top: AppSpacing.sm,
+                      bottom: 80,
+                    ), // Add bottom padding for bottom app bar
+                    itemCount: _problems.length,
+                    itemBuilder: (context, index) {
+                      final problem = _problems[index];
+                      // For super users, compare against selected crew; for crew members, compare against their crew
+                      final userActiveCrew = _isSuperUser
+                          ? _selectedCrewId
+                          : _userCrewId;
+                      final isUserCrew =
+                          userActiveCrew != null &&
+                          problem.crewId == userActiveCrew;
+                      final status = _problemService.getProblemStatus(
+                        problem,
+                        _responders,
+                      );
+                      final isUserResponding =
+                          _responders[problem.id]?.any(
+                            (r) =>
+                                r['user_id'] ==
+                                Supabase.instance.client.auth.currentUser?.id,
+                          ) ??
+                          false;
 
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 6.0),
-                                child: Stack(
-                                  children: [
-                                    ProblemCard(
-                                      problem: problem,
-                                      status: status,
-                                      currentUserId: Supabase.instance.client.auth.currentUser?.id,
-                                      isReferee: _isReferee,
-                                      isUserResponding: isUserResponding,
-                                      userCrewId: _userCrewId,
-                                      isSuperUser: _isSuperUser,
-                                      responders: _responders[problem.id],
-                                      onToggleExpansion: () => _toggleProblemExpansion(problem.id),
-                                      onResolve: () => _showResolveDialog(problem.id),
-                                      onGoOnMyWay: () => _goOnMyWay(problem.id),
-                                      onLoadMissingData: () => _loadMissingData(problem),
-                                      onEditSymptom: () => _showEditSymptomDialog(problem),
-                                    ),
-                                    if (!isUserCrew)
-                                      Positioned(
-                                        top: 8,
-                                        right: 52,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.secondary,
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: const Text(
-                                            'Other Crew',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.sm - 2),
+                        child: Stack(
+                          children: [
+                            ProblemCard(
+                              problem: problem,
+                              status: status,
+                              currentUserId:
+                                  Supabase.instance.client.auth.currentUser?.id,
+                              isReferee: _isReferee,
+                              isUserResponding: isUserResponding,
+                              userCrewId: _userCrewId,
+                              isSuperUser: _isSuperUser,
+                              responders: _responders[problem.id],
+                              onToggleExpansion: () =>
+                                  _toggleProblemExpansion(problem.id),
+                              onResolve: () => _showResolveDialog(problem.id),
+                              onGoOnMyWay: () => _goOnMyWay(problem.id),
+                              onLoadMissingData: () =>
+                                  _loadMissingData(problem),
+                              onEditSymptom: () =>
+                                  _showEditSymptomDialog(problem),
+                            ),
+                            if (!isUserCrew)
+                              Positioned(
+                                top: AppSpacing.sm,
+                                right: 52,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sm,
+                                    vertical: AppSpacing.xs,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary(context),
+                                    borderRadius: AppSpacing.borderRadiusMd,
+                                  ),
+                                  child: Text(
+                                    'Other Crew',
+                                    style: AppTypography.badge(context)
+                                        .copyWith(
+                                          color: AppColors.onSecondary(context),
                                         ),
-                                      ),
-                                  ],
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
       bottomNavigationBar: BottomAppBar(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           child: Row(
             children: [
               // Add Problem Button
@@ -860,12 +935,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
                   onPressed: _showNewProblemDialog,
                   icon: const Icon(Icons.add),
                   label: const Text('Report Problem'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              AppSpacing.horizontalSm,
               // Refresh Button
               IconButton(
                 key: const ValueKey('problems_refresh_button'),

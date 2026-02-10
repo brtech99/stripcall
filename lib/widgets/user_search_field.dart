@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/theme.dart';
+import 'adaptive/adaptive.dart';
 
 class UserSearchField extends StatefulWidget {
   final String label;
@@ -37,7 +39,6 @@ class _UserSearchFieldState extends State<UserSearchField> {
   Future<List<Map<String, dynamic>>> _searchUsers(String searchTerm) async {
     final searchTerms = searchTerm.trim().split(' ');
     if (searchTerms.length > 1) {
-      // Full name search
       final firstName = searchTerms.first;
       final lastName = searchTerms.skip(1).join(' ');
       return await Supabase.instance.client
@@ -46,7 +47,6 @@ class _UserSearchFieldState extends State<UserSearchField> {
           .eq('first_name', firstName)
           .eq('last_name', lastName);
     } else {
-      // Last name prefix search
       return await Supabase.instance.client
           .from('users')
           .select()
@@ -63,12 +63,9 @@ class _UserSearchFieldState extends State<UserSearchField> {
         Row(
           children: [
             Expanded(
-              child: TextFormField(
+              child: AppTextField(
                 controller: _controller,
-                decoration: InputDecoration(
-                  labelText: widget.label,
-                  border: const OutlineInputBorder(),
-                ),
+                label: widget.label,
                 onChanged: (value) {
                   setState(() {
                     _selectedUserId = null;
@@ -77,8 +74,8 @@ class _UserSearchFieldState extends State<UserSearchField> {
                 },
               ),
             ),
-            const SizedBox(width: 8),
-            IconButton(
+            AppSpacing.horizontalSm,
+            AppIconButton(
               icon: const Icon(Icons.search),
               onPressed: _controller.text.trim().isEmpty
                   ? null
@@ -91,8 +88,8 @@ class _UserSearchFieldState extends State<UserSearchField> {
                           _searchResults = results;
                           if (results.length == 1) {
                             _selectedUserId = results.first['id'].toString();
-                            _controller.text = 
-                              '${results.first['first_name']} ${results.first['last_name']}';
+                            _controller.text =
+                                '${results.first['first_name']} ${results.first['last_name']}';
                             widget.onUserSelected(results.first);
                           }
                         });
@@ -102,13 +99,10 @@ class _UserSearchFieldState extends State<UserSearchField> {
           ],
         ),
         if (_searchResults.length > 1) ...[
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
+          AppSpacing.verticalMd,
+          AppDropdown<String>(
             value: _selectedUserId,
-            decoration: const InputDecoration(
-              labelText: 'Select User',
-              border: OutlineInputBorder(),
-            ),
+            label: 'Select User',
             items: _searchResults.map<DropdownMenuItem<String>>((user) {
               return DropdownMenuItem<String>(
                 value: user['id'].toString(),
@@ -130,4 +124,4 @@ class _UserSearchFieldState extends State<UserSearchField> {
       ],
     );
   }
-} 
+}

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../routes.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class EmailConfirmationPage extends StatefulWidget {
   const EmailConfirmationPage({super.key});
@@ -24,12 +26,11 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
   Future<void> _processEmailConfirmation() async {
     try {
       print('=== EMAIL CONFIRMATION PAGE: Processing email confirmation ===');
-      
-      // Get the current user from auth
+
       final user = Supabase.instance.client.auth.currentUser;
       print('Current user: ${user?.email}');
       print('Email confirmed at: ${user?.emailConfirmedAt}');
-      
+
       if (user == null) {
         setState(() {
           _isProcessing = false;
@@ -37,7 +38,7 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
         });
         return;
       }
-      
+
       if (user.emailConfirmedAt == null) {
         setState(() {
           _isProcessing = false;
@@ -45,22 +46,20 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
         });
         return;
       }
-      
-      // Check if user exists in users table
+
       try {
         await Supabase.instance.client
             .from('users')
             .select('supabase_id')
             .eq('supabase_id', user.id)
             .single();
-        
+
         print('User already exists in users table');
         setState(() {
           _isProcessing = false;
           _message = 'Email confirmed successfully! You can now log in.';
         });
-        
-        // Redirect to login after a short delay
+
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
             context.go(Routes.login);
@@ -70,15 +69,14 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
       } catch (e) {
         print('User not in users table, copying from pending_users...');
       }
-      
-      // Copy user data from pending_users to users table
+
       try {
         final pendingUser = await Supabase.instance.client
             .from('pending_users')
             .select('firstname, lastname, phone_number')
             .eq('email', user.email ?? '')
             .single();
-        
+
         if (pendingUser != null) {
           print('Found pending user data, copying to users table...');
           await Supabase.instance.client
@@ -89,22 +87,20 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
                 'lastname': pendingUser['lastname'],
                 'phonenbr': pendingUser['phone_number'],
               });
-          
+
           print('User data copied successfully, cleaning up pending_users...');
-          
-          // Delete the record from pending_users to prevent data leakage
+
           await Supabase.instance.client
               .from('pending_users')
               .delete()
               .eq('email', user.email ?? '');
-          
+
           print('Pending user data cleaned up successfully');
           setState(() {
             _isProcessing = false;
             _message = 'Account confirmed successfully! You can now log in.';
           });
-          
-          // Redirect to login after a short delay
+
           Future.delayed(const Duration(seconds: 2), () {
             if (mounted) {
               context.go(Routes.login);
@@ -135,6 +131,8 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Email Confirmation'),
@@ -142,49 +140,53 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: AppSpacing.screenPadding,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (_isProcessing) ...[
-                const CircularProgressIndicator(),
-                const SizedBox(height: 24),
-                const Text(
+                const AppLoadingIndicator(),
+                AppSpacing.verticalLg,
+                Text(
                   'Processing email confirmation...',
-                  style: TextStyle(fontSize: 18),
+                  style: AppTypography.titleMedium(context),
                   textAlign: TextAlign.center,
                 ),
               ] else if (_message != null) ...[
-                const Icon(
+                Icon(
                   Icons.check_circle,
-                  color: Colors.green,
+                  color: AppColors.statusSuccess,
                   size: 64,
                 ),
-                const SizedBox(height: 24),
+                AppSpacing.verticalLg,
                 Text(
                   _message!,
-                  style: const TextStyle(fontSize: 18),
+                  style: AppTypography.titleMedium(context),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
-                const Text(
+                AppSpacing.verticalLg,
+                Text(
                   'Redirecting to login...',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ] else if (_error != null) ...[
-                const Icon(
+                Icon(
                   Icons.error,
-                  color: Colors.red,
+                  color: AppColors.statusError,
                   size: 64,
                 ),
-                const SizedBox(height: 24),
+                AppSpacing.verticalLg,
                 Text(
                   _error!,
-                  style: const TextStyle(fontSize: 18, color: Colors.red),
+                  style: AppTypography.titleMedium(context).copyWith(
+                    color: AppColors.statusError,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton(
+                AppSpacing.verticalLg,
+                AppButton(
                   onPressed: () => context.go(Routes.login),
                   child: const Text('Go to Login'),
                 ),
@@ -195,4 +197,4 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
       ),
     );
   }
-} 
+}

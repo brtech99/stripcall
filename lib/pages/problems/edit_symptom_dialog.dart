@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
@@ -228,7 +230,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Strip:'),
-          const SizedBox(height: 8),
+          AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
             runSpacing: 12,
@@ -262,7 +264,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
             }).toList(),
           ),
           if (_selectedPod != null && _selectedPod != 'Finals') ...[
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             Wrap(
               spacing: 8,
               runSpacing: 12,
@@ -307,7 +309,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Strip:'),
-          const SizedBox(height: 8),
+          AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
             runSpacing: 12,
@@ -464,7 +466,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: AppSpacing.screenPadding,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,9 +475,9 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 'Edit Problem',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               if (_isLoadingData)
-                const Center(child: CircularProgressIndicator())
+                const Center(child: AppLoadingIndicator())
               else
                 Flexible(
                   child: SingleChildScrollView(
@@ -498,9 +500,9 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                             color: Colors.grey[600],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        AppSpacing.verticalMd,
                         _buildStripSelector(),
-                        const SizedBox(height: 16),
+                        AppSpacing.verticalMd,
                         SizedBox(
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
@@ -541,7 +543,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                                   },
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        AppSpacing.verticalMd,
                         SizedBox(
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
@@ -580,7 +582,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -589,7 +591,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                     onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 8),
+                  AppSpacing.horizontalSm,
                   TextButton(
                     key: const ValueKey('edit_symptom_submit_button'),
                     onPressed: _isLoading ? null : _submitChange,
@@ -597,7 +599,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppLoadingIndicator(),
                           )
                         : const Text('Save'),
                   ),

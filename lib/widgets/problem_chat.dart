@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'message_bubble.dart';
 import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
+import '../theme/theme.dart';
+import 'adaptive/adaptive.dart';
 
 class ProblemChat extends StatefulWidget {
   final List<dynamic>? messages;
@@ -204,18 +206,26 @@ class _ProblemChatState extends State<ProblemChat> {
         Container(
           constraints: const BoxConstraints(maxHeight: 200),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400, width: 1),
-            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: AppColors.outline(context), width: 1),
+            borderRadius: AppSpacing.borderRadiusSm,
           ),
           child: _messages.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('No messages yet'),
+              ? Padding(
+                  padding: AppSpacing.paddingMd,
+                  child: Text(
+                    'No messages yet',
+                    style: AppTypography.bodyMedium(
+                      context,
+                    ).copyWith(color: AppColors.textSecondary(context)),
+                  ),
                 )
               : ListView.builder(
                   controller: _scrollController,
                   shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  padding: EdgeInsets.symmetric(
+                    vertical: AppSpacing.sm,
+                    horizontal: AppSpacing.xs,
+                  ),
                   itemCount: _messages.length,
                   itemBuilder: (context, idx) {
                     final msg = _messages[idx];
@@ -231,7 +241,9 @@ class _ProblemChatState extends State<ProblemChat> {
                       // Try to parse different SMS message formats:
                       // Old format: "[SMS from Name] message" or "[SMS from (724) 612-2359] message"
                       // New format: "Name: message" or "7246122359: message"
-                      final oldFormatMatch = RegExp(r'^\[SMS from ([^\]]+)\]\s*(.*)$').firstMatch(messageText);
+                      final oldFormatMatch = RegExp(
+                        r'^\[SMS from ([^\]]+)\]\s*(.*)$',
+                      ).firstMatch(messageText);
                       if (oldFormatMatch != null) {
                         smsName = oldFormatMatch.group(1)!.trim();
                         smsText = oldFormatMatch.group(2)!.trim();
@@ -274,23 +286,21 @@ class _ProblemChatState extends State<ProblemChat> {
                   },
                 ),
         ),
-        const SizedBox(height: 8),
+        AppSpacing.verticalSm,
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: AppTextField(
                 key: ValueKey('problem_chat_message_field_${widget.problemId}'),
                 controller: _messageController,
                 decoration: const InputDecoration(
                   hintText: 'Type a message...',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  border: OutlineInputBorder(),
                   isDense: true,
                 ),
                 maxLines: 1,
               ),
             ),
-            const SizedBox(width: 8),
+            AppSpacing.horizontalSm,
             IconButton(
               key: ValueKey('problem_chat_send_button_${widget.problemId}'),
               icon: const Icon(Icons.send, size: 24),
@@ -308,7 +318,9 @@ class _ProblemChatState extends State<ProblemChat> {
                     'created_at': now.toIso8601String(),
                     'include_reporter': _includeReporter,
                   };
-                  await Supabase.instance.client.from('messages').insert(insertData);
+                  await Supabase.instance.client
+                      .from('messages')
+                      .insert(insertData);
                   if (!mounted) return;
 
                   // Reload all messages with filtering
@@ -324,7 +336,9 @@ class _ProblemChatState extends State<ProblemChat> {
                   try {
                     await NotificationService().sendCrewNotification(
                       title: 'New Message',
-                      body: text.length > 50 ? '${text.substring(0, 50)}...' : text,
+                      body: text.length > 50
+                          ? '${text.substring(0, 50)}...'
+                          : text,
                       crewId: widget.crewId.toString(),
                       senderId: widget.currentUserId!,
                       data: {
@@ -333,7 +347,8 @@ class _ProblemChatState extends State<ProblemChat> {
                         'crewId': widget.crewId.toString(),
                       },
                       includeReporter: _includeReporter,
-                      reporterId: widget.originator?.toString(), // Pass the reporter ID
+                      reporterId: widget.originator
+                          ?.toString(), // Pass the reporter ID
                     );
                   } catch (notifError) {
                     debugLogError('Error sending notification', notifError);
@@ -344,7 +359,8 @@ class _ProblemChatState extends State<ProblemChat> {
                   // - To SMS-mode crew members (always, regardless of include_reporter)
                   // Use direct HTTP to avoid Supabase SDK type issues in minified web builds
                   try {
-                    final session = Supabase.instance.client.auth.currentSession;
+                    final session =
+                        Supabase.instance.client.auth.currentSession;
                     if (session != null) {
                       // Get current user's name for the SMS
                       String senderName = 'Crew';
@@ -364,9 +380,15 @@ class _ProblemChatState extends State<ProblemChat> {
                         // Use default name if lookup fails
                       }
 
-                      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-                      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-                      final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
+                      const supabaseUrl = String.fromEnvironment(
+                        'SUPABASE_URL',
+                      );
+                      const supabaseAnonKey = String.fromEnvironment(
+                        'SUPABASE_ANON_KEY',
+                      );
+                      final url = Uri.parse(
+                        '$supabaseUrl/functions/v1/send-sms',
+                      );
 
                       await http.post(
                         url,
@@ -408,12 +430,18 @@ class _ProblemChatState extends State<ProblemChat> {
           Row(
             children: [
               Checkbox(
-                key: ValueKey('problem_chat_include_reporter_${widget.problemId}'),
+                key: ValueKey(
+                  'problem_chat_include_reporter_${widget.problemId}',
+                ),
                 value: _includeReporter,
-                onChanged: (val) => setState(() => _includeReporter = val ?? false),
+                onChanged: (val) =>
+                    setState(() => _includeReporter = val ?? false),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              const Text('Include reporter', style: TextStyle(fontSize: 12)),
+              Text(
+                'Include reporter',
+                style: AppTypography.labelSmall(context),
+              ),
             ],
           ),
       ],

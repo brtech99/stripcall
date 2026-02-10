@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/notification_service.dart';
@@ -288,7 +290,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Select Pod and Strip:'),
-          const SizedBox(height: 8),
+          AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
             runSpacing: 12,
@@ -322,7 +324,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
             }).toList(),
           ),
           if (_selectedPod != null && _selectedPod != 'Finals') ...[
-            const SizedBox(height: 8),
+            AppSpacing.verticalSm,
             Wrap(
               spacing: 8,
               runSpacing: 12,
@@ -367,7 +369,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Select Strip:'),
-          const SizedBox(height: 8),
+          AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
             runSpacing: 12,
@@ -425,7 +427,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   ),
                 ),
               const Text('Select Crew:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
+              AppSpacing.verticalSm,
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
@@ -457,9 +459,9 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               _buildStripSelector(),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               (_selectedCrewId == null)
                 ? DropdownButtonFormField<String>(
                     key: const ValueKey('new_problem_symptom_class_dropdown_disabled'),
@@ -497,7 +499,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                       }
                     },
                   ),
-              const SizedBox(height: 12),
+              AppSpacing.verticalMd,
               DropdownButtonFormField<String>(
                 key: const ValueKey('new_problem_symptom_dropdown'),
                 value: _selectedSymptom,
@@ -538,7 +540,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AppLoadingIndicator(),
                     )
                   : const Text('Submit'),
             ),

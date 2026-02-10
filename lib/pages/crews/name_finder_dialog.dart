@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user.dart' as app_models;
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class NameFinderDialog extends StatefulWidget {
   final String title;
@@ -27,7 +29,6 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
   @override
   void initState() {
     super.initState();
-    // Add listeners to track text changes
     _firstNameController.addListener(_onTextChanged);
     _lastNameController.addListener(_onTextChanged);
   }
@@ -36,7 +37,6 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
     final currentFirstName = _firstNameController.text;
     final currentLastName = _lastNameController.text;
 
-    // Re-enable search button if text has changed since last search
     if (_searchButtonDisabled &&
         (currentFirstName != _lastSearchedFirstName || currentLastName != _lastSearchedLastName)) {
       setState(() {
@@ -83,9 +83,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
         setState(() {
           _users = response.map<app_models.User>((json) => app_models.User.fromJson(json)).toList();
           _isLoading = false;
-          // Disable search button if we found at least one user
           _searchButtonDisabled = _users.isNotEmpty;
-          // Store the search terms
           _lastSearchedFirstName = _firstNameController.text;
           _lastSearchedLastName = _lastNameController.text;
         });
@@ -106,48 +104,43 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
     return Dialog(
       key: const ValueKey('name_finder_dialog'),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.screenPadding,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               widget.title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppTypography.titleLarge(context),
             ),
-            const SizedBox(height: 16),
-            TextField(
+            AppSpacing.verticalMd,
+            AppTextField(
               key: const ValueKey('name_finder_firstname_field'),
               controller: _firstNameController,
-              decoration: const InputDecoration(
-                labelText: 'First Name',
-                hintText: 'Enter first name or * for wildcard',
-              ),
+              label: 'First Name',
+              hint: 'Enter first name or * for wildcard',
               onSubmitted: (_) => _searchUsers(),
             ),
-            const SizedBox(height: 8),
-            TextField(
+            AppSpacing.verticalSm,
+            AppTextField(
               key: const ValueKey('name_finder_lastname_field'),
               controller: _lastNameController,
-              decoration: const InputDecoration(
-                labelText: 'Last Name',
-                hintText: 'Enter last name or * for wildcard',
-              ),
+              label: 'Last Name',
+              hint: 'Enter last name or * for wildcard',
               onSubmitted: (_) => _searchUsers(),
             ),
-            const SizedBox(height: 16),
+            AppSpacing.verticalMd,
             if (_error != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
+                padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: Text(
                   _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.statusError,
+                  ),
                 ),
               ),
             if (_isLoading)
-              const Center(child: CircularProgressIndicator())
+              const Center(child: AppLoadingIndicator())
             else if (_users.isNotEmpty)
               Flexible(
                 child: ListView.builder(
@@ -155,7 +148,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
                   itemCount: _users.length,
                   itemBuilder: (context, index) {
                     final user = _users[index];
-                    return ListTile(
+                    return AppListTile(
                       title: Text(user.fullName),
                       onTap: () {
                         Navigator.pop(context, user);
@@ -165,18 +158,21 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
                 ),
               )
             else if (_firstNameController.text.isNotEmpty || _lastNameController.text.isNotEmpty)
-              const Text('No users found'),
-            const SizedBox(height: 16),
+              Text(
+                'No users found',
+                style: AppTypography.bodyMedium(context),
+              ),
+            AppSpacing.verticalMd,
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton.secondary(
                   key: const ValueKey('name_finder_cancel_button'),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancel'),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
+                AppSpacing.horizontalSm,
+                AppButton(
                   key: const ValueKey('name_finder_search_button'),
                   onPressed: _searchButtonDisabled ? null : _searchUsers,
                   child: const Text('Search'),

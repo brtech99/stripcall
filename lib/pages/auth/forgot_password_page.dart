@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -49,7 +51,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     try {
       final email = _emailController.text.trim();
 
-      print('=== PASSWORD RESET: Attempting to send reset email to: $email ===');
       debugLog('Attempting to send password reset email to: $email');
 
       await Supabase.instance.client.auth.resetPasswordForEmail(
@@ -57,26 +58,23 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         redirectTo: 'https://stripcall.us/auth/reset-password',
       );
 
-      print('=== PASSWORD RESET: Email sent successfully ===');
       debugLog('Password reset email sent successfully');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password reset email sent. Please check your email and click the reset link.'),
+          content: Text(
+            'Password reset email sent. Please check your email and click the reset link.',
+          ),
           duration: Duration(seconds: 8),
         ),
       );
       context.go(Routes.login);
     } on AuthException catch (e) {
-      print('=== PASSWORD RESET ERROR: ${e.message} (Status: ${e.statusCode}) ===');
       debugLogError('AuthException during password reset', e);
-      debugLog('Auth error message: ${e.message}');
-      debugLog('Auth error status code: ${e.statusCode}');
       setState(() {
         _error = e.message;
       });
     } catch (e) {
-      print('=== PASSWORD RESET ERROR: $e ===');
       debugLogError('Error during password reset', e);
       setState(() {
         _error = e.toString();
@@ -93,13 +91,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reset Password'),
-      ),
+      appBar: AppBar(title: const Text('Reset Password')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: AppSpacing.screenPadding,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
@@ -107,30 +103,46 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_error != null) ...[
-                    Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red),
-                      textAlign: TextAlign.center,
+                    Container(
+                      padding: AppSpacing.paddingSm,
+                      decoration: BoxDecoration(
+                        color: AppColors.errorContainer(context),
+                        borderRadius: AppSpacing.borderRadiusMd,
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: AppColors.onErrorContainer(context),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    AppSpacing.verticalMd,
                   ],
-                  ..._buildCurrentStep(),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      key: const ValueKey('forgot_password_submit_button'),
-                      onPressed: _isLoading || !_isValidInput ? null : _handleSubmit,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(_getButtonText()),
-                    ),
+                  Text(
+                    'Enter your email address and we\'ll send you a password reset link.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyMedium(context),
+                  ),
+                  AppSpacing.verticalMd,
+                  AppTextField(
+                    key: const ValueKey('forgot_password_email_field'),
+                    controller: _emailController,
+                    label: 'Email',
+                    keyboardType: TextInputType.emailAddress,
+                    textCapitalization: TextCapitalization.none,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                  ),
+                  AppSpacing.verticalLg,
+                  AppButton(
+                    buttonKey: const ValueKey('forgot_password_submit_button'),
+                    onPressed: _isLoading || !_isValidInput
+                        ? null
+                        : _handleSubmit,
+                    isLoading: _isLoading,
+                    expand: true,
+                    child: const Text('Send Reset Link'),
                   ),
                 ],
               ),
@@ -139,28 +151,5 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
       ),
     );
-  }
-
-  List<Widget> _buildCurrentStep() {
-    return [
-      const Text(
-        'Enter your email address and we\'ll send you a password reset link.',
-        textAlign: TextAlign.center,
-      ),
-      const SizedBox(height: 16),
-      TextField(
-        key: const ValueKey('forgot_password_email_field'),
-        controller: _emailController,
-        decoration: const InputDecoration(labelText: 'Email'),
-        keyboardType: TextInputType.emailAddress,
-        textCapitalization: TextCapitalization.none,
-        autocorrect: false,
-        enableSuggestions: false,
-      ),
-    ];
-  }
-
-  String _getButtonText() {
-    return 'Send Reset Link';
   }
 }

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import '../theme/theme.dart';
 
+/// A colored circle indicator for problem status.
+///
+/// Uses semantic colors from AppColors for consistent styling.
 class StatusIndicator extends StatelessWidget {
   final String status;
   final double size;
-  
+
   const StatusIndicator({
     super.key,
     required this.status,
@@ -12,21 +16,21 @@ class StatusIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    final Color color;
     switch (status) {
       case 'new':
-        color = Colors.red;
+        color = AppColors.statusError;
         break;
       case 'en_route':
-        color = Colors.orange;
+        color = AppColors.statusWarning;
         break;
       case 'resolved':
-        color = Colors.green;
+        color = AppColors.statusSuccess;
         break;
       default:
         return const SizedBox.shrink();
     }
-    
+
     return Container(
       width: size,
       height: size,
@@ -36,4 +40,4 @@ class StatusIndicator extends StatelessWidget {
       ),
     );
   }
-} 
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/problem_with_details.dart';
+import '../theme/theme.dart';
 import 'status_indicator.dart';
 import 'problem_chat.dart';
 
@@ -58,9 +59,12 @@ class _ProblemCardState extends State<ProblemCard> {
   Widget _buildCollapsedProblem() {
     // Get the latest message if available, filtering based on user's access
     String? latestMessage;
-    if (widget.problem.messages != null && widget.problem.messages!.isNotEmpty) {
+    if (widget.problem.messages != null &&
+        widget.problem.messages!.isNotEmpty) {
       // Filter messages based on user's crew membership
-      final isUserCrew = widget.userCrewId != null && widget.problem.crewId == widget.userCrewId;
+      final isUserCrew =
+          widget.userCrewId != null &&
+          widget.problem.crewId == widget.userCrewId;
       final visibleMessages = widget.problem.messages!.where((msg) {
         if (isUserCrew || widget.isSuperUser) {
           return true; // Crew members and superusers see all messages
@@ -86,26 +90,26 @@ class _ProblemCardState extends State<ProblemCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         StatusIndicator(status: widget.status),
-        const SizedBox(width: 4),
+        AppSpacing.horizontalXs,
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Strip ${widget.problem.strip}: ${widget.problem.symptomString ?? 'Unknown'}',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTypography.problemTitle(context),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
               const SizedBox(height: 2),
               Text(
-                latestMessage ?? 'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                latestMessage ??
+                    'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
+                style: AppTypography.problemSubtitle(context).copyWith(
                   fontStyle: latestMessage != null ? FontStyle.italic : null,
-                  color: latestMessage != null ? Colors.grey[700] : null,
+                  color: latestMessage != null
+                      ? AppColors.textSecondary(context)
+                      : null,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -120,10 +124,10 @@ class _ProblemCardState extends State<ProblemCard> {
           },
           icon: Icon(
             Icons.expand_more,
-            size: 24,
-            color: Colors.grey[600],
+            size: AppSpacing.iconMd,
+            color: AppColors.textSecondary(context),
           ),
-          padding: const EdgeInsets.all(4),
+          padding: AppSpacing.paddingXs,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
         ),
       ],
@@ -137,26 +141,29 @@ class _ProblemCardState extends State<ProblemCard> {
         Row(
           children: [
             StatusIndicator(status: widget.status),
-            const SizedBox(width: 8),
+            AppSpacing.horizontalSm,
             SizedBox(
               width: 80, // Fixed width for strip text
               child: Text(
                 'Strip ${widget.problem.strip}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTypography.problemTitle(context),
               ),
             ),
             // Only show buttons if user is superuser OR user's crew matches problem's crew
-            if ((widget.isSuperUser || widget.userCrewId == widget.problem.crewId) && widget.problem.actionString == null && !widget.problem.isResolved) ...[
+            if ((widget.isSuperUser ||
+                    widget.userCrewId == widget.problem.crewId) &&
+                widget.problem.actionString == null &&
+                !widget.problem.isResolved) ...[
               if (!widget.isUserResponding)
                 ElevatedButton(
                   key: ValueKey('problem_onmyway_button_${widget.problem.id}'),
                   onPressed: widget.onGoOnMyWay,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: const TextStyle(fontSize: 12),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm + 4,
+                      vertical: AppSpacing.sm,
+                    ),
+                    textStyle: AppTypography.labelSmall(context),
                   ),
                   child: const Text('On my way'),
                 )
@@ -165,20 +172,26 @@ class _ProblemCardState extends State<ProblemCard> {
                   key: ValueKey('problem_enroute_button_${widget.problem.id}'),
                   onPressed: null, // Disabled
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: const TextStyle(fontSize: 12),
-                    backgroundColor: Colors.orange,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm + 4,
+                      vertical: AppSpacing.sm,
+                    ),
+                    textStyle: AppTypography.labelSmall(context),
+                    backgroundColor: AppColors.statusWarning,
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('En route'),
                 ),
-              const SizedBox(width: 20),
+              AppSpacing.horizontalMd,
               ElevatedButton(
                 key: ValueKey('problem_resolve_button_${widget.problem.id}'),
                 onPressed: widget.onResolve,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 12),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm + 4,
+                    vertical: AppSpacing.sm,
+                  ),
+                  textStyle: AppTypography.labelSmall(context),
                 ),
                 child: const Text('Resolve'),
               ),
@@ -192,37 +205,40 @@ class _ProblemCardState extends State<ProblemCard> {
               icon: Icon(
                 Icons.expand_less,
                 size: 28,
-                color: Colors.grey[600],
+                color: AppColors.textSecondary(context),
               ),
-              padding: const EdgeInsets.all(8),
+              padding: AppSpacing.paddingSm,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        AppSpacing.verticalXs,
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
                 'Problem: ${widget.problem.symptomString ?? 'Unknown'}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppTypography.problemTitle(context),
               ),
             ),
             // Show Edit button for crew members and superusers on unresolved problems
             if (widget.onEditSymptom != null &&
-                (widget.isSuperUser || widget.userCrewId == widget.problem.crewId) &&
+                (widget.isSuperUser ||
+                    widget.userCrewId == widget.problem.crewId) &&
                 !widget.problem.isResolved)
               TextButton.icon(
-                key: ValueKey('problem_edit_symptom_button_${widget.problem.id}'),
+                key: ValueKey(
+                  'problem_edit_symptom_button_${widget.problem.id}',
+                ),
                 onPressed: widget.onEditSymptom,
-                icon: const Icon(Icons.edit, size: 16),
+                icon: Icon(Icons.edit, size: AppSpacing.iconSm),
                 label: const Text('Edit'),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -231,24 +247,22 @@ class _ProblemCardState extends State<ProblemCard> {
         ),
 
         if (widget.problem.actionString != null) ...[
-          const SizedBox(height: 4),
+          AppSpacing.verticalXs,
           Text('Resolution: ${widget.problem.actionString}'),
         ],
         if (widget.problem.notes?.isNotEmpty ?? false) ...[
-          const SizedBox(height: 4),
+          AppSpacing.verticalXs,
           Text('Notes: ${widget.problem.notes}'),
         ],
-        if (widget.problem.isResolved && widget.problem.actionByName != null) ...[
-          const SizedBox(height: 4),
+        if (widget.problem.isResolved &&
+            widget.problem.actionByName != null) ...[
+          AppSpacing.verticalXs,
           Text(
             'Resolved by: ${widget.problem.actionByName}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Colors.green,
-            ),
+            style: AppTypography.successText(context),
           ),
         ],
-        const SizedBox(height: 4),
+        AppSpacing.verticalXs,
         ProblemChat(
           messages: widget.problem.messages,
           problemId: widget.problem.id,
@@ -256,13 +270,13 @@ class _ProblemCardState extends State<ProblemCard> {
           originator: widget.problem.originatorName ?? 'Unknown',
           currentUserId: widget.currentUserId,
         ),
-        const SizedBox(height: 4),
+        AppSpacing.verticalXs,
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               'Reported by ${widget.problem.originatorName ?? 'Unknown'} ${_formatTime(widget.problem.startDateTime)}',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: AppTypography.timestamp(context),
             ),
             if (widget.responders != null && widget.responders!.isNotEmpty)
               Text(
@@ -273,8 +287,10 @@ class _ProblemCardState extends State<ProblemCard> {
                   }
                   return 'Unknown';
                 }).join(', ')}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: widget.problem.isResolved ? Colors.grey[600] : Colors.orange[700],
+                style: AppTypography.timestamp(context).copyWith(
+                  color: widget.problem.isResolved
+                      ? AppColors.textSecondary(context)
+                      : AppColors.statusWarning,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -294,8 +310,10 @@ class _ProblemCardState extends State<ProblemCard> {
           widget.onToggleExpansion();
         },
         child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: _isExpanded ? _buildExpandedProblem() : _buildCollapsedProblem(),
+          padding: AppSpacing.cardPadding,
+          child: _isExpanded
+              ? _buildExpandedProblem()
+              : _buildCollapsedProblem(),
         ),
       ),
     );

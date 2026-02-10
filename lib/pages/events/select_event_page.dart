@@ -7,6 +7,8 @@ import '../../widgets/app_menu.dart';
 import '../../widgets/settings_menu.dart';
 import '../../models/event.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class SelectEventPage extends StatefulWidget {
   const SelectEventPage({super.key});
@@ -63,11 +65,9 @@ class _SelectEventPageState extends State<SelectEventPage> {
 
   Future<void> _navigateToProblems(Event event) async {
     try {
-      // Get the user's crew for this event
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
-      // Check if user is a crew member for this event
       final crewMemberResponse = await Supabase.instance.client
           .from('crewmembers')
           .select('crew:crews(id, crewtype:crewtypes(crewtype))')
@@ -76,7 +76,6 @@ class _SelectEventPageState extends State<SelectEventPage> {
           .maybeSingle();
 
       if (crewMemberResponse == null) {
-        // User is not a crew member; treat as referee by passing empty crewId and crewType
         if (!mounted) return;
         context.push(Routes.problems, extra: {
           'eventId': event.id,
@@ -85,10 +84,8 @@ class _SelectEventPageState extends State<SelectEventPage> {
         });
         return;
       } else {
-        // User is a crew member
         final crew = crewMemberResponse['crew'] as Map<String, dynamic>?;
         if (crew == null) {
-          // Handle case where crew data is null
           if (!mounted) return;
           context.push(Routes.problems, extra: {
             'eventId': event.id,
@@ -120,32 +117,78 @@ class _SelectEventPageState extends State<SelectEventPage> {
     print('=== SELECT EVENT PAGE: build() method called ===');
     print('=== SELECT EVENT PAGE: _isLoading = $_isLoading ===');
     print('=== SELECT EVENT PAGE: _events.length = ${_events.length} ===');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Event'),
-        actions: [
-          const SettingsMenu(),
+        actions: const [
+          SettingsMenu(),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!))
-              : _events.isEmpty
-                  ? const Center(child: Text('No current events'))
-                  : ListView.builder(
-                      key: const ValueKey('select_event_list'),
-                      itemCount: _events.length,
-                      itemBuilder: (context, index) {
-                        final event = _events[index];
-                        return ListTile(
-                          key: ValueKey('select_event_item_${event.id}'),
-                          title: Text(event.name),
-                          subtitle: Text(_formatDate(event.startDateTime)),
-                          onTap: () => _navigateToProblems(event),
-                        );
-                      },
-                    ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.statusError,
+              ),
+              AppSpacing.verticalMd,
+              Text(
+                _error!,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.statusError,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              AppSpacing.verticalLg,
+              AppButton(
+                onPressed: _loadEvents,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_events.isEmpty) {
+      return const AppEmptyState(
+        icon: Icons.event_busy,
+        title: 'No current events',
+        subtitle: 'Check back when an event is scheduled',
+      );
+    }
+
+    return ListView.builder(
+      key: const ValueKey('select_event_list'),
+      itemCount: _events.length,
+      itemBuilder: (context, index) {
+        final event = _events[index];
+        return AppListTile(
+          key: ValueKey('select_event_item_${event.id}'),
+          title: Text(event.name),
+          subtitle: Text(_formatDate(event.startDateTime)),
+          trailing: Icon(
+            Icons.chevron_right,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          onTap: () => _navigateToProblems(event),
+        );
+      },
     );
   }
 }

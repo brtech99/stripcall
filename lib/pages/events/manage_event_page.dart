@@ -9,9 +9,11 @@ import '../../models/crew.dart';
 import '../../models/crew_type.dart';
 import '../../utils/debug_utils.dart';
 import '../../widgets/settings_menu.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class ManageEventPage extends StatefulWidget {
-  final Event? event;  // null for new event, populated for editing
+  final Event? event;
 
   const ManageEventPage({
     super.key,
@@ -29,7 +31,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
   bool _isLoading = true;
   String? _error;
 
-  // Editable event fields
   late TextEditingController _nameController;
   late TextEditingController _cityController;
   late TextEditingController _stateController;
@@ -103,7 +104,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
   }
 
   Future<void> _saveEvent() async {
-    // Validation
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter an event name')),
@@ -138,7 +138,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
       };
 
       if (widget.event == null) {
-        // Creating new event
         final userId = Supabase.instance.client.auth.currentUser?.id;
         if (userId != null) {
           eventData['organizer'] = userId;
@@ -151,7 +150,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
           context.go(Routes.manageEvents);
         }
       } else {
-        // Updating existing event
         await Supabase.instance.client
             .from('events')
             .update(eventData)
@@ -217,7 +215,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
     if (!mounted) return;
     if (result != null) {
       try {
-        // Create the crew and get the new crew ID
         final crewResponse = await Supabase.instance.client
             .from('crews')
             .insert({
@@ -228,7 +225,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
             .select('id')
             .single();
 
-        // Add crew chief as a crew member so they appear in crew membership queries
         await Supabase.instance.client
             .from('crewmembers')
             .insert({
@@ -247,7 +243,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to add crew: $e'),
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: AppColors.statusError,
             ),
           );
         }
@@ -279,7 +275,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to update crew: $e'),
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: AppColors.statusError,
             ),
           );
         }
@@ -288,7 +284,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
   }
 
   Future<void> _deleteCrew(int crewId) async {
-    // First check if crew has any problems or messages (has been active)
     try {
       final problemCount = await Supabase.instance.client
           .from('problem')
@@ -313,44 +308,25 @@ class _ManageEventPageState extends State<ManageEventPage> {
                           (crewMessageCount.count ?? 0) > 0;
 
       if (hasActivity) {
-        // Show confirmation dialog for active crews
         if (!mounted) return;
-        final confirmed = await showDialog<bool>(
+        final confirmed = await AppDialog.showConfirm(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete Active Crew?'),
-            content: Text(
-              'This crew has been active with ${problemCount.count ?? 0} problems and '
+          title: 'Delete Active Crew?',
+          message: 'This crew has been active with ${problemCount.count ?? 0} problems and '
               '${(messageCount.count ?? 0) + (crewMessageCount.count ?? 0)} messages. '
               'Deleting it will also delete all associated data.\n\n'
               'Are you sure you want to delete this crew?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+          confirmText: 'Delete',
+          isDestructive: true,
         );
 
         if (confirmed != true) return;
 
-        // Delete related data first (in correct order to avoid FK violations)
-        // Delete messages first (references problem and crew)
         await Supabase.instance.client
             .from('messages')
             .delete()
             .eq('crew', crewId);
 
-        // Delete responders (references problem)
         final problemIds = await Supabase.instance.client
             .from('problem')
             .select('id')
@@ -363,32 +339,27 @@ class _ManageEventPageState extends State<ManageEventPage> {
               .delete()
               .inFilter('problem', ids);
 
-          // Delete old problem symptoms
           await Supabase.instance.client
               .from('oldproblemsymptom')
               .delete()
               .inFilter('problem', ids);
         }
 
-        // Delete problems
         await Supabase.instance.client
             .from('problem')
             .delete()
             .eq('crew', crewId);
 
-        // crew_messages has ON DELETE CASCADE, but delete explicitly to be safe
         await Supabase.instance.client
             .from('crew_messages')
             .delete()
             .eq('crew', crewId);
 
-        // Delete crew members
         await Supabase.instance.client
             .from('crewmembers')
             .delete()
             .eq('crew', crewId);
 
-        // Delete SMS reply slots (has ON DELETE CASCADE but be explicit)
         await Supabase.instance.client
             .from('sms_reply_slots')
             .delete()
@@ -400,7 +371,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
             .eq('crew_id', crewId);
       }
 
-      // Now delete the crew
       await Supabase.instance.client
           .from('crews')
           .delete()
@@ -418,7 +388,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to delete crew: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppColors.statusError,
           ),
         );
       }
@@ -430,171 +400,231 @@ class _ManageEventPageState extends State<ManageEventPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.event == null ? 'Create Event' : 'Edit Event'),
-        actions: [
-          const SettingsMenu(),
+        actions: const [
+          SettingsMenu(),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Text(
+            _error!,
+            style: AppTypography.bodyMedium(context).copyWith(
+              color: AppColors.statusError,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: AppSpacing.screenPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            key: const ValueKey('manage_event_name_field'),
+            controller: _nameController,
+            label: 'Event Name',
+          ),
+          AppSpacing.verticalMd,
+          AppTextField(
+            key: const ValueKey('manage_event_city_field'),
+            controller: _cityController,
+            label: 'City',
+          ),
+          AppSpacing.verticalMd,
+          AppTextField(
+            key: const ValueKey('manage_event_state_field'),
+            controller: _stateController,
+            label: 'State',
+          ),
+          AppSpacing.verticalMd,
+          _buildDateRow(
+            label: 'Start Date',
+            date: _startDate,
+            onPick: () => _pickDate(isStart: true),
+            buttonKey: 'manage_event_start_date_button',
+          ),
+          AppSpacing.verticalSm,
+          _buildDateRow(
+            label: 'End Date',
+            date: _endDate,
+            onPick: () => _pickDate(isStart: false),
+            buttonKey: 'manage_event_end_date_button',
+          ),
+          AppSpacing.verticalMd,
+          DropdownButtonFormField<String>(
+            key: const ValueKey('manage_event_strip_numbering_dropdown'),
+            value: _stripNumbering,
+            decoration: const InputDecoration(labelText: 'Strip Numbering'),
+            items: const [
+              DropdownMenuItem(value: 'Pods', child: Text('Pods')),
+              DropdownMenuItem(value: 'SequentialNumbers', child: Text('Sequential Numbers')),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _stripNumbering = val);
+            },
+          ),
+          AppSpacing.verticalMd,
+          AppTextField(
+            key: const ValueKey('manage_event_count_field'),
+            label: _stripNumbering == 'Pods' ? 'Number of Pods' : 'Number of Strips',
+            keyboardType: TextInputType.number,
+            onChanged: (val) {
+              final parsed = int.tryParse(val);
+              if (parsed != null) setState(() => _count = parsed);
+            },
+          ),
+          AppSpacing.verticalLg,
+          AppButton(
+            key: const ValueKey('manage_event_save_button'),
+            onPressed: _isLoading ? null : _saveEvent,
+            expand: true,
+            child: Text(widget.event == null ? 'Create Event' : 'Save'),
+          ),
+          AppSpacing.verticalLg,
+          if (widget.event != null) _buildCrewsSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRow({
+    required String label,
+    required DateTime? date,
+    required VoidCallback onPick,
+    required String buttonKey,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            date != null
+                ? '$label: ${date.toLocal().toString().split(' ')[0]}'
+                : '$label: Not set',
+            style: AppTypography.bodyMedium(context),
+          ),
+        ),
+        TextButton(
+          key: ValueKey(buttonKey),
+          onPressed: onPick,
+          child: Text(
+            'Pick',
+            style: TextStyle(color: colorScheme.primary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCrewsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Crews',
+              style: AppTypography.titleMedium(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (_availableCrewTypes.isNotEmpty)
+              IconButton(
+                key: const ValueKey('manage_event_add_crew_button'),
+                onPressed: _addCrew,
+                icon: Icon(
+                  Icons.add,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                tooltip: 'Add Crew',
+              ),
+          ],
+        ),
+        AppSpacing.verticalSm,
+        if (_crews.isEmpty)
+          Center(
+            child: Padding(
+              padding: AppSpacing.paddingMd,
+              child: Text(
+                'No crews found',
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          )
+        else
+          Container(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _crews.length,
+              itemBuilder: (context, index) {
+                final crew = _crews[index];
+                String chiefName;
+                if (crew.crewChief != null) {
+                  final firstName = crew.crewChief!['firstname'] as String? ?? '';
+                  final lastName = crew.crewChief!['lastname'] as String? ?? '';
+                  if (firstName.isNotEmpty || lastName.isNotEmpty) {
+                    chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
+                  } else {
+                    chiefName = 'Chief ID: ${crew.crewChiefId}';
+                  }
+                } else {
+                  chiefName = 'Chief ID: ${crew.crewChiefId}';
+                }
+
+                String crewTypeName = crew.crewTypeId.toString();
+                final crewTypeObj = _allCrewTypes.firstWhere(
+                  (t) => t.id == crew.crewTypeId,
+                  orElse: () => CrewType(id: -1, crewType: 'Unknown'),
+                );
+                if (crewTypeObj.id != -1) {
+                  crewTypeName = crewTypeObj.crewType;
+                }
+
+                return AppCard(
+                  margin: EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: AppListTile(
+                    title: Text(crewTypeName),
+                    subtitle: Text('Crew Chief: $chiefName'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _editCrew(crew),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete,
+                            color: AppColors.statusError,
+                          ),
+                          onPressed: () => _deleteCrew(crew.id),
+                        ),
+                      ],
                     ),
                   ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextFormField(
-                        key: const ValueKey('manage_event_name_field'),
-                        controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Event Name'),
-                      ),
-                      TextFormField(
-                        key: const ValueKey('manage_event_city_field'),
-                        controller: _cityController,
-                        decoration: const InputDecoration(labelText: 'City'),
-                      ),
-                      TextFormField(
-                        key: const ValueKey('manage_event_state_field'),
-                        controller: _stateController,
-                        decoration: const InputDecoration(labelText: 'State'),
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(_startDate != null ? 'Start Date: ${_startDate!.toLocal().toString().split(' ')[0]}' : 'Start Date: Not set'),
-                          ),
-                          TextButton(
-                            key: const ValueKey('manage_event_start_date_button'),
-                            onPressed: () => _pickDate(isStart: true),
-                            child: const Text('Pick'),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(_endDate != null ? 'End Date: ${_endDate!.toLocal().toString().split(' ')[0]}' : 'End Date: Not set'),
-                          ),
-                          TextButton(
-                            key: const ValueKey('manage_event_end_date_button'),
-                            onPressed: () => _pickDate(isStart: false),
-                            child: const Text('Pick'),
-                          ),
-                        ],
-                      ),
-                      DropdownButtonFormField<String>(
-                        key: const ValueKey('manage_event_strip_numbering_dropdown'),
-                        value: _stripNumbering,
-                        decoration: const InputDecoration(labelText: 'Strip Numbering'),
-                        items: const [
-                          DropdownMenuItem(value: 'Pods', child: Text('Pods')),
-                          DropdownMenuItem(value: 'SequentialNumbers', child: Text('Sequential Numbers')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _stripNumbering = val);
-                        },
-                      ),
-                      TextFormField(
-                        key: const ValueKey('manage_event_count_field'),
-                        initialValue: _count > 0 ? _count.toString() : '',
-                        decoration: InputDecoration(
-                          labelText: _stripNumbering == 'Pods' ? 'Number of Pods' : 'Number of Strips',
-                        ),
-                        keyboardType: TextInputType.number,
-                        onChanged: (val) {
-                          final parsed = int.tryParse(val);
-                          if (parsed != null) setState(() => _count = parsed);
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        key: const ValueKey('manage_event_save_button'),
-                        onPressed: _isLoading ? null : _saveEvent,
-                        child: Text(widget.event == null ? 'Create Event' : 'Save'),
-                      ),
-                      const SizedBox(height: 16),
-                      if (widget.event != null) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Crews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            if (_availableCrewTypes.isNotEmpty)
-                              IconButton(
-                                key: const ValueKey('manage_event_add_crew_button'),
-                                onPressed: _addCrew,
-                                icon: const Icon(Icons.add),
-                                tooltip: 'Add Crew',
-                              ),
-                          ],
-                        ),
-                        if (_crews.isEmpty)
-                          const Center(child: Text('No crews found'))
-                        else
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 300),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: _crews.length,
-                              itemBuilder: (context, index) {
-                                final crew = _crews[index];
-                                // Get crew chief name from joined data or fallback to ID
-                                String chiefName;
-                                if (crew.crewChief != null) {
-                                  final firstName = crew.crewChief!['firstname'] as String? ?? '';
-                                  final lastName = crew.crewChief!['lastname'] as String? ?? '';
-                                  if (firstName.isNotEmpty || lastName.isNotEmpty) {
-                                    chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
-                                  } else {
-                                    chiefName = 'Chief ID: ${crew.crewChiefId}';
-                                  }
-                                } else {
-                                  chiefName = 'Chief ID: ${crew.crewChiefId}';
-                                }
-
-                                // Lookup crew type name
-                                String crewTypeName = crew.crewTypeId.toString();
-                                final crewTypeObj = _allCrewTypes.firstWhere(
-                                  (t) => t.id == crew.crewTypeId,
-                                  orElse: () => CrewType(id: -1, crewType: 'Unknown'),
-                                );
-                                if (crewTypeObj.id != -1) {
-                                  crewTypeName = crewTypeObj.crewType;
-                                }
-                                return Card(
-                                  child: ListTile(
-                                    title: Text(crewTypeName),
-                                    subtitle: Text('Crew Chief: $chiefName'),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit),
-                                          onPressed: () => _editCrew(crew),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete),
-                                          onPressed: () => _deleteCrew(crew.id),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

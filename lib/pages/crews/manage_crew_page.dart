@@ -5,6 +5,8 @@ import '../../models/user.dart' as app_models;
 import '../../models/crew_member.dart';
 import '../../widgets/settings_menu.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class ManageCrewPage extends StatefulWidget {
   final String crewId;
@@ -68,7 +70,6 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
   Future<void> _loadCrewMembers() async {
     try {
-      // First get the crew member records
       final crewMemberResponse = await Supabase.instance.client
           .from('crewmembers')
           .select('id, crew, crewmember')
@@ -84,22 +85,18 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         return;
       }
 
-      // Extract user IDs
       final userIds = crewMemberResponse.map((record) => record['crewmember'] as String).toList();
 
-      // Fetch user data separately
       final userResponse = await Supabase.instance.client
           .from('users')
           .select('supabase_id, firstname, lastname, phonenbr')
           .inFilter('supabase_id', userIds);
 
-      // Create a map of user data by ID
       final userMap = <String, Map<String, dynamic>>{};
       for (final user in userResponse) {
         userMap[user['supabase_id'] as String] = user;
       }
 
-      // Combine the data
       final combinedData = crewMemberResponse.map((crewMember) {
         final userId = crewMember['crewmember'] as String;
         final userData = userMap[userId];
@@ -151,7 +148,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to add crew member: $e'),
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: AppColors.statusError,
             ),
           );
         }
@@ -179,7 +176,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to remove crew member: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppColors.statusError,
           ),
         );
       }
@@ -191,92 +188,128 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.eventName} - ${widget.crewType} Crew'),
-        actions: [
-          const SettingsMenu(),
+        actions: const [
+          SettingsMenu(),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : Column(
-                  children: [
-                    // Crew Chief Information
-                    if (_crewChiefName != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Row(
-                          children: [
-                            Text(
-                              'Crew Chief: ',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              _crewChiefName!,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    // Crew Members List
-                    Expanded(
-                      child: _crewMembers.isEmpty
-                          ? const Center(
-                              child: Text('No crew members yet'),
-                            )
-                          : ListView.builder(
-                              key: const ValueKey('manage_crew_members_list'),
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _crewMembers.length,
-                              itemBuilder: (context, index) {
-                                final member = _crewMembers[index];
-                                final user = member.user;
-
-                                if (user == null) {
-                                  return const Card(
-                                    child: ListTile(
-                                      title: Text('Unknown User'),
-                                      subtitle: Text('User data not available'),
-                                    ),
-                                  );
-                                }
-
-                                return Card(
-                                  key: ValueKey('manage_crew_member_${user.supabaseId}'),
-                                  child: ListTile(
-                                    title: Text(user.fullName),
-                                    subtitle: Text(user.phoneNumber ?? 'No phone'),
-                                    trailing: IconButton(
-                                      key: ValueKey('manage_crew_remove_${user.supabaseId}'),
-                                      icon: const Icon(Icons.delete),
-                                      onPressed: () => _removeCrewMember(user.supabaseId),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
+      body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         key: const ValueKey('manage_crew_add_member_button'),
         onPressed: _addCrewMember,
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppColors.statusError,
+              ),
+              AppSpacing.verticalMd,
+              Text(
+                _error!,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.statusError,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              AppSpacing.verticalLg,
+              AppButton(
+                onPressed: _loadCrewData,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        if (_crewChiefName != null)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            color: colorScheme.surfaceContainerHighest,
+            child: Row(
+              children: [
+                Text(
+                  'Crew Chief: ',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  _crewChiefName!,
+                  style: AppTypography.bodyMedium(context),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: _crewMembers.isEmpty
+              ? const AppEmptyState(
+                  icon: Icons.person_add,
+                  title: 'No crew members yet',
+                  subtitle: 'Tap + to add crew members',
+                )
+              : ListView.builder(
+                  key: const ValueKey('manage_crew_members_list'),
+                  padding: AppSpacing.screenPadding,
+                  itemCount: _crewMembers.length,
+                  itemBuilder: (context, index) {
+                    final member = _crewMembers[index];
+                    final user = member.user;
+
+                    if (user == null) {
+                      return AppCard(
+                        margin: EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: const AppListTile(
+                          title: Text('Unknown User'),
+                          subtitle: Text('User data not available'),
+                        ),
+                      );
+                    }
+
+                    return AppCard(
+                      key: ValueKey('manage_crew_member_${user.supabaseId}'),
+                      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: AppListTile(
+                        title: Text(user.fullName),
+                        subtitle: Text(user.phoneNumber ?? 'No phone'),
+                        trailing: IconButton(
+                          key: ValueKey('manage_crew_remove_${user.supabaseId}'),
+                          icon: Icon(
+                            Icons.delete,
+                            color: AppColors.statusError,
+                          ),
+                          onPressed: () => _removeCrewMember(user.supabaseId),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

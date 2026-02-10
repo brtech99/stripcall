@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
+import '../theme/theme.dart';
 
 class AppMenu extends StatelessWidget {
   final bool showManageEvents;
-  
-  const AppMenu({
-    super.key,
-    this.showManageEvents = false,
-  });
+
+  const AppMenu({super.key, this.showManageEvents = false});
 
   @override
   Widget build(BuildContext context) {
@@ -14,16 +12,13 @@ class AppMenu extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
-          const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-            ),
+          DrawerHeader(
+            decoration: BoxDecoration(color: AppColors.primary(context)),
             child: Text(
               'Menu',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-              ),
+              style: AppTypography.headlineSmall(
+                context,
+              ).copyWith(color: AppColors.onPrimary(context)),
             ),
           ),
           // Add menu items here as needed
@@ -31,4 +26,4 @@ class AppMenu extends StatelessWidget {
       ),
     );
   }
-} 
+}

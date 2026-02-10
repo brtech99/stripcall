@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
 import '../../utils/debug_utils.dart';
+import '../../theme/theme.dart';
+import '../../widgets/adaptive/adaptive.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -31,12 +33,8 @@ class _LoginPageState extends State<LoginPage> {
       debugLog('Current session: ${session != null ? "exists" : "none"}');
 
       // Test a simple database query
-      await Supabase.instance.client
-          .from('users')
-          .select('count')
-          .limit(1);
+      await Supabase.instance.client.from('users').select('count').limit(1);
       debugLog('Database connection test successful');
-
     } catch (e) {
       debugLogError('Supabase connection test failed', e);
     }
@@ -84,11 +82,9 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login'),
-      ),
+      appBar: AppBar(title: const Text('Login')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: AppSpacing.screenPadding,
         child: Form(
           key: _formKey,
           child: Column(
@@ -96,17 +92,17 @@ class _LoginPageState extends State<LoginPage> {
             children: [
               if (_error != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: AppSpacing.paddingSm,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.errorContainer(context),
+                      borderRadius: AppSpacing.borderRadiusMd,
                     ),
                     child: Text(
                       _error!,
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        color: AppColors.onErrorContainer(context),
                       ),
                     ),
                   ),
@@ -114,10 +110,7 @@ class _LoginPageState extends State<LoginPage> {
               TextFormField(
                 key: const ValueKey('login_email_field'),
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
                 textCapitalization: TextCapitalization.none,
@@ -132,14 +125,11 @@ class _LoginPageState extends State<LoginPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               TextFormField(
                 key: const ValueKey('login_password_field'),
                 controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Password'),
                 obscureText: true,
                 enabled: !_isLoading,
                 validator: (value) {
@@ -149,37 +139,31 @@ class _LoginPageState extends State<LoginPage> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  key: const ValueKey('login_submit_button'),
-                  onPressed: _isLoading ? null : _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Login'),
-                ),
+              AppSpacing.verticalLg,
+              AppButton(
+                buttonKey: const ValueKey('login_submit_button'),
+                onPressed: _isLoading ? null : _handleLogin,
+                isLoading: _isLoading,
+                expand: true,
+                child: const Text('Login'),
               ),
-              const SizedBox(height: 16),
+              AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextButton(
-                    key: const ValueKey('login_forgot_password_button'),
-                    onPressed: _isLoading ? null : () => context.go(Routes.forgotPassword),
+                  AppButton.secondary(
+                    buttonKey: const ValueKey('login_forgot_password_button'),
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.go(Routes.forgotPassword),
                     child: const Text('Forgot Password'),
                   ),
-                  const SizedBox(width: 16),
-                  TextButton(
-                    key: const ValueKey('login_create_account_button'),
-                    onPressed: _isLoading ? null : () => context.go(Routes.register),
+                  AppSpacing.horizontalMd,
+                  AppButton.secondary(
+                    buttonKey: const ValueKey('login_create_account_button'),
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.go(Routes.register),
                     child: const Text('Create Account'),
                   ),
                 ],
