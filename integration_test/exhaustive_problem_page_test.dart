@@ -790,8 +790,8 @@ void main() {
         // ========================================================================
         debugPrint('=== STEP 30b: Second edit - Change strip to B2 ===');
 
-        // Wait a moment then find the edit button again
-        await tester.pump(const Duration(seconds: 1));
+        // Wait for the 30a dialog dismiss animation to fully complete
+        await _pumpForDuration(tester, const Duration(seconds: 2));
 
         // The problem card should still be expanded, find the edit button again
         var editBtn30b = find.byKey(
@@ -805,7 +805,7 @@ void main() {
         );
 
         if (editBtn30b.evaluate().isNotEmpty) {
-          await tester.tap(editBtn30b.first);
+          await tester.tap(editBtn30b.first, warnIfMissed: false);
           await _pumpForDuration(tester, const Duration(seconds: 1));
           debugPrint('Edit dialog opened for 30b');
 
@@ -1226,10 +1226,17 @@ void main() {
       if (actionDropdownResolve.evaluate().isNotEmpty) {
         await tester.tap(actionDropdownResolve);
         await _pumpForDuration(tester, const Duration(seconds: 1));
-        // Find any action and select it
-        final firstAction = find.byType(DropdownMenuItem<String>);
-        if (firstAction.evaluate().length > 1) {
-          await tester.tap(firstAction.at(1));
+        // Select an action by its visible text in the popup overlay.
+        // Tapping DropdownMenuItem by type hits the offstage copy.
+        var actionOption = find.text('Referred to ER');
+        if (actionOption.evaluate().isEmpty) {
+          actionOption = find.text('Cleared to continue');
+        }
+        if (actionOption.evaluate().isEmpty) {
+          actionOption = find.text('Ran Concussion Protocol');
+        }
+        if (actionOption.evaluate().isNotEmpty) {
+          await tester.tap(actionOption.first);
           await _pumpForDuration(tester, const Duration(seconds: 1));
         }
       }
@@ -1549,10 +1556,13 @@ void main() {
         await _scrollUntilVisible(tester, symptomClassReferee);
         await tester.tap(symptomClassReferee);
         await _pumpForDuration(tester, const Duration(seconds: 1));
-        // Select first available symptom class for Armorer
-        final symptomClassOpts = find.byType(DropdownMenuItem<String>);
-        if (symptomClassOpts.evaluate().length > 1) {
-          await tester.tap(symptomClassOpts.at(1));
+        // Select by visible text in popup overlay
+        var scOption = find.text('Weapon Issue');
+        if (scOption.evaluate().isEmpty) {
+          scOption = find.text('Scoring Equipment');
+        }
+        if (scOption.evaluate().isNotEmpty) {
+          await tester.tap(scOption.first);
           await _pumpForDuration(tester, const Duration(seconds: 1));
         }
       }
@@ -1565,9 +1575,16 @@ void main() {
         await _scrollUntilVisible(tester, symptomReferee);
         await tester.tap(symptomReferee);
         await _pumpForDuration(tester, const Duration(seconds: 1));
-        final symptomOpts = find.byType(DropdownMenuItem<String>);
-        if (symptomOpts.evaluate().length > 1) {
-          await tester.tap(symptomOpts.at(1));
+        // Select by visible text in popup overlay
+        var sOption = find.text('Blade broken');
+        if (sOption.evaluate().isEmpty) {
+          sOption = find.text('Point not registering');
+        }
+        if (sOption.evaluate().isEmpty) {
+          sOption = find.text('Reel not retracting');
+        }
+        if (sOption.evaluate().isNotEmpty) {
+          await tester.tap(sOption.first);
           await _pumpForDuration(tester, const Duration(seconds: 1));
         }
       }
@@ -1809,13 +1826,13 @@ Future<void> _selectSimulatorCrewPhone(
     await tester.tap(dropdown);
     await _pumpForDuration(tester, const Duration(seconds: 1));
 
-    final option = find.byKey(
-      ValueKey('sms_simulator_crew_option_${index}_$crewType'),
-    );
-    if (option.evaluate().isNotEmpty) {
-      await tester.tap(option.first);
-      await _pumpForDuration(tester, const Duration(seconds: 1));
-    }
+    // Tap the option by its visible text in the popup overlay.
+    // DropdownMenuItem keys live on the original (offstage) items, not the
+    // popup copy, so tapping by key hits the wrong render object.
+    final crewLabel = crewType[0].toUpperCase() + crewType.substring(1);
+    final option = find.textContaining(crewLabel).last;
+    await tester.tap(option, warnIfMissed: false);
+    await _pumpForDuration(tester, const Duration(seconds: 1));
   }
 }
 
