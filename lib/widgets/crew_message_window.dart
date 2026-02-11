@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
 import '../models/crew_message.dart';
 import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
@@ -20,23 +18,21 @@ class CrewMessageWindow extends StatefulWidget {
   });
 
   @override
-  State<CrewMessageWindow> createState() => _CrewMessageWindowState();
+  CrewMessageWindowState createState() => CrewMessageWindowState();
 }
 
-class _CrewMessageWindowState extends State<CrewMessageWindow> {
+class CrewMessageWindowState extends State<CrewMessageWindow> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<CrewMessage> _messages = [];
   bool _isLoading = true;
   bool _isExpanded = false;
-  Timer? _updateTimer;
-  Set<int> _readMessageIds = {}; // Track which messages the user has seen
+  Set<int> _readMessageIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
-    _startUpdateTimer();
     _loadReadMessageIds();
   }
 
@@ -44,16 +40,12 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _updateTimer?.cancel();
     super.dispose();
   }
 
-  void _startUpdateTimer() {
-    _updateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) {
-        _checkForNewMessages();
-      }
-    });
+  /// Public method to check for new messages. Called by parent's update timer.
+  Future<void> checkForNewMessages() async {
+    await _checkForNewMessages();
   }
 
   Future<void> _loadReadMessageIds() async {
@@ -183,7 +175,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
         await Supabase.instance.client.from('crew_messages').insert(insertData);
       } catch (insertError) {
         debugLogError('Error inserting crew message', insertError);
-        throw insertError;
+        rethrow;
       }
 
       // Clear the input immediately
@@ -319,10 +311,7 @@ class _CrewMessageWindowState extends State<CrewMessageWindow> {
                 Expanded(
                   child: AppTextField(
                     controller: _messageController,
-                    decoration: const InputDecoration(
-                      hintText: 'Type a crew message...',
-                      isDense: true,
-                    ),
+                    hint: 'Type a crew message...',
                     maxLines: 1,
                     onSubmitted: (_) => _sendMessage(),
                   ),

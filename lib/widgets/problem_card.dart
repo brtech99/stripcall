@@ -12,6 +12,7 @@ class ProblemCard extends StatefulWidget {
   final bool isUserResponding;
   final int? userCrewId;
   final bool isSuperUser;
+  final bool isExpanded;
   final List<Map<String, dynamic>>? responders;
   final VoidCallback onToggleExpansion;
   final VoidCallback onResolve;
@@ -28,6 +29,7 @@ class ProblemCard extends StatefulWidget {
     required this.isUserResponding,
     required this.userCrewId,
     required this.isSuperUser,
+    required this.isExpanded,
     this.responders,
     required this.onToggleExpansion,
     required this.onResolve,
@@ -41,8 +43,6 @@ class ProblemCard extends StatefulWidget {
 }
 
 class _ProblemCardState extends State<ProblemCard> {
-  bool _isExpanded = false;
-
   @override
   void initState() {
     super.initState();
@@ -118,10 +118,7 @@ class _ProblemCardState extends State<ProblemCard> {
           ),
         ),
         IconButton(
-          onPressed: () {
-            setState(() => _isExpanded = !_isExpanded);
-            widget.onToggleExpansion();
-          },
+          onPressed: widget.onToggleExpansion,
           icon: Icon(
             Icons.expand_more,
             size: AppSpacing.iconMd,
@@ -198,10 +195,7 @@ class _ProblemCardState extends State<ProblemCard> {
             ],
             const Spacer(),
             IconButton(
-              onPressed: () {
-                setState(() => _isExpanded = !_isExpanded);
-                widget.onToggleExpansion();
-              },
+              onPressed: widget.onToggleExpansion,
               icon: Icon(
                 Icons.expand_less,
                 size: 28,
@@ -269,6 +263,10 @@ class _ProblemCardState extends State<ProblemCard> {
           crewId: widget.problem.crewId,
           originator: widget.problem.originatorName ?? 'Unknown',
           currentUserId: widget.currentUserId,
+          isCrewMember:
+              widget.userCrewId != null &&
+              widget.userCrewId == widget.problem.crewId,
+          isSuperUser: widget.isSuperUser,
         ),
         AppSpacing.verticalXs,
         Row(
@@ -305,13 +303,10 @@ class _ProblemCardState extends State<ProblemCard> {
     return Card(
       key: ValueKey('problem_card_${widget.problem.id}'),
       child: InkWell(
-        onTap: () {
-          setState(() => _isExpanded = !_isExpanded);
-          widget.onToggleExpansion();
-        },
+        onTap: widget.onToggleExpansion,
         child: Padding(
           padding: AppSpacing.cardPadding,
-          child: _isExpanded
+          child: widget.isExpanded
               ? _buildExpandedProblem()
               : _buildCollapsedProblem(),
         ),

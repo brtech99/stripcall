@@ -9,7 +9,8 @@ import 'package:patrol/src/platform/contracts/contracts.dart';
 import 'package:test_api/src/backend/invoker.dart';
 
 // START: GENERATED TEST IMPORTS
-import 'Users/brosen/Downloads/stripcallC/stripcall/integration_test/problem_page_test.dart' as Users__brosen__Downloads__stripcallC__stripcall__integration_test__problem_page_test;
+import '../integration_test/app_test.dart'
+    as Users__brosen__Downloads__stripcallC__stripcall__integration_test__app_test;
 // END: GENERATED TEST IMPORTS
 
 Future<void> main() async {
@@ -72,7 +73,11 @@ Future<void> main() async {
   });
 
   // START: GENERATED TEST GROUPS
-  group('Users.brosen.Downloads.stripcallC.stripcall.integration_test.problem_page_test', Users__brosen__Downloads__stripcallC__stripcall__integration_test__problem_page_test.main);
+  group(
+    'Users.brosen.Downloads.stripcallC.stripcall.integration_test.app_test',
+    Users__brosen__Downloads__stripcallC__stripcall__integration_test__app_test
+        .main,
+  );
   // END: GENERATED TEST GROUPS
 
   final dartTestGroup = await testExplorationCompleter.future;

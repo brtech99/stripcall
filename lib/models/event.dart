@@ -9,6 +9,7 @@ class Event {
   final int count;
   final String organizerId;
   final Map<String, dynamic>? organizer;
+  final bool useSms;
 
   const Event({
     required this.id,
@@ -21,13 +22,14 @@ class Event {
     required this.count,
     required this.organizerId,
     this.organizer,
+    this.useSms = false,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
     // Handle organizer data - could be string (ID) or Map (joined data)
     String organizerId;
     Map<String, dynamic>? organizer;
-    
+
     if (json['organizer'] is Map<String, dynamic>) {
       // Joined data from users table
       organizer = json['organizer'] as Map<String, dynamic>;
@@ -37,7 +39,7 @@ class Event {
       organizerId = json['organizer']?.toString() ?? '';
       organizer = null;
     }
-    
+
     // Handle count field more safely
     int countValue = 0;
     if (json['count'] != null) {
@@ -49,7 +51,7 @@ class Event {
         countValue = int.tryParse(json['count'].toString()) ?? 0;
       }
     }
-    
+
     // Handle ID field more safely
     int idValue;
     try {
@@ -63,7 +65,7 @@ class Event {
     } catch (e) {
       rethrow;
     }
-    
+
     return Event(
       id: idValue,
       name: json['name'] ?? '',
@@ -75,6 +77,7 @@ class Event {
       count: countValue,
       organizerId: organizerId,
       organizer: organizer,
+      useSms: json['use_sms'] ?? false,
     );
   }
 
@@ -89,6 +92,7 @@ class Event {
       'stripnumbering': stripNumbering,
       'count': count,
       'organizer': organizerId,
+      'use_sms': useSms,
     };
   }
 
@@ -96,4 +100,4 @@ class Event {
   String toString() {
     return 'Event(id: $id, name: $name, city: $city, state: $state, start: $startDateTime, end: $endDateTime, organizer: $organizerId)';
   }
-} 
+}

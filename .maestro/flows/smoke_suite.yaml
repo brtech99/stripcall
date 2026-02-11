@@ -2,7 +2,7 @@
 # Runs the complete smoke test flow: login -> select event/crew -> report problem -> resolve -> logout
 # Tags: smoke
 
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 tags:
   - smoke
   - suite

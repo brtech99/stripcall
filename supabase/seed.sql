@@ -193,7 +193,8 @@ INSERT INTO public.users (supabase_id, firstname, lastname, phonenbr, superuser,
 -- ============================================================================
 INSERT INTO public.crewtypes (crewtype) VALUES
   ('Armorer'),
-  ('Medical');
+  ('Medical'),
+  ('Natloff');
 
 -- ============================================================================
 -- SYMPTOM CLASSES (linked to crew types)
@@ -209,7 +210,11 @@ INSERT INTO public.symptomclass (symptomclassstring, "crewType", display_order) 
   ('Injury', 2, 1),
   ('Illness', 2, 2),
   ('Head', 2, 3),      -- For Concussion symptom
-  ('General', 2, 99);  -- For SMS Report - Needs Triage
+  ('General', 2, 99),  -- For SMS Report - Needs Triage
+  -- Natloff symptom classes
+  ('Rules Violation', 3, 1),
+  ('Card Issue', 3, 2),
+  ('General', 3, 99);  -- For SMS Report - Needs Triage
 
 -- ============================================================================
 -- SYMPTOMS (linked to symptom classes)
@@ -217,6 +222,7 @@ INSERT INTO public.symptomclass (symptomclassstring, "crewType", display_order) 
 -- Symptom class IDs after insert:
 --   1=Weapon Issue, 2=Scoring Equipment, 3=Electrical, 4=General(Armorer)
 --   5=Injury, 6=Illness, 7=Head, 8=General(Medical)
+--   9=Rules Violation, 10=Card Issue, 11=General(Natloff)
 INSERT INTO public.symptom (symptomclass, symptomstring, display_order) VALUES
   -- Weapon Issue symptoms (symptomclass=1)
   (1, 'Blade broken', 1),
@@ -245,7 +251,17 @@ INSERT INTO public.symptom (symptomclass, symptomstring, display_order) VALUES
   (7, 'Laceration to head', 2),
   -- General (Medical) symptoms (symptomclass=8)
   (8, 'SMS Report - Needs Triage', 1),
-  (8, 'Other', 99);
+  (8, 'Other', 99),
+  -- Rules Violation symptoms (symptomclass=9)
+  (9, 'Black card', 1),
+  (9, 'Red card', 2),
+  (9, 'Yellow card', 3),
+  -- Card Issue symptoms (symptomclass=10)
+  (10, 'Missing card', 1),
+  (10, 'Expired card', 2),
+  -- General (Natloff) symptoms (symptomclass=11)
+  (11, 'SMS Report - Needs Triage', 1),
+  (11, 'Other', 99);
 
 -- ============================================================================
 -- ACTIONS (linked to symptoms for resolution)
@@ -259,6 +275,9 @@ INSERT INTO public.symptom (symptomclass, symptomstring, display_order) VALUES
 --   14=Feeling faint, 15=Dehydration, 16=Nausea
 --   17=Concussion, 18=Laceration to head
 --   19=SMS Report - Needs Triage (Medical), 20=Other (Medical)
+--   21=Black card, 22=Red card, 23=Yellow card
+--   24=Missing card, 25=Expired card
+--   26=SMS Report - Needs Triage (Natloff), 27=Other (Natloff)
 INSERT INTO public.action (symptom, actionstring, display_order) VALUES
   -- Actions for Blade broken (symptom=1)
   (1, 'Replaced blade', 1),
@@ -325,7 +344,27 @@ INSERT INTO public.action (symptom, actionstring, display_order) VALUES
   (19, 'Reclassified problem', 2),
   -- Actions for Other (Medical) (symptom=20)
   (20, 'Resolved', 1),
-  (20, 'Other', 99);
+  (20, 'Other', 99),
+  -- Actions for Black card (symptom=21)
+  (21, 'Card issued', 1),
+  (21, 'Referred to committee', 2),
+  -- Actions for Red card (symptom=22)
+  (22, 'Card issued', 1),
+  (22, 'Referred to committee', 2),
+  -- Actions for Yellow card (symptom=23)
+  (23, 'Card issued', 1),
+  -- Actions for Missing card (symptom=24)
+  (24, 'Issued temporary card', 1),
+  (24, 'Resolved', 2),
+  -- Actions for Expired card (symptom=25)
+  (25, 'Issued temporary card', 1),
+  (25, 'Resolved', 2),
+  -- Actions for SMS Report - Needs Triage (Natloff) (symptom=26)
+  (26, 'Triaged and resolved', 1),
+  (26, 'Reclassified problem', 2),
+  -- Actions for Other (Natloff) (symptom=27)
+  (27, 'Resolved', 1),
+  (27, 'Other', 99);
 
 -- ============================================================================
 -- PRE-CONFIGURED EVENT FOR E2E TESTING
@@ -380,6 +419,8 @@ INSERT INTO public.crewmembers (crew, crewmember) VALUES
 -- e2e_medical2@test.com      | TestPassword123!  | Medical crew member | 2025551004
 -- e2e_referee1@test.com      | TestPassword123!  | Referee (no crew)   | (none)
 -- ============================================================================
+--
+-- CREW TYPES: Armorer=1, Medical=2, Natloff=3
 --
 -- SMS SIMULATOR PHONE MAPPING:
 -- SimPhone.phone1 (2025551001) -> Armorer One (crew chief)

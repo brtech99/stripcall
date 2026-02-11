@@ -144,15 +144,19 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
           .eq('supabase_id', userId)
           .single();
 
-      await Supabase.instance.client.from('problem').update({
-        'action': int.parse(_selectedAction!),
-        'notes': _notesController.text.trim(),
-        'actionby': userId,
-        'enddatetime': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', widget.problemId);
+      await Supabase.instance.client
+          .from('problem')
+          .update({
+            'action': int.parse(_selectedAction!),
+            'notes': _notesController.text.trim(),
+            'actionby': userId,
+            'enddatetime': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', widget.problemId);
 
       // Capture values needed for notification before popping
-      final resolverName = '${userResponse['firstname']} ${userResponse['lastname']}';
+      final resolverName =
+          '${userResponse['firstname']} ${userResponse['lastname']}';
       final resolution = actionResponse['actionstring'] as String;
       final strip = problemResponse['strip'] as String;
       final crewId = problemResponse['crew'].toString();
@@ -163,22 +167,28 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       Navigator.of(context).pop(true);
 
       // Send notification (fire and forget - don't block UI)
-      NotificationService().sendCrewNotification(
-        title: 'Problem Resolved',
-        body: 'Strip $strip resolved by $resolverName: $resolution',
-        crewId: crewId,
-        senderId: userId,
-        data: {
-          'type': 'problem_resolved',
-          'problemId': problemId.toString(),
-          'crewId': crewId,
-          'strip': strip,
-        },
-        includeReporter: true, // Include reporter so they know their problem is resolved
-        reporterId: reporterId,
-      ).catchError((e) {
-        debugLogError('Failed to send notification (problem was resolved successfully)', e);
-      });
+      NotificationService()
+          .sendCrewNotification(
+            title: 'Problem Resolved',
+            body: 'Strip $strip resolved by $resolverName: $resolution',
+            crewId: crewId,
+            senderId: userId,
+            data: {
+              'type': 'problem_resolved',
+              'problemId': problemId.toString(),
+              'crewId': crewId,
+              'strip': strip,
+            },
+            includeReporter:
+                true, // Include reporter so they know their problem is resolved
+            reporterId: reporterId,
+          )
+          .catchError((e) {
+            debugLogError(
+              'Failed to send notification (problem was resolved successfully)',
+              e,
+            );
+          });
     } catch (e) {
       debugLogError('Failed to resolve problem', e);
       if (!mounted) return;
@@ -217,20 +227,26 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           padding: const EdgeInsets.only(bottom: 16),
                           child: Text(
                             _error!,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                           ),
                         ),
                       if (_problemSymptomId != null) ...[
                         Text(
                           'Available resolutions for this problem (${_actions.length} found)',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                         ),
                         AppSpacing.verticalSm,
                       ],
                       SizedBox(
                         width: double.infinity,
                         child: DropdownButtonFormField<String>(
-                          key: const ValueKey('resolve_problem_action_dropdown'),
+                          key: const ValueKey(
+                            'resolve_problem_action_dropdown',
+                          ),
                           value: _selectedAction,
                           decoration: const InputDecoration(
                             labelText: 'Resolution',
@@ -238,35 +254,34 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           menuMaxHeight: 200,
                           isExpanded: true,
                           items: _actions.isEmpty
-                            ? [
-                                const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('No Resolutions Available'),
-                                ),
-                              ]
-                            : _actions.map((action) {
-                                return DropdownMenuItem(
-                                  value: action['id'].toString(),
-                                  child: Text(
-                                    action['actionstring'],
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 2,
+                              ? [
+                                  const DropdownMenuItem(
+                                    value: null,
+                                    child: Text('No Resolutions Available'),
                                   ),
-                                );
-                              }).toList(),
-                          onChanged: _actions.isEmpty ? null : (value) {
-                            setState(() => _selectedAction = value);
-                          },
+                                ]
+                              : _actions.map((action) {
+                                  return DropdownMenuItem(
+                                    value: action['id'].toString(),
+                                    child: Text(
+                                      action['actionstring'],
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 2,
+                                    ),
+                                  );
+                                }).toList(),
+                          onChanged: _actions.isEmpty
+                              ? null
+                              : (value) {
+                                  setState(() => _selectedAction = value);
+                                },
                         ),
                       ),
                       AppSpacing.verticalMd,
                       AppTextField(
                         key: const ValueKey('resolve_problem_notes_field'),
                         controller: _notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Notes (Optional)',
-                          border: OutlineInputBorder(),
-                        ),
+                        label: 'Notes (Optional)',
                         maxLines: 3,
                       ),
                     ],
@@ -279,7 +294,9 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                 children: [
                   TextButton(
                     key: const ValueKey('resolve_problem_cancel_button'),
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   AppSpacing.horizontalSm,

@@ -3,7 +3,7 @@
 # Prerequisites: User must be logged in
 # Tags: smoke, auth
 
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 tags:
   - smoke
   - auth

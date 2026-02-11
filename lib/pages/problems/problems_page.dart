@@ -15,6 +15,7 @@ import '../../widgets/adaptive/adaptive.dart';
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
 import 'edit_symptom_dialog.dart';
+import 'problems_state.dart';
 
 class ProblemsPage extends StatefulWidget {
   final int eventId;
@@ -34,20 +35,10 @@ class ProblemsPage extends StatefulWidget {
 
 class _ProblemsPageState extends State<ProblemsPage> {
   final ProblemService _problemService = ProblemService();
+  final GlobalKey<CrewMessageWindowState> _crewMessageKey = GlobalKey();
 
-  List<ProblemWithDetails> _problems = [];
-  bool _isLoading = true;
-  String? _error;
-  bool _isReferee = false;
-  Timer? _cleanupTimer;
+  ProblemsPageState _state = const ProblemsPageState();
   Timer? _updateTimer;
-  int? _userCrewId;
-  String? _userCrewName;
-  bool _isSuperUser = false;
-  List<Map<String, dynamic>> _allCrews = [];
-  int? _selectedCrewId;
-  final Set<int> _expandedProblems = {};
-  Map<int, List<Map<String, dynamic>>> _responders = {};
 
   @override
   void initState() {
@@ -55,28 +46,103 @@ class _ProblemsPageState extends State<ProblemsPage> {
     _initialize();
   }
 
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initialize() async {
-    await _checkSuperUserStatus(); // This loads crews for superusers and sets _selectedCrewId
+    await _checkSuperUserStatus();
     await _determineUserCrewInfo();
     await _loadCrewInfo();
-    await _loadProblems(); // This will use the _selectedCrewId set above
+    await _loadProblems();
 
-    // Start timers
-    _cleanupTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _cleanupResolvedProblems(),
-    );
     _updateTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _checkForUpdates(),
     );
   }
 
-  @override
-  void dispose() {
-    _cleanupTimer?.cancel();
-    _updateTimer?.cancel();
-    super.dispose();
+  void _updateState(ProblemsPageState newState) {
+    if (mounted) {
+      setState(() {
+        _state = newState;
+      });
+    }
+  }
+
+  Future<void> _checkSuperUserStatus() async {
+    final isSuperUser = await _problemService.checkSuperUserStatus();
+    _updateState(_state.copyWith(isSuperUser: isSuperUser));
+
+    if (isSuperUser) {
+      await _loadAllCrews();
+    }
+  }
+
+  Future<void> _loadAllCrews() async {
+    final crews = await _problemService.loadAllCrewsForEvent(widget.eventId);
+
+    int? selectedCrewId = _state.selectedCrewId;
+    if (selectedCrewId == null && crews.isNotEmpty) {
+      selectedCrewId = crews.first['id'] as int;
+    }
+
+    _updateState(
+      _state.copyWith(allCrews: crews, selectedCrewId: selectedCrewId),
+    );
+  }
+
+  Future<void> _loadCrewInfo() async {
+    if (widget.crewId != null) {
+      final isReferee = await _problemService.isUserRefereeForCrew(
+        widget.crewId!,
+      );
+      _updateState(_state.copyWith(isReferee: isReferee));
+    }
+  }
+
+  Future<void> _determineUserCrewInfo() async {
+    final crewInfo = await _problemService.getUserCrewInfo(widget.eventId);
+    _updateState(
+      _state.copyWith(
+        userCrewId: crewInfo.crewId,
+        userCrewName: crewInfo.crewName,
+        clearUserCrewId: crewInfo.crewId == null,
+        clearUserCrewName: crewInfo.crewName == null,
+      ),
+    );
+  }
+
+  Future<void> _loadProblems() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not logged in');
+
+      final crewId = _state.getActiveCrewId(widget.crewId);
+      final problems = await _problemService.loadProblems(
+        eventId: widget.eventId,
+        userId: userId,
+        crewId: crewId,
+        isSuperUser: _state.isSuperUser,
+      );
+
+      _updateState(
+        _state.copyWith(problems: problems, isLoading: false, clearError: true),
+      );
+
+      await _loadResponders();
+    } catch (e) {
+      _updateState(
+        _state.copyWith(error: 'Failed to load problems: $e', isLoading: false),
+      );
+    }
+  }
+
+  Future<void> _loadResponders() async {
+    final responders = await _problemService.loadResponders(_state.problems);
+    _updateState(_state.copyWith(responders: responders));
   }
 
   Future<void> _checkForUpdates() async {
@@ -86,8 +152,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      final latestProblemTime = _problems.isNotEmpty
-          ? _problems
+      final latestProblemTime = _state.problems.isNotEmpty
+          ? _state.problems
                 .map((p) => p.startDateTime)
                 .reduce((a, b) => a.isAfter(b) ? a : b)
           : DateTime(1970);
@@ -95,10 +161,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _checkForNewProblems(latestProblemTime);
       await _checkForNewMessages(latestProblemTime);
       await _checkForResolvedProblems(latestProblemTime);
-      await _loadResponders(); // Refresh responder data for "On my way" updates
+
+      // Check for new crew messages (consolidated from CrewMessageWindow's 5s timer)
+      _crewMessageKey.currentState?.checkForNewMessages();
+      await _loadResponders();
+
+      // Cleanup resolved problems older than 5 minutes
+      _cleanupResolvedProblems();
     } catch (e) {
       debugLogError('Error checking for updates', e);
-      // Error checking for updates
     }
   }
 
@@ -109,92 +180,75 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      final crewId = _isSuperUser ? _selectedCrewId : widget.crewId;
+      final crewId = _state.getActiveCrewId(widget.crewId);
       final newProblems = await _problemService.checkForNewProblems(
         eventId: widget.eventId,
         userId: userId,
         since: since,
         crewId: crewId,
-        isSuperUser: _isSuperUser,
+        isSuperUser: _state.isSuperUser,
       );
 
-      if (mounted && newProblems.isNotEmpty) {
-        for (final problem in newProblems) {
-          try {
-            await _handleNewProblem(problem);
-          } catch (e) {
-            // Error handling new problem
-          }
-        }
+      for (final problem in newProblems) {
+        await _handleNewProblem(problem);
       }
     } catch (e) {
       debugLogError('Error checking for new problems', e);
-      // Error checking for new problems
     }
   }
 
   Future<void> _checkForNewMessages(DateTime since) async {
-    if (!mounted) return;
+    if (!mounted || _state.problems.isEmpty) return;
 
     try {
-      if (_problems.isEmpty) return;
-
-      final problemIds = _problems.map((p) => p.id).toList();
+      final problemIds = _state.problems.map((p) => p.id).toList();
       final newMessages = await _problemService.checkForNewMessages(
         since: since,
         problemIds: problemIds,
       );
 
-      if (mounted && newMessages.isNotEmpty) {
-        for (final message in newMessages) {
-          await _handleNewMessage(message);
-        }
+      for (final message in newMessages) {
+        _handleNewMessage(message);
       }
     } catch (e) {
       debugLogError('Error checking for new messages', e);
-      // Error checking for new messages
     }
   }
 
   Future<void> _checkForResolvedProblems(DateTime since) async {
     if (!mounted) return;
 
-    // For reporters (no crew), use the new checkForProblemUpdates method
+    // For reporters (no crew), use the checkForProblemUpdates method
     if (widget.crewId == null) {
-      if (_problems.isEmpty) return;
+      if (_state.problems.isEmpty) return;
 
       try {
-        // Only check for updates on unresolved problems
-        final unresolvedProblemIds = _problems
+        final unresolvedProblemIds = _state.problems
             .where((p) => p.resolvedDateTime == null)
             .map((p) => p.id)
             .toList();
 
-        if (unresolvedProblemIds.isEmpty) {
-          return;
-        }
+        if (unresolvedProblemIds.isEmpty) return;
 
         final updatedProblems = await _problemService.checkForProblemUpdates(
           since: since,
           problemIds: unresolvedProblemIds,
         );
 
-        if (mounted && updatedProblems.isNotEmpty) {
-          for (final updated in updatedProblems) {
-            try {
-              final enddatetime = updated['enddatetime'] as String?;
-              if (enddatetime != null) {
-                final resolvedTime = DateTime.parse(enddatetime);
-                final problemId = (updated['id'] as num).toInt();
-                await _handleProblemResolved(
-                  problemId,
-                  resolvedTime,
-                  resolvedData: updated,
-                );
-              }
-            } catch (e) {
-              debugLogError('Error handling updated problem', e);
+        for (final updated in updatedProblems) {
+          try {
+            final enddatetime = updated['enddatetime'] as String?;
+            if (enddatetime != null) {
+              final resolvedTime = DateTime.parse(enddatetime);
+              final problemId = (updated['id'] as num).toInt();
+              _handleProblemResolved(
+                problemId,
+                resolvedTime,
+                resolvedData: updated,
+              );
             }
+          } catch (e) {
+            debugLogError('Error handling updated problem', e);
           }
         }
       } catch (e) {
@@ -210,45 +264,41 @@ class _ProblemsPageState extends State<ProblemsPage> {
         since: since,
       );
 
-      if (mounted && resolvedProblems.isNotEmpty) {
-        for (final resolved in resolvedProblems) {
-          try {
-            String? resolvedTimeStr;
-            if (resolved.containsKey('enddatetime')) {
-              resolvedTimeStr = resolved['enddatetime'] as String?;
-            } else if (resolved.containsKey('resolveddatetime')) {
-              resolvedTimeStr = resolved['resolveddatetime'] as String?;
-            }
-
-            if (resolvedTimeStr != null) {
-              final resolvedTime = DateTime.parse(resolvedTimeStr);
-              final problemId = (resolved['id'] as num).toInt();
-              await _handleProblemResolved(
-                problemId,
-                resolvedTime,
-                resolvedData:
-                    resolved, // Pass the full resolved data including action and actionby
-              );
-            }
-          } catch (e) {
-            // Error handling resolved problem
+      for (final resolved in resolvedProblems) {
+        try {
+          String? resolvedTimeStr;
+          if (resolved.containsKey('enddatetime')) {
+            resolvedTimeStr = resolved['enddatetime'] as String?;
+          } else if (resolved.containsKey('resolveddatetime')) {
+            resolvedTimeStr = resolved['resolveddatetime'] as String?;
           }
-        }
 
-        // Remove problems that were resolved more than 5 minutes ago
-        setState(() {
-          _problems.removeWhere((problem) {
-            if (problem.resolvedDateTimeParsed == null) return false;
-            return DateTime.now()
-                    .difference(problem.resolvedDateTimeParsed!)
-                    .inMinutes >=
-                5;
-          });
-        });
+          if (resolvedTimeStr != null) {
+            final resolvedTime = DateTime.parse(resolvedTimeStr);
+            final problemId = (resolved['id'] as num).toInt();
+            _handleProblemResolved(
+              problemId,
+              resolvedTime,
+              resolvedData: resolved,
+            );
+          }
+        } catch (e) {
+          debugLogError('Error handling resolved problem', e);
+        }
       }
+
+      // Remove problems that were resolved more than 5 minutes ago
+      _updateState(
+        _state.removeProblemsWhere((problem) {
+          if (problem.resolvedDateTimeParsed == null) return false;
+          return DateTime.now()
+                  .difference(problem.resolvedDateTimeParsed!)
+                  .inMinutes >=
+              5;
+        }),
+      );
     } catch (e) {
       debugLogError('Error checking for resolved problems', e);
-      // Continue working even if this fails
     }
   }
 
@@ -260,197 +310,56 @@ class _ProblemsPageState extends State<ProblemsPage> {
     // Filter out resolved problems that are older than 5 minutes
     if (problemWithDetails.resolvedDateTimeParsed != null) {
       final resolvedTime = problemWithDetails.resolvedDateTimeParsed!;
-      final now = DateTime.now();
-      final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
-
-      if (minutesSinceResolved >= 5) {
-        return;
-      }
+      final minutesSinceResolved = DateTime.now()
+          .difference(resolvedTime)
+          .inMinutes;
+      if (minutesSinceResolved >= 5) return;
     }
 
-    setState(() {
-      if (!_problems.any((p) => p.id == problemWithDetails.id)) {
-        _problems.add(problemWithDetails);
-        _problems.sort((a, b) => b.startDateTime.compareTo(a.startDateTime));
-      }
-    });
+    _updateState(_state.addProblem(problemWithDetails));
   }
 
-  Future<void> _handleNewMessage(Map<String, dynamic> message) async {
+  void _handleNewMessage(Map<String, dynamic> message) {
     if (!mounted) return;
-
-    setState(() {
-      final problemId = message['problem'] as int;
-      final problemIndex = _problems.indexWhere((p) => p.id == problemId);
-      if (problemIndex != -1) {
-        final problem = _problems[problemIndex];
-        final updatedMessages = <Map<String, dynamic>>[
-          ...(problem.messages ?? []),
-        ];
-
-        final messageId = message['id'] as int;
-        final messageExists = updatedMessages.any((m) => m['id'] == messageId);
-
-        if (!messageExists) {
-          updatedMessages.add(message);
-          _problems[problemIndex] = problem.copyWith(messages: updatedMessages);
-        }
-      }
-    });
+    final problemId = message['problem'] as int;
+    _updateState(_state.addMessageToProblem(problemId, message));
   }
 
-  Future<void> _handleProblemResolved(
+  void _handleProblemResolved(
     int problemId,
     DateTime resolvedTime, {
     Map<String, dynamic>? resolvedData,
-  }) async {
+  }) {
     if (!mounted) return;
 
-    setState(() {
-      final problemIndex = _problems.indexWhere((p) => p.id == problemId);
-      if (problemIndex != -1) {
-        final problem = _problems[problemIndex];
-
-        // If we have resolution data (action, actionby), update those too
+    _updateState(
+      _state.updateProblem(problemId, (problem) {
         if (resolvedData != null && resolvedData.containsKey('action_data')) {
-          _problems[problemIndex] = problem.copyWith(
+          return problem.copyWith(
             resolvedDateTime: resolvedTime.toIso8601String(),
             action: resolvedData['action_data'],
             actionBy: resolvedData['actionby_data'],
           );
-        } else {
-          // Fallback to just updating resolved time
-          _problems[problemIndex] = problem.copyWith(
-            resolvedDateTime: resolvedTime.toIso8601String(),
-          );
         }
-      }
-      // Problem not in list is expected - may be from different crew or already cleaned up
-    });
+        return problem.copyWith(
+          resolvedDateTime: resolvedTime.toIso8601String(),
+        );
+      }),
+    );
   }
 
-  Future<void> _cleanupResolvedProblems() async {
+  void _cleanupResolvedProblems() {
     if (!mounted) return;
 
-    final now = DateTime.now();
-    final resolvedProblems = _problems.where((problem) {
-      if (problem.resolvedDateTimeParsed == null) return false;
-      return now.difference(problem.resolvedDateTimeParsed!).inMinutes >= 5;
-    }).toList();
-
-    if (resolvedProblems.isNotEmpty) {
-      setState(() {
-        _problems.removeWhere((problem) => resolvedProblems.contains(problem));
-      });
-    }
-  }
-
-  /// Get the currently active crew ID (either from widget or selected by super user)
-  int? _getActiveCrewId() {
-    return _isSuperUser ? _selectedCrewId : widget.crewId;
-  }
-
-  /// Determine if the crew message window should be shown
-  /// Shows for: crew members of the selected crew OR super users viewing a crew
-  bool _shouldShowCrewMessageWindow() {
-    final activeCrewId = _getActiveCrewId();
-    if (activeCrewId == null) return false;
-
-    // Super users can see crew messages for any crew they select
-    if (_isSuperUser) return true;
-
-    // Regular users can see crew messages if they're a member of the active crew
-    return !_isReferee && widget.crewId != null;
-  }
-
-  Future<void> _loadCrewInfo() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) throw Exception('User not logged in');
-
-      if (widget.crewId != null) {
-        final crewMemberResponse = await Supabase.instance.client
-            .from('crewmembers')
-            .select('crew:crew(id, crewtype:crewtypes(crewtype))')
-            .eq('crew', widget.crewId!)
-            .eq('crewmember', userId)
-            .maybeSingle();
-
-        if (mounted) {
-          setState(() {
-            _isReferee = crewMemberResponse == null;
-          });
-        }
-      }
-    } catch (e) {
-      // Error loading crew info
-    }
-  }
-
-  Future<void> _loadProblems() async {
-    try {
-      print('DEBUG: _loadProblems START ${DateTime.now()}');
-      final startTime = DateTime.now();
-
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) throw Exception('User not logged in');
-
-      final crewId = _isSuperUser ? _selectedCrewId : widget.crewId;
-      print(
-        'DEBUG: About to call loadProblems with crewId=$crewId, isSuperUser=$_isSuperUser',
-      );
-
-      final problems = await _problemService.loadProblems(
-        eventId: widget.eventId,
-        userId: userId,
-        crewId: crewId,
-        isSuperUser: _isSuperUser,
-      );
-
-      final afterLoadProblems = DateTime.now();
-      print(
-        'DEBUG: loadProblems completed in ${afterLoadProblems.difference(startTime).inMilliseconds}ms',
-      );
-
-      if (mounted) {
-        setState(() {
-          _problems = problems;
-          _isLoading = false;
-        });
-
-        // Load responders data after problems are loaded
-        print('DEBUG: About to call _loadResponders');
-        await _loadResponders();
-
-        final afterLoadResponders = DateTime.now();
-        print(
-          'DEBUG: _loadResponders completed in ${afterLoadResponders.difference(afterLoadProblems).inMilliseconds}ms',
-        );
-        print(
-          'DEBUG: TOTAL _loadProblems time: ${afterLoadResponders.difference(startTime).inMilliseconds}ms',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load problems: $e';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadResponders() async {
-    try {
-      final responders = await _problemService.loadResponders(_problems);
-      if (mounted) {
-        setState(() {
-          _responders = responders;
-        });
-      }
-    } catch (e) {
-      // Error loading responders
-    }
+    _updateState(
+      _state.removeProblemsWhere((problem) {
+        if (problem.resolvedDateTimeParsed == null) return false;
+        return DateTime.now()
+                .difference(problem.resolvedDateTimeParsed!)
+                .inMinutes >=
+            5;
+      }),
+    );
   }
 
   Future<void> _showNewProblemDialog() async {
@@ -485,19 +394,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _showEditSymptomDialog(ProblemWithDetails problem) async {
-    // Get the crew type ID for filtering symptoms
-    int? crewTypeId;
-    try {
-      final crewResponse = await Supabase.instance.client
-          .from('crews')
-          .select('crew_type')
-          .eq('id', problem.crewId)
-          .maybeSingle();
-      crewTypeId = crewResponse?['crew_type'] as int?;
-    } catch (e) {
-      // If we can't get the crew type, we'll show all symptoms
-    }
-
+    final crewTypeId = await _problemService.getCrewTypeId(problem.crewId);
     if (!mounted) return;
 
     final result = await showDialog<bool>(
@@ -517,47 +414,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
   }
 
-  Future<void> _determineUserCrewInfo() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final crewMember = await Supabase.instance.client
-          .from('crewmembers')
-          .select('''
-            crew:crew(
-              id,
-              event,
-              crewtype:crewtypes(crewtype)
-            )
-          ''')
-          .eq('crewmember', userId)
-          .eq('crew.event', widget.eventId)
-          .maybeSingle();
-
-      if (crewMember != null && crewMember['crew'] != null) {
-        final crew = crewMember['crew'] as Map<String, dynamic>;
-        final crewTypeData = crew['crewtype'] as Map<String, dynamic>?;
-        final crewTypeName = crewTypeData?['crewtype'] as String? ?? 'Crew';
-
-        setState(() {
-          _userCrewId = crew['id'] as int;
-          _userCrewName = crewTypeName;
-        });
-      } else {
-        setState(() {
-          _userCrewId = null;
-          _userCrewName = null;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _userCrewId = null;
-        _userCrewName = null;
-      });
-    }
-  }
-
   Future<void> _loadMissingData(ProblemWithDetails problem) async {
     // Load missing symptom data
     if (problem.symptom == null && problem.symptomId != 0) {
@@ -565,15 +421,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
         problem.symptomId,
       );
       if (symptomData != null && mounted) {
-        setState(() {
-          final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
-          if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(
-              symptom: symptomData,
-            );
-            _problems[problemIndex] = updatedProblem;
-          }
-        });
+        _updateState(
+          _state.updateProblem(
+            problem.id,
+            (p) => p.copyWith(symptom: symptomData),
+          ),
+        );
       }
     }
 
@@ -583,15 +436,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
         problem.originatorId,
       );
       if (originatorData != null && mounted) {
-        setState(() {
-          final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
-          if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(
-              originator: originatorData,
-            );
-            _problems[problemIndex] = updatedProblem;
-          }
-        });
+        _updateState(
+          _state.updateProblem(
+            problem.id,
+            (p) => p.copyWith(originator: originatorData),
+          ),
+        );
       }
     }
 
@@ -601,104 +451,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
         problem.actionById!,
       );
       if (resolverData != null && mounted) {
-        setState(() {
-          final problemIndex = _problems.indexWhere((p) => p.id == problem.id);
-          if (problemIndex != -1) {
-            final updatedProblem = _problems[problemIndex].copyWith(
-              actionBy: resolverData,
-            );
-            _problems[problemIndex] = updatedProblem;
-          }
-        });
+        _updateState(
+          _state.updateProblem(
+            problem.id,
+            (p) => p.copyWith(actionBy: resolverData),
+          ),
+        );
       }
-    }
-  }
-
-  Future<void> _checkSuperUserStatus() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final userResponse = await Supabase.instance.client
-          .from('users')
-          .select('superuser')
-          .eq('supabase_id', userId)
-          .maybeSingle();
-
-      if (mounted) {
-        setState(() {
-          _isSuperUser = userResponse?['superuser'] == true;
-        });
-
-        print('DEBUG: _isSuperUser = $_isSuperUser');
-
-        if (_isSuperUser) {
-          await _loadAllCrews();
-          print(
-            'DEBUG: After _loadAllCrews, _selectedCrewId = $_selectedCrewId',
-          );
-        }
-      }
-    } catch (e) {
-      // Error checking superuser status
-    }
-  }
-
-  Future<void> _loadAllCrews() async {
-    try {
-      print('DEBUG: _loadAllCrews starting, widget.eventId=${widget.eventId}');
-      final response = await Supabase.instance.client
-          .from('crews')
-          .select('''
-            id,
-            crewtype:crewtypes(crewtype),
-            crew_chief:users(firstname, lastname)
-          ''')
-          .eq('event', widget.eventId)
-          .order('crewtype(crewtype)');
-
-      print('DEBUG: _loadAllCrews got ${response.length} crews');
-
-      // Sort crews in a standard order: Armorer, Medical, then others alphabetically
-      final crewList = List<Map<String, dynamic>>.from(response);
-      crewList.sort((a, b) {
-        final aType = (a['crewtype']?['crewtype'] as String?) ?? '';
-        final bType = (b['crewtype']?['crewtype'] as String?) ?? '';
-
-        // Define priority order
-        const priorityOrder = ['Armorer', 'Medical'];
-        final aIndex = priorityOrder.indexOf(aType);
-        final bIndex = priorityOrder.indexOf(bType);
-
-        if (aIndex != -1 && bIndex != -1) {
-          return aIndex.compareTo(bIndex);
-        } else if (aIndex != -1) {
-          return -1; // a comes first
-        } else if (bIndex != -1) {
-          return 1; // b comes first
-        } else {
-          return aType.compareTo(bType); // alphabetical for others
-        }
-      });
-
-      if (mounted) {
-        setState(() {
-          _allCrews = crewList;
-          if (_selectedCrewId == null && _allCrews.isNotEmpty) {
-            _selectedCrewId = _allCrews.first['id'] as int;
-            final firstCrewType =
-                _allCrews.first['crewtype']?['crewtype'] ?? 'Unknown';
-            print(
-              'DEBUG: Setting _selectedCrewId to ${_selectedCrewId} (${firstCrewType})',
-            );
-          }
-        });
-        // Note: Don't call _loadProblems() here during initialization
-        // It will be called by _initialize() after this completes
-        // Only the dropdown onChanged handler should trigger reload
-      }
-    } catch (e) {
-      print('DEBUG ERROR: Error loading all crews - $e');
     }
   }
 
@@ -710,20 +469,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
       await _problemService.goOnMyWay(problemId, userId);
 
       // Update the local responders data immediately
-      if (mounted) {
-        setState(() {
-          if (!_responders.containsKey(problemId)) {
-            _responders[problemId] = [];
-          }
-          _responders[problemId]!.add({
-            'problem': problemId,
-            'user_id': userId,
-            'responded_at': DateTime.now().toUtc().toIso8601String(),
-          });
-        });
-      }
+      _updateState(
+        _state.addResponder(problemId, {
+          'problem': problemId,
+          'user_id': userId,
+          'responded_at': DateTime.now().toUtc().toIso8601String(),
+        }),
+      );
 
-      // Also reload from database to ensure consistency
       await _loadResponders();
 
       if (mounted) {
@@ -741,21 +494,24 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   void _toggleProblemExpansion(int problemId) {
-    setState(() {
-      if (_expandedProblems.contains(problemId)) {
-        _expandedProblems.remove(problemId);
-      } else {
-        _expandedProblems.add(problemId);
-      }
-    });
+    _updateState(_state.toggleProblemExpansion(problemId));
+  }
+
+  void _onCrewSelected(int? crewId) async {
+    developer.log(
+      'DROPDOWN: selecting crew $crewId, _isSuperUser=${_state.isSuperUser}',
+      name: 'StripCall',
+    );
+    _updateState(_state.copyWith(selectedCrewId: crewId, isLoading: true));
+    await _loadProblems();
   }
 
   @override
   Widget build(BuildContext context) {
     String appBarTitle;
-    if (_isSuperUser) {
-      final selectedCrew = _allCrews.firstWhere(
-        (crew) => crew['id'] == _selectedCrewId,
+    if (_state.isSuperUser) {
+      final selectedCrew = _state.allCrews.firstWhere(
+        (crew) => crew['id'] == _state.selectedCrewId,
         orElse: () => {
           'crewtype': {'crewtype': 'All Crews'},
         },
@@ -763,15 +519,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final crewType = selectedCrew['crewtype']?['crewtype'] ?? 'All Crews';
       appBarTitle = crewType;
     } else {
-      appBarTitle = _userCrewName ?? 'My Problems';
+      appBarTitle = _state.userCrewName ?? 'My Problems';
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSuperUser
+        title: _state.isSuperUser
             ? DropdownButton<int>(
                 key: const ValueKey('problems_crew_dropdown'),
-                value: _selectedCrewId,
+                value: _state.selectedCrewId,
                 underline: Container(),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
@@ -779,7 +535,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                   fontWeight: FontWeight.w500,
                 ),
                 dropdownColor: Theme.of(context).colorScheme.surface,
-                items: _allCrews.map((crew) {
+                items: _state.allCrews.map((crew) {
                   final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
                   return DropdownMenuItem(
                     key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
@@ -792,166 +548,156 @@ class _ProblemsPageState extends State<ProblemsPage> {
                     ),
                   );
                 }).toList(),
-                onChanged: (value) async {
-                  developer.log(
-                    'DROPDOWN: selecting crew $value, _isSuperUser=$_isSuperUser',
-                    name: 'StripCall',
-                  );
-                  setState(() {
-                    _selectedCrewId = value;
-                    _isLoading = true;
-                  });
-                  await _loadProblems();
-                },
+                onChanged: _onCrewSelected,
               )
             : Text(appBarTitle),
         actions: [const UserNameDisplay(), const SettingsMenu()],
       ),
       body: Column(
         children: [
-          // Crew Message Window (show for crew members and super users viewing a crew)
-          if (_shouldShowCrewMessageWindow())
+          if (_state.shouldShowCrewMessageWindow(widget.crewId))
             CrewMessageWindow(
-              crewId: _getActiveCrewId()!,
+              key: _crewMessageKey,
+              crewId: _state.getActiveCrewId(widget.crewId)!,
               currentUserId: Supabase.instance.client.auth.currentUser?.id,
             ),
-          // Problems List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: AppLoadingIndicator())
-                : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: AppSpacing.paddingMd,
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: AppColors.error(context)),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  )
-                : _problems.isEmpty
-                ? AppEmptyState(
-                    icon: Icons.check_circle_outline,
-                    title: _isReferee
-                        ? 'You haven\'t reported any problems yet'
-                        : 'No problems reported yet',
-                  )
-                : ListView.builder(
-                    key: const ValueKey('problems_list'),
-                    padding: EdgeInsets.only(
-                      left: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      top: AppSpacing.sm,
-                      bottom: 80,
-                    ), // Add bottom padding for bottom app bar
-                    itemCount: _problems.length,
-                    itemBuilder: (context, index) {
-                      final problem = _problems[index];
-                      // For super users, compare against selected crew; for crew members, compare against their crew
-                      final userActiveCrew = _isSuperUser
-                          ? _selectedCrewId
-                          : _userCrewId;
-                      final isUserCrew =
-                          userActiveCrew != null &&
-                          problem.crewId == userActiveCrew;
-                      final status = _problemService.getProblemStatus(
-                        problem,
-                        _responders,
-                      );
-                      final isUserResponding =
-                          _responders[problem.id]?.any(
-                            (r) =>
-                                r['user_id'] ==
-                                Supabase.instance.client.auth.currentUser?.id,
-                          ) ??
-                          false;
-
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: AppSpacing.sm - 2),
-                        child: Stack(
-                          children: [
-                            ProblemCard(
-                              problem: problem,
-                              status: status,
-                              currentUserId:
-                                  Supabase.instance.client.auth.currentUser?.id,
-                              isReferee: _isReferee,
-                              isUserResponding: isUserResponding,
-                              userCrewId: _userCrewId,
-                              isSuperUser: _isSuperUser,
-                              responders: _responders[problem.id],
-                              onToggleExpansion: () =>
-                                  _toggleProblemExpansion(problem.id),
-                              onResolve: () => _showResolveDialog(problem.id),
-                              onGoOnMyWay: () => _goOnMyWay(problem.id),
-                              onLoadMissingData: () =>
-                                  _loadMissingData(problem),
-                              onEditSymptom: () =>
-                                  _showEditSymptomDialog(problem),
-                            ),
-                            if (!isUserCrew)
-                              Positioned(
-                                top: AppSpacing.sm,
-                                right: 52,
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.sm,
-                                    vertical: AppSpacing.xs,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.secondary(context),
-                                    borderRadius: AppSpacing.borderRadiusMd,
-                                  ),
-                                  child: Text(
-                                    'Other Crew',
-                                    style: AppTypography.badge(context)
-                                        .copyWith(
-                                          color: AppColors.onSecondary(context),
-                                        ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _buildProblemsContent()),
         ],
       ),
-      bottomNavigationBar: BottomAppBar(
+      bottomNavigationBar: _buildBottomBar(),
+    );
+  }
+
+  Widget _buildProblemsContent() {
+    if (_state.isLoading) {
+      return const Center(child: AppLoadingIndicator());
+    }
+
+    if (_state.error != null) {
+      return Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
+          padding: AppSpacing.paddingMd,
+          child: Text(
+            _state.error!,
+            style: TextStyle(color: AppColors.error(context)),
+            textAlign: TextAlign.center,
           ),
-          child: Row(
-            children: [
-              // Add Problem Button
-              Expanded(
-                child: ElevatedButton.icon(
-                  key: const ValueKey('problems_report_button'),
-                  onPressed: _showNewProblemDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Report Problem'),
+        ),
+      );
+    }
+
+    if (_state.problems.isEmpty) {
+      return AppEmptyState(
+        icon: Icons.check_circle_outline,
+        title: _state.isReferee
+            ? 'You haven\'t reported any problems yet'
+            : 'No problems reported yet',
+      );
+    }
+
+    return ListView.builder(
+      key: const ValueKey('problems_list'),
+      padding: EdgeInsets.only(
+        left: AppSpacing.sm,
+        right: AppSpacing.sm,
+        top: AppSpacing.sm,
+        bottom: 80,
+      ),
+      itemCount: _state.problems.length,
+      itemBuilder: (context, index) =>
+          _buildProblemItem(_state.problems[index]),
+    );
+  }
+
+  Widget _buildProblemItem(ProblemWithDetails problem) {
+    final userActiveCrew = _state.isSuperUser
+        ? _state.selectedCrewId
+        : _state.userCrewId;
+    final isUserCrew =
+        userActiveCrew != null && problem.crewId == userActiveCrew;
+    final status = _problemService.getProblemStatus(problem, _state.responders);
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isUserResponding =
+        _state.responders[problem.id]?.any(
+          (r) => r['user_id'] == currentUserId,
+        ) ??
+        false;
+    final isExpanded = _state.expandedProblems.contains(problem.id);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.sm - 2),
+      child: Stack(
+        children: [
+          ProblemCard(
+            problem: problem,
+            status: status,
+            currentUserId: currentUserId,
+            isReferee: _state.isReferee,
+            isUserResponding: isUserResponding,
+            userCrewId: _state.userCrewId,
+            isSuperUser: _state.isSuperUser,
+            isExpanded: isExpanded,
+            responders: _state.responders[problem.id],
+            onToggleExpansion: () => _toggleProblemExpansion(problem.id),
+            onResolve: () => _showResolveDialog(problem.id),
+            onGoOnMyWay: () => _goOnMyWay(problem.id),
+            onLoadMissingData: () => _loadMissingData(problem),
+            onEditSymptom: () => _showEditSymptomDialog(problem),
+          ),
+          if (!isUserCrew)
+            Positioned(
+              top: AppSpacing.sm,
+              right: 52,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary(context),
+                  borderRadius: AppSpacing.borderRadiusMd,
+                ),
+                child: Text(
+                  'Other Crew',
+                  style: AppTypography.badge(
+                    context,
+                  ).copyWith(color: AppColors.onSecondary(context)),
                 ),
               ),
-              AppSpacing.horizontalSm,
-              // Refresh Button
-              IconButton(
-                key: const ValueKey('problems_refresh_button'),
-                onPressed: () {
-                  setState(() {
-                    _isLoading = true;
-                  });
-                  _loadProblems();
-                },
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return BottomAppBar(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                key: const ValueKey('problems_report_button'),
+                onPressed: _showNewProblemDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('Report Problem'),
               ),
-            ],
-          ),
+            ),
+            AppSpacing.horizontalSm,
+            IconButton(
+              key: const ValueKey('problems_refresh_button'),
+              onPressed: () {
+                _updateState(_state.copyWith(isLoading: true));
+                _loadProblems();
+              },
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+          ],
         ),
       ),
     );

@@ -10,6 +10,9 @@ import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 
+/// Route observer for detecting when routes are pushed/popped over SelectEventPage.
+final selectEventRouteObserver = RouteObserver<ModalRoute<void>>();
+
 class SelectEventPage extends StatefulWidget {
   const SelectEventPage({super.key});
 
@@ -17,7 +20,7 @@ class SelectEventPage extends StatefulWidget {
   State<SelectEventPage> createState() => _SelectEventPageState();
 }
 
-class _SelectEventPageState extends State<SelectEventPage> {
+class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
   List<Event> _events = [];
   bool _isLoading = false;
   String? _error;
@@ -30,8 +33,24 @@ class _SelectEventPageState extends State<SelectEventPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      selectEventRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
   void dispose() {
+    selectEventRouteObserver.unsubscribe(this);
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Reload events when a pushed route (e.g. manage events) is popped
+    _loadEvents();
   }
 
   Future<void> _loadEvents() async {
@@ -77,31 +96,32 @@ class _SelectEventPageState extends State<SelectEventPage> {
 
       if (crewMemberResponse == null) {
         if (!mounted) return;
-        context.push(Routes.problems, extra: {
-          'eventId': event.id,
-          'crewId': null,
-          'crewType': null,
-        });
+        context.push(
+          Routes.problems,
+          extra: {'eventId': event.id, 'crewId': null, 'crewType': null},
+        );
         return;
       } else {
         final crew = crewMemberResponse['crew'] as Map<String, dynamic>?;
         if (crew == null) {
           if (!mounted) return;
-          context.push(Routes.problems, extra: {
-            'eventId': event.id,
-            'crewId': null,
-            'crewType': null,
-          });
+          context.push(
+            Routes.problems,
+            extra: {'eventId': event.id, 'crewId': null, 'crewType': null},
+          );
           return;
         }
 
         final crewType = crew['crewtype'] as Map<String, dynamic>?;
         if (!mounted) return;
-        context.push(Routes.problems, extra: {
-          'eventId': event.id,
-          'crewId': crew['id'],
-          'crewType': crewType?['crewtype'],
-        });
+        context.push(
+          Routes.problems,
+          extra: {
+            'eventId': event.id,
+            'crewId': crew['id'],
+            'crewType': crewType?['crewtype'],
+          },
+        );
       }
     } catch (e) {
       debugLogError('Error navigating to problems', e);
@@ -121,9 +141,7 @@ class _SelectEventPageState extends State<SelectEventPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Event'),
-        actions: const [
-          SettingsMenu(),
-        ],
+        actions: const [SettingsMenu()],
       ),
       body: _buildBody(),
     );
@@ -141,24 +159,17 @@ class _SelectEventPageState extends State<SelectEventPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: AppColors.statusError,
-              ),
+              Icon(Icons.error_outline, size: 48, color: AppColors.statusError),
               AppSpacing.verticalMd,
               Text(
                 _error!,
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: AppColors.statusError,
-                ),
+                style: AppTypography.bodyMedium(
+                  context,
+                ).copyWith(color: AppColors.statusError),
                 textAlign: TextAlign.center,
               ),
               AppSpacing.verticalLg,
-              AppButton(
-                onPressed: _loadEvents,
-                child: const Text('Retry'),
-              ),
+              AppButton(onPressed: _loadEvents, child: const Text('Retry')),
             ],
           ),
         ),

@@ -1,0 +1,336 @@
+# Manage Events Flow - E2E Test
+# Tests: Organizer can create event, add crews, edit event, delete/add crews
+# Requires: User with organizer privileges
+# Environment variables needed:
+#   - TEST_EMAIL: Login email
+#   - TEST_PASSWORD: Login password
+#   - TEST_CREW_CHIEF_FIRSTNAME: First name to search for crew chief
+#   - TEST_CREW_CHIEF_LASTNAME: Last name to search for crew chief
+# Tags: events, organizer
+
+appId: com.brianrosen.stripcall
+tags:
+  - events
+  - organizer
+
+---
+# Ensure we're logged in first
+- runFlow: 01_login.yaml
+
+# Navigate to Manage Events from the settings menu
+- tapOn:
+    id: "settings_menu_button"
+- tapOn:
+    id: "settings_menu_manage_events"
+- waitForAnimationToEnd
+
+# Verify we're on the Manage Events page
+- assertVisible:
+    text: "My Events"
+
+# ========================================
+# STEP 1: Create a new event
+# ========================================
+
+- tapOn:
+    id: "manage_events_add_button"
+- waitForAnimationToEnd
+
+# Verify we're on Create Event page
+- assertVisible:
+    text: "Create Event"
+
+# Fill in event details
+- tapOn:
+    id: "manage_event_name_field"
+- inputText: "E2E Test Tournament"
+
+- tapOn:
+    id: "manage_event_city_field"
+- inputText: "Test City"
+
+- tapOn:
+    id: "manage_event_state_field"
+- inputText: "PA"
+
+# Set start date (pick today)
+- tapOn:
+    id: "manage_event_start_date_button"
+- waitForAnimationToEnd
+- tapOn:
+    text: "OK"
+- waitForAnimationToEnd
+
+# Set end date (pick today - will work for a one-day event)
+- tapOn:
+    id: "manage_event_end_date_button"
+- waitForAnimationToEnd
+- tapOn:
+    text: "OK"
+- waitForAnimationToEnd
+
+# Strip numbering defaults to Sequential Numbers, leave it
+# Set strip count
+- tapOn:
+    id: "manage_event_count_field"
+- inputText: "12"
+
+# Save the event
+- tapOn:
+    id: "manage_event_save_button"
+- waitForAnimationToEnd
+
+# Verify success message
+- assertVisible:
+    text: "Event created successfully"
+
+# Should navigate back to My Events list
+- waitForAnimationToEnd
+- assertVisible:
+    text: "My Events"
+
+# ========================================
+# STEP 2: Open the event to add a crew
+# ========================================
+
+# Find and tap our newly created event
+- tapOn:
+    text: "E2E Test Tournament"
+- waitForAnimationToEnd
+
+# Verify we're on Edit Event page
+- assertVisible:
+    text: "Edit Event"
+
+# Verify the Crews section exists
+- assertVisible:
+    text: "Crews"
+
+# ========================================
+# STEP 3: Add first crew (Armorer) with crew leader
+# ========================================
+
+- tapOn:
+    id: "manage_event_add_crew_button"
+- waitForAnimationToEnd
+
+# Select crew type dialog should appear
+- assertVisible:
+    text: "Select Crew Type"
+
+# Select Armorer crew type
+- tapOn:
+    text: "Armorer"
+- waitForAnimationToEnd
+
+# Name finder dialog should appear
+- assertVisible:
+    text: "Find Crew Chief"
+
+# Search for a crew chief using first and last name
+- tapOn:
+    id: "name_finder_firstname_field"
+- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+
+- tapOn:
+    id: "name_finder_lastname_field"
+- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+
+- tapOn:
+    id: "name_finder_search_button"
+
+# Wait for search results
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "name_finder_results_list"
+    timeout: 5000
+
+# Tap on the first result
+- tapOn:
+    id: "name_finder_result_0"
+- waitForAnimationToEnd
+
+# Verify crew was added
+- assertVisible:
+    text: "Crew added successfully"
+
+# Verify Armorer crew now shows in the list
+- assertVisible:
+    text: "Armorer"
+
+# ========================================
+# STEP 4: Exit and return to the event
+# ========================================
+
+# Go back to My Events
+- back
+- waitForAnimationToEnd
+
+# Verify we're back on My Events
+- assertVisible:
+    text: "My Events"
+
+# Tap our event again
+- tapOn:
+    text: "E2E Test Tournament"
+- waitForAnimationToEnd
+
+# Verify the Armorer crew is still there
+- assertVisible:
+    text: "Armorer"
+
+# ========================================
+# STEP 5: Edit event parameters
+# ========================================
+
+# Change the city
+- tapOn:
+    id: "manage_event_city_field"
+- eraseText:
+    charactersToErase: 9
+- inputText: "Updated City"
+
+# Change strip numbering to Pods
+- tapOn:
+    id: "manage_event_strip_numbering_dropdown"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Pods"
+- waitForAnimationToEnd
+
+# Update count for pods
+- tapOn:
+    id: "manage_event_count_field"
+- eraseText:
+    charactersToErase: 2
+- inputText: "4"
+
+# Save changes
+- tapOn:
+    id: "manage_event_save_button"
+- waitForAnimationToEnd
+
+# Verify success
+- assertVisible:
+    text: "Event updated successfully"
+
+# ========================================
+# STEP 6: Delete the Armorer crew
+# ========================================
+
+# Scroll to make sure crew section is visible
+- scrollUntilVisible:
+    element:
+      text: "Armorer"
+    direction: DOWN
+
+# The crew card has delete button - look for delete icon near Armorer
+# We need to tap the delete icon button in the crew card
+- tapOn:
+    id: "manage_event_crew_delete_0"
+
+# If there's activity, a confirmation dialog appears
+# Handle both cases - with or without confirmation
+- runFlow:
+    when:
+      visible: "Delete Active Crew?"
+    commands:
+      - tapOn:
+          text: "Delete"
+      - waitForAnimationToEnd
+
+- waitForAnimationToEnd
+
+# Verify deletion success
+- assertVisible:
+    text: "Crew deleted successfully"
+
+# ========================================
+# STEP 7: Add two more crews (Medical and Armorer)
+# ========================================
+
+# Add Medical crew
+- tapOn:
+    id: "manage_event_add_crew_button"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Select Crew Type"
+- tapOn:
+    text: "Medical"
+- waitForAnimationToEnd
+
+# Find crew chief
+- assertVisible:
+    text: "Find Crew Chief"
+- tapOn:
+    id: "name_finder_firstname_field"
+- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+- tapOn:
+    id: "name_finder_lastname_field"
+- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+- tapOn:
+    id: "name_finder_search_button"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "name_finder_results_list"
+    timeout: 5000
+- tapOn:
+    id: "name_finder_result_0"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Crew added successfully"
+
+# Add Armorer crew again
+- tapOn:
+    id: "manage_event_add_crew_button"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Select Crew Type"
+- tapOn:
+    text: "Armorer"
+- waitForAnimationToEnd
+
+# Find crew chief
+- assertVisible:
+    text: "Find Crew Chief"
+- tapOn:
+    id: "name_finder_firstname_field"
+- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+- tapOn:
+    id: "name_finder_lastname_field"
+- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+- tapOn:
+    id: "name_finder_search_button"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "name_finder_results_list"
+    timeout: 5000
+- tapOn:
+    id: "name_finder_result_0"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Crew added successfully"
+
+# Verify both crews are visible
+- assertVisible:
+    text: "Medical"
+- assertVisible:
+    text: "Armorer"
+
+# ========================================
+# STEP 8: Final verification
+# ========================================
+
+# Go back to My Events to verify event is saved
+- back
+- waitForAnimationToEnd
+- assertVisible:
+    text: "My Events"
+
+# Verify our event is in the list
+- assertVisible:
+    text: "E2E Test Tournament"
+# Test complete - event created, crews added/deleted, parameters edited

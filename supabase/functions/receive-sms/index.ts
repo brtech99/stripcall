@@ -344,7 +344,7 @@ async function handleReporterMessage(
   }
 }
 
-// Find crew by crew type name
+// Find crew by crew type name, preferring the event with use_sms=true
 async function findCrewByType(
   adminClient: any,
   crewTypeName: string,
@@ -358,8 +358,35 @@ async function findCrewByType(
 
   if (!crewType) return null;
 
-  // Find the most recent crew of this type (assumes one active per event)
-  // In a real scenario, you might filter by active event
+  // Find the crew belonging to the event with use_sms=true
+  const { data: smsCrew } = await adminClient
+    .from("crews")
+    .select("id, event, crew_type, events!crew_event_fkey(use_sms)")
+    .eq("crew_type", crewType.id)
+    .eq("events.use_sms", true)
+    .order("id", { ascending: false })
+    .limit(10);
+
+  // Filter to crews where the event join actually matched (use_sms=true)
+  const matchingCrew = smsCrew?.find(
+    (c: any) => c.events && c.events.use_sms === true,
+  );
+
+  if (matchingCrew) {
+    console.log(
+      `Found crew ${matchingCrew.id} via use_sms flag on event ${matchingCrew.event}`,
+    );
+    return {
+      id: matchingCrew.id,
+      event: matchingCrew.event,
+      crew_type: matchingCrew.crew_type,
+    };
+  }
+
+  // Fallback: most recent crew of this type (backwards compatibility)
+  console.log(
+    "No event with use_sms=true found, falling back to most recent crew",
+  );
   const { data: crew } = await adminClient
     .from("crews")
     .select("id, event, crew_type")

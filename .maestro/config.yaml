@@ -2,7 +2,7 @@
 # https://maestro.mobile.dev/
 
 # App configuration
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 
 # Default flow configuration
 flows:
@@ -15,6 +15,8 @@ env:
   TEST_PASSWORD: "TestPassword123!"
   TEST_EMAIL_ARMORER: "e2e_armorer1@test.com"
   TEST_EMAIL_MEDICAL: "e2e_medical1@test.com"
+  TEST_CREW_CHIEF_FIRSTNAME: "E2E"
+  TEST_CREW_CHIEF_LASTNAME: "Armorer"
 
 # Execution settings
 executionOrder:

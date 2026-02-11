@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import '../../routes.dart';
 import '../crews/name_finder_dialog.dart';
 import '../../models/event.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew.dart';
 import '../../models/crew_type.dart';
+import '../../utils/auth_helpers.dart' as auth;
 import '../../utils/debug_utils.dart';
 import '../../widgets/settings_menu.dart';
 import '../../theme/theme.dart';
@@ -15,10 +15,7 @@ import '../../widgets/adaptive/adaptive.dart';
 class ManageEventPage extends StatefulWidget {
   final Event? event;
 
-  const ManageEventPage({
-    super.key,
-    this.event,
-  });
+  const ManageEventPage({super.key, this.event});
 
   @override
   State<ManageEventPage> createState() => _ManageEventPageState();
@@ -30,10 +27,13 @@ class _ManageEventPageState extends State<ManageEventPage> {
   List<CrewType> _allCrewTypes = [];
   bool _isLoading = true;
   String? _error;
+  bool _isSuperUser = false;
+  bool _useSms = false;
 
   late TextEditingController _nameController;
   late TextEditingController _cityController;
   late TextEditingController _stateController;
+  late TextEditingController _countController;
   DateTime? _startDate;
   DateTime? _endDate;
   String _stripNumbering = 'SequentialNumbers';
@@ -49,7 +49,21 @@ class _ManageEventPageState extends State<ManageEventPage> {
     _endDate = widget.event?.endDateTime;
     _stripNumbering = widget.event?.stripNumbering ?? 'SequentialNumbers';
     _count = widget.event?.count ?? 0;
+    _countController = TextEditingController(
+      text: _count > 0 ? _count.toString() : '',
+    );
+    _useSms = widget.event?.useSms ?? false;
+    _checkSuperUser();
     _loadCrewsAndTypes();
+  }
+
+  Future<void> _checkSuperUser() async {
+    final isSuperUser = await auth.isSuperUser();
+    if (mounted) {
+      setState(() {
+        _isSuperUser = isSuperUser;
+      });
+    }
   }
 
   @override
@@ -57,6 +71,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
     _nameController.dispose();
     _cityController.dispose();
     _stateController.dispose();
+    _countController.dispose();
     super.dispose();
   }
 
@@ -87,11 +102,19 @@ class _ManageEventPageState extends State<ManageEventPage> {
           .select()
           .order('crewtype');
       final usedTypeIds = crewsResponse.map((c) => c['crewtype']).toSet();
-      final availableTypes = crewTypesResponse.where((t) => !usedTypeIds.contains(t['id'])).toList();
+      final availableTypes = crewTypesResponse
+          .where((t) => !usedTypeIds.contains(t['id']))
+          .toList();
       setState(() {
-        _crews = crewsResponse.map<Crew>((json) => Crew.fromJson(json)).toList();
-        _availableCrewTypes = availableTypes.map<CrewType>((json) => CrewType.fromJson(json)).toList();
-        _allCrewTypes = crewTypesResponse.map<CrewType>((json) => CrewType.fromJson(json)).toList();
+        _crews = crewsResponse
+            .map<Crew>((json) => Crew.fromJson(json))
+            .toList();
+        _availableCrewTypes = availableTypes
+            .map<CrewType>((json) => CrewType.fromJson(json))
+            .toList();
+        _allCrewTypes = crewTypesResponse
+            .map<CrewType>((json) => CrewType.fromJson(json))
+            .toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -100,6 +123,66 @@ class _ManageEventPageState extends State<ManageEventPage> {
         _error = 'Failed to load event details: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _toggleUseSms(bool value) async {
+    if (!value) {
+      // Turning off is always allowed
+      setState(() => _useSms = false);
+      return;
+    }
+
+    // Turning on — check for overlapping events with use_sms=true
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please set start and end dates before enabling SMS'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      var query = Supabase.instance.client
+          .from('events')
+          .select('id, name')
+          .eq('use_sms', true)
+          .lt('startdatetime', _endDate!.toIso8601String())
+          .gt('enddatetime', _startDate!.toIso8601String());
+
+      if (widget.event != null) {
+        query = query.neq('id', widget.event!.id);
+      }
+
+      final overlapping = await query;
+
+      if (overlapping.isNotEmpty) {
+        final conflictName = overlapping.first['name'] ?? 'Unknown';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Cannot enable SMS: overlapping event "$conflictName" already has SMS enabled',
+              ),
+              backgroundColor: AppColors.statusError,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() => _useSms = true);
+    } catch (e) {
+      debugLogError('Error checking SMS overlap', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking for SMS conflicts: $e'),
+            backgroundColor: AppColors.statusError,
+          ),
+        );
+      }
     }
   }
 
@@ -135,6 +218,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         'enddatetime': _endDate!.toIso8601String(),
         'stripnumbering': _stripNumbering,
         'count': _count,
+        if (_isSuperUser) 'use_sms': _useSms,
       };
 
       if (widget.event == null) {
@@ -147,7 +231,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Event created successfully')),
           );
-          context.go(Routes.manageEvents);
+          context.pop();
         }
       } else {
         await Supabase.instance.client
@@ -171,7 +255,9 @@ class _ManageEventPageState extends State<ManageEventPage> {
   }
 
   Future<void> _pickDate({required bool isStart}) async {
-    final initialDate = isStart ? _startDate ?? DateTime.now() : _endDate ?? DateTime.now();
+    final initialDate = isStart
+        ? _startDate ?? DateTime.now()
+        : _endDate ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -196,12 +282,18 @@ class _ManageEventPageState extends State<ManageEventPage> {
       builder: (context) => AlertDialog(
         title: const Text('Select Crew Type'),
         content: DropdownButtonFormField<int>(
-          items: _availableCrewTypes.map((type) => DropdownMenuItem<int>(
-            value: type.id,
-            child: Text(type.crewType),
-          )).toList(),
+          items: _availableCrewTypes
+              .map(
+                (type) => DropdownMenuItem<int>(
+                  value: type.id,
+                  child: Text(type.crewType),
+                ),
+              )
+              .toList(),
           onChanged: (value) {
-            Navigator.of(context).pop(_availableCrewTypes.firstWhere((t) => t.id == value));
+            Navigator.of(
+              context,
+            ).pop(_availableCrewTypes.firstWhere((t) => t.id == value));
           },
         ),
       ),
@@ -225,12 +317,10 @@ class _ManageEventPageState extends State<ManageEventPage> {
             .select('id')
             .single();
 
-        await Supabase.instance.client
-            .from('crewmembers')
-            .insert({
-              'crew': crewResponse['id'],
-              'crewmember': result.supabaseId,
-            });
+        await Supabase.instance.client.from('crewmembers').insert({
+          'crew': crewResponse['id'],
+          'crewmember': result.supabaseId,
+        });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -303,16 +393,18 @@ class _ManageEventPageState extends State<ManageEventPage> {
           .eq('crew', crewId)
           .count(CountOption.exact);
 
-      final hasActivity = (problemCount.count ?? 0) > 0 ||
-                          (messageCount.count ?? 0) > 0 ||
-                          (crewMessageCount.count ?? 0) > 0;
+      final hasActivity =
+          (problemCount.count ?? 0) > 0 ||
+          (messageCount.count ?? 0) > 0 ||
+          (crewMessageCount.count ?? 0) > 0;
 
       if (hasActivity) {
         if (!mounted) return;
         final confirmed = await AppDialog.showConfirm(
           context: context,
           title: 'Delete Active Crew?',
-          message: 'This crew has been active with ${problemCount.count ?? 0} problems and '
+          message:
+              'This crew has been active with ${problemCount.count ?? 0} problems and '
               '${(messageCount.count ?? 0) + (crewMessageCount.count ?? 0)} messages. '
               'Deleting it will also delete all associated data.\n\n'
               'Are you sure you want to delete this crew?',
@@ -356,11 +448,6 @@ class _ManageEventPageState extends State<ManageEventPage> {
             .eq('crew', crewId);
 
         await Supabase.instance.client
-            .from('crewmembers')
-            .delete()
-            .eq('crew', crewId);
-
-        await Supabase.instance.client
             .from('sms_reply_slots')
             .delete()
             .eq('crew_id', crewId);
@@ -371,10 +458,14 @@ class _ManageEventPageState extends State<ManageEventPage> {
             .eq('crew_id', crewId);
       }
 
+      // Always delete crewmembers before deleting the crew
+      // (every crew has at least one crewmember: the crew chief)
       await Supabase.instance.client
-          .from('crews')
+          .from('crewmembers')
           .delete()
-          .eq('id', crewId);
+          .eq('crew', crewId);
+
+      await Supabase.instance.client.from('crews').delete().eq('id', crewId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -400,9 +491,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.event == null ? 'Create Event' : 'Edit Event'),
-        actions: const [
-          SettingsMenu(),
-        ],
+        actions: const [SettingsMenu()],
       ),
       body: _buildBody(),
     );
@@ -419,9 +508,9 @@ class _ManageEventPageState extends State<ManageEventPage> {
           padding: AppSpacing.screenPadding,
           child: Text(
             _error!,
-            style: AppTypography.bodyMedium(context).copyWith(
-              color: AppColors.statusError,
-            ),
+            style: AppTypography.bodyMedium(
+              context,
+            ).copyWith(color: AppColors.statusError),
             textAlign: TextAlign.center,
           ),
         ),
@@ -471,7 +560,10 @@ class _ManageEventPageState extends State<ManageEventPage> {
             decoration: const InputDecoration(labelText: 'Strip Numbering'),
             items: const [
               DropdownMenuItem(value: 'Pods', child: Text('Pods')),
-              DropdownMenuItem(value: 'SequentialNumbers', child: Text('Sequential Numbers')),
+              DropdownMenuItem(
+                value: 'SequentialNumbers',
+                child: Text('Sequential Numbers'),
+              ),
             ],
             onChanged: (val) {
               if (val != null) setState(() => _stripNumbering = val);
@@ -480,13 +572,26 @@ class _ManageEventPageState extends State<ManageEventPage> {
           AppSpacing.verticalMd,
           AppTextField(
             key: const ValueKey('manage_event_count_field'),
-            label: _stripNumbering == 'Pods' ? 'Number of Pods' : 'Number of Strips',
+            controller: _countController,
+            label: _stripNumbering == 'Pods'
+                ? 'Number of Pods'
+                : 'Number of Strips',
             keyboardType: TextInputType.number,
             onChanged: (val) {
               final parsed = int.tryParse(val);
               if (parsed != null) setState(() => _count = parsed);
             },
           ),
+          AppSpacing.verticalMd,
+          if (widget.event != null)
+            SwitchListTile(
+              key: const ValueKey('manage_event_use_sms_switch'),
+              title: const Text('SMS Active'),
+              subtitle: const Text('Route Twilio SMS to this event'),
+              value: _useSms,
+              onChanged: _isSuperUser ? _toggleUseSms : null,
+              contentPadding: EdgeInsets.zero,
+            ),
           AppSpacing.verticalLg,
           AppButton(
             key: const ValueKey('manage_event_save_button'),
@@ -513,7 +618,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         Expanded(
           child: Text(
             date != null
-                ? '$label: ${date.toLocal().toString().split(' ')[0]}'
+                ? '$label: ${date.toUtc().toString().split(' ')[0]}'
                 : '$label: Not set',
             style: AppTypography.bodyMedium(context),
           ),
@@ -521,10 +626,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
         TextButton(
           key: ValueKey(buttonKey),
           onPressed: onPick,
-          child: Text(
-            'Pick',
-            style: TextStyle(color: colorScheme.primary),
-          ),
+          child: Text('Pick', style: TextStyle(color: colorScheme.primary)),
         ),
       ],
     );
@@ -539,9 +641,9 @@ class _ManageEventPageState extends State<ManageEventPage> {
           children: [
             Text(
               'Crews',
-              style: AppTypography.titleMedium(context).copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppTypography.titleMedium(
+                context,
+              ).copyWith(fontWeight: FontWeight.bold),
             ),
             if (_availableCrewTypes.isNotEmpty)
               IconButton(
@@ -578,7 +680,8 @@ class _ManageEventPageState extends State<ManageEventPage> {
                 final crew = _crews[index];
                 String chiefName;
                 if (crew.crewChief != null) {
-                  final firstName = crew.crewChief!['firstname'] as String? ?? '';
+                  final firstName =
+                      crew.crewChief!['firstname'] as String? ?? '';
                   final lastName = crew.crewChief!['lastname'] as String? ?? '';
                   if (firstName.isNotEmpty || lastName.isNotEmpty) {
                     chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
@@ -599,6 +702,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
                 }
 
                 return AppCard(
+                  key: ValueKey('manage_event_crew_card_$index'),
                   margin: EdgeInsets.only(bottom: AppSpacing.sm),
                   child: AppListTile(
                     title: Text(crewTypeName),
@@ -607,10 +711,12 @@ class _ManageEventPageState extends State<ManageEventPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
+                          key: ValueKey('manage_event_crew_edit_$index'),
                           icon: const Icon(Icons.edit),
                           onPressed: () => _editCrew(crew),
                         ),
                         IconButton(
+                          key: ValueKey('manage_event_crew_delete_$index'),
                           icon: Icon(
                             Icons.delete,
                             color: AppColors.statusError,

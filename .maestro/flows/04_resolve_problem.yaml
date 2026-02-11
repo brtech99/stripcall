@@ -3,7 +3,7 @@
 # Prerequisites: Must have at least one unresolved problem visible
 # Tags: smoke, problems
 
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 tags:
   - smoke
   - problems

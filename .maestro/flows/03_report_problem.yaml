@@ -3,7 +3,7 @@
 # Prerequisites: User must be on the problems page (logged in, event/crew selected)
 # Tags: smoke, problems
 
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 tags:
   - smoke
   - problems

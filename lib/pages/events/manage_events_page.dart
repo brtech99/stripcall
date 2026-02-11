@@ -43,7 +43,8 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
   bool _isLoading = true;
   String? _error;
 
-  EventsRepository get _eventsRepository => widget.eventsRepository ?? SupabaseEventsRepository();
+  EventsRepository get _eventsRepository =>
+      widget.eventsRepository ?? SupabaseEventsRepository();
 
   @override
   void initState() {
@@ -60,7 +61,8 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
     });
 
     try {
-      final userId = widget.userId ?? Supabase.instance.client.auth.currentUser?.id;
+      final userId =
+          widget.userId ?? Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) {
         throw Exception('User not logged in');
       }
@@ -98,20 +100,19 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            context.go(Routes.selectEvent);
+            context.pop();
           },
           tooltip: 'Back to Select Event',
         ),
         title: const Text('My Events'),
-        actions: const [
-          SettingsMenu(),
-        ],
+        actions: const [SettingsMenu()],
       ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         key: const ValueKey('manage_events_add_button'),
-        onPressed: () {
-          context.push(Routes.manageEvent);
+        onPressed: () async {
+          await context.push(Routes.manageEvent);
+          _loadEvents();
         },
         child: const Icon(Icons.add),
       ),
@@ -130,24 +131,17 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: AppColors.statusError,
-              ),
+              Icon(Icons.error_outline, size: 48, color: AppColors.statusError),
               AppSpacing.verticalMd,
               Text(
                 _error!,
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: AppColors.statusError,
-                ),
+                style: AppTypography.bodyMedium(
+                  context,
+                ).copyWith(color: AppColors.statusError),
                 textAlign: TextAlign.center,
               ),
               AppSpacing.verticalLg,
-              AppButton(
-                onPressed: _loadEvents,
-                child: const Text('Retry'),
-              ),
+              AppButton(onPressed: _loadEvents, child: const Text('Retry')),
             ],
           ),
         ),
@@ -171,13 +165,28 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
           key: ValueKey('manage_events_item_${event.id}'),
           title: Text(event.name),
           subtitle: Text(_getOrganizerName(event)),
-          trailing: Icon(
-            Icons.chevron_right,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (event.useSms)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.sms,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
-          onTap: () {
+          onTap: () async {
             if (mounted) {
-              context.push(Routes.manageEvent, extra: event);
+              await context.push(Routes.manageEvent, extra: event);
+              _loadEvents();
             }
           },
         );

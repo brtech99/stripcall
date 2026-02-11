@@ -7,10 +7,7 @@ import '../../widgets/adaptive/adaptive.dart';
 class NameFinderDialog extends StatefulWidget {
   final String title;
 
-  const NameFinderDialog({
-    super.key,
-    this.title = 'Find User',
-  });
+  const NameFinderDialog({super.key, this.title = 'Find User'});
 
   @override
   State<NameFinderDialog> createState() => _NameFinderDialogState();
@@ -38,7 +35,8 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
     final currentLastName = _lastNameController.text;
 
     if (_searchButtonDisabled &&
-        (currentFirstName != _lastSearchedFirstName || currentLastName != _lastSearchedLastName)) {
+        (currentFirstName != _lastSearchedFirstName ||
+            currentLastName != _lastSearchedLastName)) {
       setState(() {
         _searchButtonDisabled = false;
       });
@@ -70,18 +68,26 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
     });
 
     try {
-      final firstName = _firstNameController.text.isEmpty ? '' : '%${_firstNameController.text}%';
-      final lastName = _lastNameController.text.isEmpty ? '' : '%${_lastNameController.text}%';
+      final firstName = _firstNameController.text.isEmpty
+          ? ''
+          : '%${_firstNameController.text}%';
+      final lastName = _lastNameController.text.isEmpty
+          ? ''
+          : '%${_lastNameController.text}%';
 
-      final response = await Supabase.instance.client
-          .rpc('search_users', params: {
-            'first_name_pattern': firstName,
-            'last_name_pattern': lastName,
-          });
+      final response = await Supabase.instance.client.rpc(
+        'search_users',
+        params: {
+          'first_name_pattern': firstName,
+          'last_name_pattern': lastName,
+        },
+      );
 
       if (mounted) {
         setState(() {
-          _users = response.map<app_models.User>((json) => app_models.User.fromJson(json)).toList();
+          _users = response
+              .map<app_models.User>((json) => app_models.User.fromJson(json))
+              .toList();
           _isLoading = false;
           _searchButtonDisabled = _users.isNotEmpty;
           _lastSearchedFirstName = _firstNameController.text;
@@ -108,10 +114,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              widget.title,
-              style: AppTypography.titleLarge(context),
-            ),
+            Text(widget.title, style: AppTypography.titleLarge(context)),
             AppSpacing.verticalMd,
             AppTextField(
               key: const ValueKey('name_finder_firstname_field'),
@@ -134,9 +137,9 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: Text(
                   _error!,
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    color: AppColors.statusError,
-                  ),
+                  style: AppTypography.bodyMedium(
+                    context,
+                  ).copyWith(color: AppColors.statusError),
                 ),
               ),
             if (_isLoading)
@@ -144,11 +147,13 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
             else if (_users.isNotEmpty)
               Flexible(
                 child: ListView.builder(
+                  key: const ValueKey('name_finder_results_list'),
                   shrinkWrap: true,
                   itemCount: _users.length,
                   itemBuilder: (context, index) {
                     final user = _users[index];
                     return AppListTile(
+                      key: ValueKey('name_finder_result_$index'),
                       title: Text(user.fullName),
                       onTap: () {
                         Navigator.pop(context, user);
@@ -157,11 +162,9 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
                   },
                 ),
               )
-            else if (_firstNameController.text.isNotEmpty || _lastNameController.text.isNotEmpty)
-              Text(
-                'No users found',
-                style: AppTypography.bodyMedium(context),
-              ),
+            else if (_firstNameController.text.isNotEmpty ||
+                _lastNameController.text.isNotEmpty)
+              Text('No users found', style: AppTypography.bodyMedium(context)),
             AppSpacing.verticalMd,
             Row(
               mainAxisAlignment: MainAxisAlignment.end,

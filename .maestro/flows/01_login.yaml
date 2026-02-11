@@ -1,40 +1,29 @@
 # Login Flow - Smoke Test
 # Tests: User can log in with valid credentials
 # Tags: smoke, auth
+# NOTE: App must already be running via Flutter with Supabase credentials
+# NOTE: DB should be reset before running (supabase db reset), so app starts on login page
 
-appId: com.stripcall.app
+appId: com.brianrosen.stripcall
 tags:
   - smoke
   - auth
 
 ---
-
-# Wait for app to load
-- waitForAnimationToEnd
-
-# Check if already logged in (on event select page)
-- runFlow:
-    when:
-      visible: "select_event_list"
-    commands:
-      - tapOn:
-          id: "settings_menu_button"
-      - tapOn:
-          id: "settings_menu_logout"
-      - waitForAnimationToEnd
-
-# Now we should be on login page
-- assertVisible:
-    id: "login_email_field"
+# Wait for login page to be ready (DB was reset, so no active session)
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 15000
 
 # Enter credentials
 - tapOn:
     id: "login_email_field"
-- inputText: ${TEST_EMAIL}
+- inputText: "${TEST_EMAIL}"
 
 - tapOn:
     id: "login_password_field"
-- inputText: ${TEST_PASSWORD}
+- inputText: "${TEST_PASSWORD}"
 
 # Submit login
 - tapOn:
@@ -45,7 +34,7 @@ tags:
 - extendedWaitUntil:
     visible:
       id: "select_event_list"
-    timeout: 10000
+    timeout: 15000
 
 # Verify we're on the event selection page
 - assertVisible:

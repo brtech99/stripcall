@@ -112,15 +112,20 @@ class _MyAppState extends State<MyApp> {
         debugLog('✅ Firebase initialized with native config (mobile)');
       }
 
-      // Initialize notification service
-      try {
-        await NotificationService().initialize();
-        debugLog('✅ Notification service initialized');
-      } catch (e) {
-        debugLogError(
-          'Notification service initialization failed, continuing without it',
-          e,
-        );
+      // Initialize notification service (skip in test mode to avoid native permission dialog)
+      const skipNotifications = bool.fromEnvironment('SKIP_NOTIFICATIONS');
+      if (skipNotifications) {
+        debugLog('⏭️ Skipping notification service (SKIP_NOTIFICATIONS=true)');
+      } else {
+        try {
+          await NotificationService().initialize();
+          debugLog('✅ Notification service initialized');
+        } catch (e) {
+          debugLogError(
+            'Notification service initialization failed, continuing without it',
+            e,
+          );
+        }
       }
     } catch (e) {
       debugLogError('Firebase initialization failed', e);

@@ -1,37 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:patrol/patrol.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
 import 'package:stripcall/main.dart' as app;
 
 import 'test_config.dart';
 
 void main() {
-  patrolTest(
-    'Login and logout flow',
-    ($) async {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Smoke Tests', () {
+    testWidgets('Login and logout flow', (WidgetTester tester) async {
       // Start the app
       app.main();
-      await $.pumpAndSettle();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
 
       // Wait for login page
-      await $(const ValueKey('login_email_field')).waitUntilVisible();
+      expect(find.byKey(const ValueKey('login_email_field')), findsOneWidget);
 
       // Login as referee1
-      await $(const ValueKey('login_email_field')).enterText(TestConfig.testUsers.referee1.email);
-      await $(const ValueKey('login_password_field')).enterText(TestConfig.testUsers.referee1.password);
-      await $(const ValueKey('login_submit_button')).tap();
-      await $.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('login_email_field')),
+        TestConfig.testUsers.referee1.email,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('login_password_field')),
+        TestConfig.testUsers.referee1.password,
+      );
+      await tester.tap(find.byKey(const ValueKey('login_submit_button')));
+      await tester.pumpAndSettle(const Duration(seconds: 3));
 
       // Verify we're on the select event page
-      await $(const ValueKey('select_event_list')).waitUntilVisible();
+      expect(find.byKey(const ValueKey('select_event_list')), findsOneWidget);
 
       // Logout
-      await $(const ValueKey('settings_menu_button')).tap();
-      await $(const ValueKey('settings_menu_logout')).waitUntilVisible();
-      await $(const ValueKey('settings_menu_logout')).tap();
-      await $.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings_menu_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings_menu_logout')));
+      await tester.pumpAndSettle();
 
       // Verify we're back on login page
-      await $(const ValueKey('login_email_field')).waitUntilVisible();
-    },
-  );
+      expect(find.byKey(const ValueKey('login_email_field')), findsOneWidget);
+    });
+  });
 }

@@ -17,12 +17,16 @@ class ProblemService {
     bool isSuperUser = false,
   }) async {
     try {
-      print('DEBUG: loadProblems START (isSuperUser=$isSuperUser, crewId=$crewId)');
+      print(
+        'DEBUG: loadProblems START (isSuperUser=$isSuperUser, crewId=$crewId)',
+      );
       final startTime = DateTime.now();
 
       // Super users bypass crew membership check when viewing a specific crew
       if (isSuperUser && crewId != null) {
-        print('DEBUG: Super user viewing crew $crewId, loading crew problems only');
+        print(
+          'DEBUG: Super user viewing crew $crewId, loading crew problems only',
+        );
         final queryStart = DateTime.now();
 
         final response = await Supabase.instance.client
@@ -40,20 +44,26 @@ class ProblemService {
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print('DEBUG: Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}');
+        print(
+          'DEBUG: Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        );
 
         final problems = <ProblemWithDetails>[];
         for (final json in response) {
           try {
             debugLog('RAW JSON keys: ${json.keys.toList()}');
-            debugLog('RAW JSON symptom: ${json['symptom']} (type: ${json['symptom'].runtimeType})');
+            debugLog(
+              'RAW JSON symptom: ${json['symptom']} (type: ${json['symptom'].runtimeType})',
+            );
             final problem = ProblemWithDetails.fromJson(json);
 
             // Filter out resolved problems that are older than 5 minutes
             if (problem.resolvedDateTimeParsed != null) {
               final resolvedTime = problem.resolvedDateTimeParsed!;
               final now = DateTime.now();
-              final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
+              final minutesSinceResolved = now
+                  .difference(resolvedTime)
+                  .inMinutes;
 
               if (minutesSinceResolved >= 5) {
                 continue;
@@ -67,26 +77,34 @@ class ProblemService {
           }
         }
 
-        print('DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total');
+        print(
+          'DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total',
+        );
 
         // Enrich with SMS reporter names
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print('DEBUG: Total loadProblems time (super user): ${DateTime.now().difference(startTime).inMilliseconds}ms');
+        print(
+          'DEBUG: Total loadProblems time (super user): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        );
         return enrichedProblems;
       }
 
       // First, check if user is part of a crew for this event
       print('DEBUG: Checking crew membership for user=$userId, crewId=$crewId');
-      final crewMemberResponse = crewId != null ? await Supabase.instance.client
-          .from('crewmembers')
-          .select('crew')
-          .eq('crewmember', userId)
-          .eq('crew', crewId)
-          .maybeSingle() : null;
+      final crewMemberResponse = crewId != null
+          ? await Supabase.instance.client
+                .from('crewmembers')
+                .select('crew')
+                .eq('crewmember', userId)
+                .eq('crew', crewId)
+                .maybeSingle()
+          : null;
 
       final afterCrewCheck = DateTime.now();
-      print('DEBUG: Crew check completed in ${afterCrewCheck.difference(startTime).inMilliseconds}ms, result=${crewMemberResponse != null}');
+      print(
+        'DEBUG: Crew check completed in ${afterCrewCheck.difference(startTime).inMilliseconds}ms, result=${crewMemberResponse != null}',
+      );
 
       // If user is not part of any crew OR not part of the specified crew, only show their own problems
       if (crewId == null || crewMemberResponse == null) {
@@ -109,7 +127,9 @@ class ProblemService {
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print('DEBUG: Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}');
+        print(
+          'DEBUG: Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        );
 
         final problems = <ProblemWithDetails>[];
         for (final json in response) {
@@ -120,7 +140,9 @@ class ProblemService {
             if (problem.resolvedDateTimeParsed != null) {
               final resolvedTime = problem.resolvedDateTimeParsed!;
               final now = DateTime.now();
-              final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
+              final minutesSinceResolved = now
+                  .difference(resolvedTime)
+                  .inMinutes;
 
               if (minutesSinceResolved >= 5) {
                 continue;
@@ -134,16 +156,22 @@ class ProblemService {
           }
         }
 
-        print('DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total');
+        print(
+          'DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total',
+        );
 
         // Enrich with SMS reporter names
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print('DEBUG: Total loadProblems time (non-crew): ${DateTime.now().difference(startTime).inMilliseconds}ms');
+        print(
+          'DEBUG: Total loadProblems time (non-crew): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        );
         return enrichedProblems;
       } else {
         // User is part of the crew: show crew's problems + any problems user created for other crews
-        print('DEBUG: User is in crew $crewId, loading crew problems + user\'s problems for other crews');
+        print(
+          'DEBUG: User is in crew $crewId, loading crew problems + user\'s problems for other crews',
+        );
         final queryStart = DateTime.now();
 
         final response = await Supabase.instance.client
@@ -161,7 +189,9 @@ class ProblemService {
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print('DEBUG: Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}');
+        print(
+          'DEBUG: Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        );
 
         final problems = <ProblemWithDetails>[];
         final seenProblemIds = <int>{}; // Track IDs to avoid duplicates
@@ -180,7 +210,9 @@ class ProblemService {
             if (problem.resolvedDateTimeParsed != null) {
               final resolvedTime = problem.resolvedDateTimeParsed!;
               final now = DateTime.now();
-              final minutesSinceResolved = now.difference(resolvedTime).inMinutes;
+              final minutesSinceResolved = now
+                  .difference(resolvedTime)
+                  .inMinutes;
 
               if (minutesSinceResolved >= 5) {
                 continue;
@@ -194,12 +226,16 @@ class ProblemService {
           }
         }
 
-        print('DEBUG: Successfully parsed ${problems.length} unique problems out of ${response.length} total');
+        print(
+          'DEBUG: Successfully parsed ${problems.length} unique problems out of ${response.length} total',
+        );
 
         // Enrich with SMS reporter names
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print('DEBUG: Total loadProblems time (crew member): ${DateTime.now().difference(startTime).inMilliseconds}ms');
+        print(
+          'DEBUG: Total loadProblems time (crew member): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        );
         return enrichedProblems;
       }
     } catch (e) {
@@ -208,14 +244,18 @@ class ProblemService {
     }
   }
 
-  Future<Map<int, List<Map<String, dynamic>>>> loadResponders(List<ProblemWithDetails> problems) async {
+  Future<Map<int, List<Map<String, dynamic>>>> loadResponders(
+    List<ProblemWithDetails> problems,
+  ) async {
     try {
       if (problems.isEmpty) return {};
 
       final problemIds = problems.map((p) => p.id).toList();
       final response = await Supabase.instance.client
           .from('responders')
-          .select('problem, user_id, responded_at, user:user_id(firstname, lastname)')
+          .select(
+            'problem, user_id, responded_at, user:user_id(firstname, lastname)',
+          )
           .inFilter('problem', problemIds);
 
       print('DEBUG loadResponders: Raw response = $response');
@@ -259,37 +299,50 @@ class ProblemService {
         'responded_at': DateTime.now().toUtc().toIso8601String(),
       });
 
-      final responderName = '${userResponse['firstname']} ${userResponse['lastname']}';
+      final responderName =
+          '${userResponse['firstname']} ${userResponse['lastname']}';
       final strip = problemResponse['strip'] as String;
       final crewId = problemResponse['crew'] as int;
       final reporterId = problemResponse['originator'] as String?;
 
       // Send crew message (fire and forget - don't block UI)
-      Supabase.instance.client.from('crew_messages').insert({
-        'crew': crewId,
-        'author': userId,
-        'message': '$responderName is on the way',
-      }).catchError((e) {
-        debugLogError('Failed to send crew message (responder was recorded successfully)', e);
-      });
+      Supabase.instance.client
+          .from('crew_messages')
+          .insert({
+            'crew': crewId,
+            'author': userId,
+            'message': '$responderName is on the way',
+          })
+          .catchError((e) {
+            debugLogError(
+              'Failed to send crew message (responder was recorded successfully)',
+              e,
+            );
+          });
 
       // Send notification using Edge Function (fire and forget - don't block UI)
-      NotificationService().sendCrewNotification(
-        title: 'Crew Member En Route',
-        body: '$responderName is en route to Strip $strip',
-        crewId: crewId.toString(),
-        senderId: userId,
-        data: {
-          'type': 'problem_response',
-          'problemId': problemId.toString(),
-          'crewId': crewId.toString(),
-          'strip': strip,
-        },
-        includeReporter: true, // Include reporter so they know help is coming
-        reporterId: reporterId,
-      ).catchError((e) {
-        debugLogError('Failed to send notification (responder was recorded successfully)', e);
-      });
+      NotificationService()
+          .sendCrewNotification(
+            title: 'Crew Member En Route',
+            body: '$responderName is en route to Strip $strip',
+            crewId: crewId.toString(),
+            senderId: userId,
+            data: {
+              'type': 'problem_response',
+              'problemId': problemId.toString(),
+              'crewId': crewId.toString(),
+              'strip': strip,
+            },
+            includeReporter:
+                true, // Include reporter so they know help is coming
+            reporterId: reporterId,
+          )
+          .catchError((e) {
+            debugLogError(
+              'Failed to send notification (responder was recorded successfully)',
+              e,
+            );
+          });
 
       // Send SMS to reporter if problem was created via SMS (fire and forget - don't block UI)
       // (The send-sms function will check if reporter_phone exists)
@@ -299,26 +352,32 @@ class ProblemService {
         const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
         final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
 
-        http.post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ${session.accessToken}',
-            'apikey': supabaseAnonKey,
-          },
-          body: jsonEncode({
-            'problemId': problemId,
-            'message': '',
-            'type': 'on_my_way',
-            'senderName': responderName,
-          }),
-        ).catchError((e) {
-          debugLogError('Failed to send SMS to reporter (responder was recorded successfully)', e);
-        });
+        http
+            .post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ${session.accessToken}',
+                'apikey': supabaseAnonKey,
+              },
+              body: jsonEncode({
+                'problemId': problemId,
+                'message': '',
+                'type': 'on_my_way',
+                'senderName': responderName,
+              }),
+            )
+            .catchError((e) {
+              debugLogError(
+                'Failed to send SMS to reporter (responder was recorded successfully)',
+                e,
+              );
+            });
       }
     } catch (e) {
       debugLogError('Error updating status (goOnMyWay)', e);
-      if (e.toString().contains('duplicate key') || e.toString().contains('UNIQUE')) {
+      if (e.toString().contains('duplicate key') ||
+          e.toString().contains('UNIQUE')) {
         throw Exception('You are already en route');
       }
       throw Exception('Failed to update status: $e');
@@ -339,7 +398,9 @@ class ProblemService {
     }
   }
 
-  Future<Map<String, dynamic>?> loadMissingOriginatorData(String originatorId) async {
+  Future<Map<String, dynamic>?> loadMissingOriginatorData(
+    String originatorId,
+  ) async {
     try {
       final userResponse = await Supabase.instance.client
           .from('users')
@@ -353,7 +414,9 @@ class ProblemService {
     }
   }
 
-  Future<Map<String, dynamic>?> loadMissingResolverData(String actionById) async {
+  Future<Map<String, dynamic>?> loadMissingResolverData(
+    String actionById,
+  ) async {
     try {
       final userResponse = await Supabase.instance.client
           .from('users')
@@ -370,7 +433,9 @@ class ProblemService {
   /// Load reporter names for problems that have reporter_phone set
   /// Uses the database function get_reporter_name which checks:
   /// 1) users table (app users), 2) sms_reporters table (legacy data)
-  Future<Map<String, Map<String, dynamic>>> loadReporterNamesByPhone(List<String> phoneNumbers) async {
+  Future<Map<String, Map<String, dynamic>>> loadReporterNamesByPhone(
+    List<String> phoneNumbers,
+  ) async {
     if (phoneNumbers.isEmpty) return {};
 
     final result = <String, Map<String, dynamic>>{};
@@ -379,8 +444,10 @@ class ProblemService {
       // Call the database function for each phone number
       // The function handles normalization and lookup priority
       for (final phone in phoneNumbers) {
-        final response = await Supabase.instance.client
-            .rpc('get_reporter_name', params: {'reporter_phone': phone});
+        final response = await Supabase.instance.client.rpc(
+          'get_reporter_name',
+          params: {'reporter_phone': phone},
+        );
 
         if (response != null && response is String && response.isNotEmpty) {
           result[phone] = {'phone': phone, 'name': response};
@@ -395,11 +462,18 @@ class ProblemService {
   }
 
   /// Enrich problems with SMS reporter data
-  Future<List<ProblemWithDetails>> enrichWithSmsReporterNames(List<ProblemWithDetails> problems) async {
+  Future<List<ProblemWithDetails>> enrichWithSmsReporterNames(
+    List<ProblemWithDetails> problems,
+  ) async {
     // Collect phone numbers that need lookup
     // Check for reporterPhone and no existing smsReporter or originator data
     final phoneNumbers = problems
-        .where((p) => p.problem.reporterPhone != null && p.smsReporter == null && p.originator == null)
+        .where(
+          (p) =>
+              p.problem.reporterPhone != null &&
+              p.smsReporter == null &&
+              p.originator == null,
+        )
         .map((p) => p.problem.reporterPhone!)
         .toSet()
         .toList();
@@ -411,7 +485,8 @@ class ProblemService {
 
     // Update problems with reporter data
     return problems.map((p) {
-      if (p.problem.reporterPhone != null && reporters.containsKey(p.problem.reporterPhone)) {
+      if (p.problem.reporterPhone != null &&
+          reporters.containsKey(p.problem.reporterPhone)) {
         return p.copyWith(smsReporter: reporters[p.problem.reporterPhone]);
       }
       return p;
@@ -449,12 +524,14 @@ class ProblemService {
       }
 
       // Check if user is a crew member
-      final crewMemberResponse = crewId != null ? await Supabase.instance.client
-          .from('crewmembers')
-          .select('crew')
-          .eq('crewmember', userId)
-          .eq('crew', crewId)
-          .maybeSingle() : null;
+      final crewMemberResponse = crewId != null
+          ? await Supabase.instance.client
+                .from('crewmembers')
+                .select('crew')
+                .eq('crewmember', userId)
+                .eq('crew', crewId)
+                .maybeSingle()
+          : null;
 
       // Non-crew member or no crew: only their own new problems
       if (crewId == null || crewMemberResponse == null) {
@@ -492,11 +569,13 @@ class ProblemService {
 
       final problemIdsStr = problemIds.join(',');
 
-      final newMessages = await Supabase.instance.client
-          .rpc('get_new_messages', params: {
-            'since_time': since.toIso8601String(),
-            'problem_ids': problemIdsStr,
-          });
+      final newMessages = await Supabase.instance.client.rpc(
+        'get_new_messages',
+        params: {
+          'since_time': since.toIso8601String(),
+          'problem_ids': problemIdsStr,
+        },
+      );
 
       return List<Map<String, dynamic>>.from(newMessages ?? []);
     } catch (e) {
@@ -540,7 +619,9 @@ class ProblemService {
   }
 
   /// Load messages for a specific problem
-  Future<List<Map<String, dynamic>>> loadMessagesForProblem(int problemId) async {
+  Future<List<Map<String, dynamic>>> loadMessagesForProblem(
+    int problemId,
+  ) async {
     try {
       final response = await Supabase.instance.client
           .from('messages')
@@ -585,9 +666,13 @@ class ProblemService {
     }
   }
 
-  String getProblemStatus(ProblemWithDetails problem, Map<int, List<Map<String, dynamic>>> responders) {
+  String getProblemStatus(
+    ProblemWithDetails problem,
+    Map<int, List<Map<String, dynamic>>> responders,
+  ) {
     if (problem.isResolved) return 'resolved';
-    if (responders.containsKey(problem.id) && responders[problem.id]!.isNotEmpty) {
+    if (responders.containsKey(problem.id) &&
+        responders[problem.id]!.isNotEmpty) {
       return 'en_route';
     }
     return 'new';
@@ -610,9 +695,10 @@ class ProblemService {
       });
 
       // Update the problem with the new symptom
-      await Supabase.instance.client.from('problem').update({
-        'symptom': newSymptomId,
-      }).eq('id', problemId);
+      await Supabase.instance.client
+          .from('problem')
+          .update({'symptom': newSymptomId})
+          .eq('id', problemId);
     } catch (e) {
       debugLogError('Failed to change symptom', e);
       throw Exception('Failed to change symptom: $e');
@@ -636,6 +722,135 @@ class ProblemService {
     } catch (e) {
       debugLogError('Failed to load symptom history', e);
       return [];
+    }
+  }
+
+  /// Check if the current user is a super user.
+  Future<bool> checkSuperUserStatus() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return false;
+
+      final userResponse = await Supabase.instance.client
+          .from('users')
+          .select('superuser')
+          .eq('supabase_id', userId)
+          .maybeSingle();
+
+      return userResponse?['superuser'] == true;
+    } catch (e) {
+      debugLogError('Error checking superuser status', e);
+      return false;
+    }
+  }
+
+  /// Load all crews for an event (for superuser crew selection).
+  /// Returns crews sorted: Armorer, Medical, then alphabetically.
+  Future<List<Map<String, dynamic>>> loadAllCrewsForEvent(int eventId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('crews')
+          .select('''
+            id,
+            crewtype:crewtypes(crewtype),
+            crew_chief:users(firstname, lastname)
+          ''')
+          .eq('event', eventId)
+          .order('crewtype(crewtype)');
+
+      final crewList = List<Map<String, dynamic>>.from(response);
+      crewList.sort((a, b) {
+        final aType = (a['crewtype']?['crewtype'] as String?) ?? '';
+        final bType = (b['crewtype']?['crewtype'] as String?) ?? '';
+
+        const priorityOrder = ['Armorer', 'Medical'];
+        final aIndex = priorityOrder.indexOf(aType);
+        final bIndex = priorityOrder.indexOf(bType);
+
+        if (aIndex != -1 && bIndex != -1) {
+          return aIndex.compareTo(bIndex);
+        } else if (aIndex != -1) {
+          return -1;
+        } else if (bIndex != -1) {
+          return 1;
+        } else {
+          return aType.compareTo(bType);
+        }
+      });
+
+      return crewList;
+    } catch (e) {
+      debugLogError('Error loading all crews', e);
+      return [];
+    }
+  }
+
+  /// Determine if the user is a referee (not a crew member) for the given crew.
+  Future<bool> isUserRefereeForCrew(int crewId) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return true;
+
+      final crewMemberResponse = await Supabase.instance.client
+          .from('crewmembers')
+          .select('crew:crew(id, crewtype:crewtypes(crewtype))')
+          .eq('crew', crewId)
+          .eq('crewmember', userId)
+          .maybeSingle();
+
+      return crewMemberResponse == null;
+    } catch (e) {
+      debugLogError('Error checking crew membership', e);
+      return true;
+    }
+  }
+
+  /// Get the user's crew info for an event.
+  /// Returns (crewId, crewName) or (null, null) if user is not in any crew.
+  Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return (crewId: null, crewName: null);
+
+      final crewMember = await Supabase.instance.client
+          .from('crewmembers')
+          .select('''
+            crew:crew(
+              id,
+              event,
+              crewtype:crewtypes(crewtype)
+            )
+          ''')
+          .eq('crewmember', userId)
+          .eq('crew.event', eventId)
+          .maybeSingle();
+
+      if (crewMember != null && crewMember['crew'] != null) {
+        final crew = crewMember['crew'] as Map<String, dynamic>;
+        final crewTypeData = crew['crewtype'] as Map<String, dynamic>?;
+        final crewTypeName = crewTypeData?['crewtype'] as String? ?? 'Crew';
+        return (crewId: crew['id'] as int, crewName: crewTypeName);
+      }
+
+      return (crewId: null, crewName: null);
+    } catch (e) {
+      debugLogError('Error getting user crew info', e);
+      return (crewId: null, crewName: null);
+    }
+  }
+
+  /// Get the crew type ID for a given crew.
+  Future<int?> getCrewTypeId(int crewId) async {
+    try {
+      final crewResponse = await Supabase.instance.client
+          .from('crews')
+          .select('crew_type')
+          .eq('id', crewId)
+          .maybeSingle();
+      return crewResponse?['crew_type'] as int?;
+    } catch (e) {
+      debugLogError('Error getting crew type ID', e);
+      return null;
     }
   }
 }
