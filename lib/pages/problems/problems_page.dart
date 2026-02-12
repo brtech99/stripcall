@@ -17,16 +17,172 @@ import 'resolve_problem_dialog.dart';
 import 'edit_symptom_dialog.dart';
 import 'problems_state.dart';
 
+/// Abstract interface for problem data operations.
+/// Used for dependency injection to enable unit testing.
+abstract class ProblemsRepository {
+  String? get currentUserId;
+
+  Future<bool> checkSuperUserStatus();
+  Future<List<Map<String, dynamic>>> loadAllCrewsForEvent(int eventId);
+  Future<bool> isUserRefereeForCrew(int crewId);
+  Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId);
+  Future<List<ProblemWithDetails>> loadProblems({
+    required int eventId,
+    required String userId,
+    int? crewId,
+    bool isSuperUser,
+  });
+  Future<Map<int, List<Map<String, dynamic>>>> loadResponders(
+    List<ProblemWithDetails> problems,
+  );
+  Future<List<Map<String, dynamic>>> checkForNewProblems({
+    required int eventId,
+    required String userId,
+    required DateTime since,
+    int? crewId,
+    bool isSuperUser,
+  });
+  Future<List<Map<String, dynamic>>> checkForNewMessages({
+    required DateTime since,
+    required List<int> problemIds,
+  });
+  Future<List<Map<String, dynamic>>> checkForProblemUpdates({
+    required DateTime since,
+    required List<int> problemIds,
+  });
+  Future<List<Map<String, dynamic>>> checkForResolvedProblems({
+    required int eventId,
+    required int crewId,
+    required DateTime since,
+  });
+  Future<int?> getCrewTypeId(int crewId);
+  Future<Map<String, dynamic>?> loadMissingSymptomData(int symptomId);
+  Future<Map<String, dynamic>?> loadMissingOriginatorData(String originatorId);
+  Future<Map<String, dynamic>?> loadMissingResolverData(String actionById);
+  Future<void> goOnMyWay(int problemId, String userId);
+  String getProblemStatus(
+    ProblemWithDetails problem,
+    Map<int, List<Map<String, dynamic>>> responders,
+  );
+}
+
+/// Default implementation that delegates to ProblemService + Supabase auth.
+class DefaultProblemsRepository implements ProblemsRepository {
+  final ProblemService _service = ProblemService();
+
+  @override
+  String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  @override
+  Future<bool> checkSuperUserStatus() => _service.checkSuperUserStatus();
+
+  @override
+  Future<List<Map<String, dynamic>>> loadAllCrewsForEvent(int eventId) =>
+      _service.loadAllCrewsForEvent(eventId);
+
+  @override
+  Future<bool> isUserRefereeForCrew(int crewId) =>
+      _service.isUserRefereeForCrew(crewId);
+
+  @override
+  Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId) =>
+      _service.getUserCrewInfo(eventId);
+
+  @override
+  Future<List<ProblemWithDetails>> loadProblems({
+    required int eventId,
+    required String userId,
+    int? crewId,
+    bool isSuperUser = false,
+  }) => _service.loadProblems(
+    eventId: eventId,
+    userId: userId,
+    crewId: crewId,
+    isSuperUser: isSuperUser,
+  );
+
+  @override
+  Future<Map<int, List<Map<String, dynamic>>>> loadResponders(
+    List<ProblemWithDetails> problems,
+  ) => _service.loadResponders(problems);
+
+  @override
+  Future<List<Map<String, dynamic>>> checkForNewProblems({
+    required int eventId,
+    required String userId,
+    required DateTime since,
+    int? crewId,
+    bool isSuperUser = false,
+  }) => _service.checkForNewProblems(
+    eventId: eventId,
+    userId: userId,
+    since: since,
+    crewId: crewId,
+    isSuperUser: isSuperUser,
+  );
+
+  @override
+  Future<List<Map<String, dynamic>>> checkForNewMessages({
+    required DateTime since,
+    required List<int> problemIds,
+  }) => _service.checkForNewMessages(since: since, problemIds: problemIds);
+
+  @override
+  Future<List<Map<String, dynamic>>> checkForProblemUpdates({
+    required DateTime since,
+    required List<int> problemIds,
+  }) => _service.checkForProblemUpdates(since: since, problemIds: problemIds);
+
+  @override
+  Future<List<Map<String, dynamic>>> checkForResolvedProblems({
+    required int eventId,
+    required int crewId,
+    required DateTime since,
+  }) => _service.checkForResolvedProblems(
+    eventId: eventId,
+    crewId: crewId,
+    since: since,
+  );
+
+  @override
+  Future<int?> getCrewTypeId(int crewId) => _service.getCrewTypeId(crewId);
+
+  @override
+  Future<Map<String, dynamic>?> loadMissingSymptomData(int symptomId) =>
+      _service.loadMissingSymptomData(symptomId);
+
+  @override
+  Future<Map<String, dynamic>?> loadMissingOriginatorData(
+    String originatorId,
+  ) => _service.loadMissingOriginatorData(originatorId);
+
+  @override
+  Future<Map<String, dynamic>?> loadMissingResolverData(String actionById) =>
+      _service.loadMissingResolverData(actionById);
+
+  @override
+  Future<void> goOnMyWay(int problemId, String userId) =>
+      _service.goOnMyWay(problemId, userId);
+
+  @override
+  String getProblemStatus(
+    ProblemWithDetails problem,
+    Map<int, List<Map<String, dynamic>>> responders,
+  ) => _service.getProblemStatus(problem, responders);
+}
+
 class ProblemsPage extends StatefulWidget {
   final int eventId;
   final int? crewId;
   final String? crewType;
+  final ProblemsRepository? repository;
 
   const ProblemsPage({
     super.key,
     required this.eventId,
     required this.crewId,
     required this.crewType,
+    this.repository,
   });
 
   @override
@@ -34,7 +190,7 @@ class ProblemsPage extends StatefulWidget {
 }
 
 class _ProblemsPageState extends State<ProblemsPage> {
-  final ProblemService _problemService = ProblemService();
+  late final ProblemsRepository _repo;
   final GlobalKey<CrewMessageWindowState> _crewMessageKey = GlobalKey();
 
   ProblemsPageState _state = const ProblemsPageState();
@@ -43,6 +199,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   @override
   void initState() {
     super.initState();
+    _repo = widget.repository ?? DefaultProblemsRepository();
     _initialize();
   }
 
@@ -73,7 +230,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _checkSuperUserStatus() async {
-    final isSuperUser = await _problemService.checkSuperUserStatus();
+    final isSuperUser = await _repo.checkSuperUserStatus();
     _updateState(_state.copyWith(isSuperUser: isSuperUser));
 
     if (isSuperUser) {
@@ -82,7 +239,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _loadAllCrews() async {
-    final crews = await _problemService.loadAllCrewsForEvent(widget.eventId);
+    final crews = await _repo.loadAllCrewsForEvent(widget.eventId);
 
     int? selectedCrewId = _state.selectedCrewId;
     if (selectedCrewId == null && crews.isNotEmpty) {
@@ -96,15 +253,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   Future<void> _loadCrewInfo() async {
     if (widget.crewId != null) {
-      final isReferee = await _problemService.isUserRefereeForCrew(
-        widget.crewId!,
-      );
+      final isReferee = await _repo.isUserRefereeForCrew(widget.crewId!);
       _updateState(_state.copyWith(isReferee: isReferee));
     }
   }
 
   Future<void> _determineUserCrewInfo() async {
-    final crewInfo = await _problemService.getUserCrewInfo(widget.eventId);
+    final crewInfo = await _repo.getUserCrewInfo(widget.eventId);
     _updateState(
       _state.copyWith(
         userCrewId: crewInfo.crewId,
@@ -117,11 +272,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   Future<void> _loadProblems() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = _repo.currentUserId;
       if (userId == null) throw Exception('User not logged in');
 
       final crewId = _state.getActiveCrewId(widget.crewId);
-      final problems = await _problemService.loadProblems(
+      final problems = await _repo.loadProblems(
         eventId: widget.eventId,
         userId: userId,
         crewId: crewId,
@@ -141,7 +296,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _loadResponders() async {
-    final responders = await _problemService.loadResponders(_state.problems);
+    final responders = await _repo.loadResponders(_state.problems);
     _updateState(_state.copyWith(responders: responders));
   }
 
@@ -149,7 +304,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (!mounted) return;
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = _repo.currentUserId;
       if (userId == null) return;
 
       final latestProblemTime = _state.problems.isNotEmpty
@@ -177,11 +332,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (!mounted) return;
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = _repo.currentUserId;
       if (userId == null) return;
 
       final crewId = _state.getActiveCrewId(widget.crewId);
-      final newProblems = await _problemService.checkForNewProblems(
+      final newProblems = await _repo.checkForNewProblems(
         eventId: widget.eventId,
         userId: userId,
         since: since,
@@ -202,7 +357,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     try {
       final problemIds = _state.problems.map((p) => p.id).toList();
-      final newMessages = await _problemService.checkForNewMessages(
+      final newMessages = await _repo.checkForNewMessages(
         since: since,
         problemIds: problemIds,
       );
@@ -230,7 +385,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
         if (unresolvedProblemIds.isEmpty) return;
 
-        final updatedProblems = await _problemService.checkForProblemUpdates(
+        final updatedProblems = await _repo.checkForProblemUpdates(
           since: since,
           problemIds: unresolvedProblemIds,
         );
@@ -258,7 +413,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
 
     try {
-      final resolvedProblems = await _problemService.checkForResolvedProblems(
+      final resolvedProblems = await _repo.checkForResolvedProblems(
         eventId: widget.eventId,
         crewId: widget.crewId!,
         since: since,
@@ -394,7 +549,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   Future<void> _showEditSymptomDialog(ProblemWithDetails problem) async {
-    final crewTypeId = await _problemService.getCrewTypeId(problem.crewId);
+    final crewTypeId = await _repo.getCrewTypeId(problem.crewId);
     if (!mounted) return;
 
     final result = await showDialog<bool>(
@@ -417,9 +572,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _loadMissingData(ProblemWithDetails problem) async {
     // Load missing symptom data
     if (problem.symptom == null && problem.symptomId != 0) {
-      final symptomData = await _problemService.loadMissingSymptomData(
-        problem.symptomId,
-      );
+      final symptomData = await _repo.loadMissingSymptomData(problem.symptomId);
       if (symptomData != null && mounted) {
         _updateState(
           _state.updateProblem(
@@ -432,7 +585,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     // Load missing originator data
     if (problem.originator == null && problem.originatorId.isNotEmpty) {
-      final originatorData = await _problemService.loadMissingOriginatorData(
+      final originatorData = await _repo.loadMissingOriginatorData(
         problem.originatorId,
       );
       if (originatorData != null && mounted) {
@@ -447,7 +600,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     // Load missing resolver data
     if (problem.actionBy == null && problem.actionById != null) {
-      final resolverData = await _problemService.loadMissingResolverData(
+      final resolverData = await _repo.loadMissingResolverData(
         problem.actionById!,
       );
       if (resolverData != null && mounted) {
@@ -463,10 +616,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   Future<void> _goOnMyWay(int problemId) async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = _repo.currentUserId;
       if (userId == null) return;
 
-      await _problemService.goOnMyWay(problemId, userId);
+      await _repo.goOnMyWay(problemId, userId);
 
       // Update the local responders data immediately
       _updateState(
@@ -512,8 +665,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (_state.isSuperUser) {
       final selectedCrew = _state.allCrews.firstWhere(
         (crew) => crew['id'] == _state.selectedCrewId,
-        orElse: () => {
-          'crewtype': {'crewtype': 'All Crews'},
+        orElse: () => <String, dynamic>{
+          'crewtype': <String, dynamic>{'crewtype': 'All Crews'},
         },
       );
       final crewType = selectedCrew['crewtype']?['crewtype'] ?? 'All Crews';
@@ -559,7 +712,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
             CrewMessageWindow(
               key: _crewMessageKey,
               crewId: _state.getActiveCrewId(widget.crewId)!,
-              currentUserId: Supabase.instance.client.auth.currentUser?.id,
+              currentUserId: _repo.currentUserId,
             ),
           Expanded(child: _buildProblemsContent()),
         ],
@@ -618,8 +771,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
         : _state.userCrewId;
     final isUserCrew =
         userActiveCrew != null && problem.crewId == userActiveCrew;
-    final status = _problemService.getProblemStatus(problem, _state.responders);
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final status = _repo.getProblemStatus(problem, _state.responders);
+    final currentUserId = _repo.currentUserId;
     final isUserResponding =
         _state.responders[problem.id]?.any(
           (r) => r['user_id'] == currentUserId,

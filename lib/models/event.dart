@@ -10,6 +10,7 @@ class Event {
   final String organizerId;
   final Map<String, dynamic>? organizer;
   final bool useSms;
+  final bool notifySuperusers;
 
   const Event({
     required this.id,
@@ -23,6 +24,7 @@ class Event {
     required this.organizerId,
     this.organizer,
     this.useSms = false,
+    this.notifySuperusers = true,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) {
@@ -78,6 +80,7 @@ class Event {
       organizerId: organizerId,
       organizer: organizer,
       useSms: json['use_sms'] ?? false,
+      notifySuperusers: json['notify_superusers'] ?? true,
     );
   }
 
@@ -93,6 +96,7 @@ class Event {
       'count': count,
       'organizer': organizerId,
       'use_sms': useSms,
+      'notify_superusers': notifySuperusers,
     };
   }
 

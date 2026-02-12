@@ -12,16 +12,195 @@ import '../../widgets/settings_menu.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 
+/// Abstract interface for manage event data operations.
+abstract class ManageEventRepository {
+  String? get currentUserId;
+  Future<bool> checkSuperUser();
+  Future<List<Crew>> loadCrews(int eventId);
+  Future<List<CrewType>> loadCrewTypes();
+  Future<void> saveEvent(Map<String, dynamic> data, {int? eventId});
+  Future<List<Map<String, dynamic>>> checkSmsOverlap(
+    DateTime start,
+    DateTime end,
+    int? excludeEventId,
+  );
+  Future<void> addCrew(int eventId, String crewChiefId, int crewTypeId);
+  Future<void> updateCrewChief(int crewId, String crewChiefId);
+  Future<void> deleteCrew(int crewId);
+  Future<int> getCrewProblemCount(int crewId);
+  Future<int> getCrewMessageCount(int crewId);
+  Future<int> getCrewCrewMessageCount(int crewId);
+}
+
+/// Default implementation using Supabase.
+class DefaultManageEventRepository implements ManageEventRepository {
+  @override
+  String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
+  @override
+  Future<bool> checkSuperUser() => auth.isSuperUser();
+
+  @override
+  Future<List<Crew>> loadCrews(int eventId) async {
+    final response = await Supabase.instance.client
+        .from('crews')
+        .select('*, crew_chief:users(firstname, lastname)')
+        .eq('event', eventId)
+        .order('crew_type');
+    return response.map<Crew>((json) => Crew.fromJson(json)).toList();
+  }
+
+  @override
+  Future<List<CrewType>> loadCrewTypes() async {
+    final response = await Supabase.instance.client
+        .from('crewtypes')
+        .select()
+        .order('crewtype');
+    return response.map<CrewType>((json) => CrewType.fromJson(json)).toList();
+  }
+
+  @override
+  Future<void> saveEvent(Map<String, dynamic> data, {int? eventId}) async {
+    if (eventId == null) {
+      await Supabase.instance.client.from('events').insert(data);
+    } else {
+      await Supabase.instance.client
+          .from('events')
+          .update(data)
+          .eq('id', eventId);
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> checkSmsOverlap(
+    DateTime start,
+    DateTime end,
+    int? excludeEventId,
+  ) async {
+    var query = Supabase.instance.client
+        .from('events')
+        .select('id, name')
+        .eq('use_sms', true)
+        .lt('startdatetime', end.toIso8601String())
+        .gt('enddatetime', start.toIso8601String());
+
+    if (excludeEventId != null) {
+      query = query.neq('id', excludeEventId);
+    }
+
+    return List<Map<String, dynamic>>.from(await query);
+  }
+
+  @override
+  Future<void> addCrew(int eventId, String crewChiefId, int crewTypeId) async {
+    final crewResponse = await Supabase.instance.client
+        .from('crews')
+        .insert({
+          'event': eventId,
+          'crew_chief': crewChiefId,
+          'crew_type': crewTypeId,
+        })
+        .select('id')
+        .single();
+
+    await Supabase.instance.client.from('crewmembers').insert({
+      'crew': crewResponse['id'],
+      'crewmember': crewChiefId,
+    });
+  }
+
+  @override
+  Future<void> updateCrewChief(int crewId, String crewChiefId) async {
+    await Supabase.instance.client
+        .from('crews')
+        .update({'crew_chief': crewChiefId})
+        .eq('id', crewId);
+  }
+
+  @override
+  Future<void> deleteCrew(int crewId) async {
+    // Delete related data first
+    final problemIds = await Supabase.instance.client
+        .from('problem')
+        .select('id')
+        .eq('crew', crewId);
+
+    if (problemIds.isNotEmpty) {
+      final ids = problemIds.map((p) => p['id'] as int).toList();
+      await Supabase.instance.client
+          .from('responders')
+          .delete()
+          .inFilter('problem', ids);
+      await Supabase.instance.client
+          .from('oldproblemsymptom')
+          .delete()
+          .inFilter('problem', ids);
+    }
+
+    await Supabase.instance.client.from('messages').delete().eq('crew', crewId);
+    await Supabase.instance.client.from('problem').delete().eq('crew', crewId);
+    await Supabase.instance.client
+        .from('crew_messages')
+        .delete()
+        .eq('crew', crewId);
+    await Supabase.instance.client
+        .from('sms_reply_slots')
+        .delete()
+        .eq('crew_id', crewId);
+    await Supabase.instance.client
+        .from('sms_crew_slot_counter')
+        .delete()
+        .eq('crew_id', crewId);
+    await Supabase.instance.client
+        .from('crewmembers')
+        .delete()
+        .eq('crew', crewId);
+    await Supabase.instance.client.from('crews').delete().eq('id', crewId);
+  }
+
+  @override
+  Future<int> getCrewProblemCount(int crewId) async {
+    final result = await Supabase.instance.client
+        .from('problem')
+        .select('id')
+        .eq('crew', crewId)
+        .count(CountOption.exact);
+    return result.count;
+  }
+
+  @override
+  Future<int> getCrewMessageCount(int crewId) async {
+    final result = await Supabase.instance.client
+        .from('messages')
+        .select('id')
+        .eq('crew', crewId)
+        .count(CountOption.exact);
+    return result.count;
+  }
+
+  @override
+  Future<int> getCrewCrewMessageCount(int crewId) async {
+    final result = await Supabase.instance.client
+        .from('crew_messages')
+        .select('id')
+        .eq('crew', crewId)
+        .count(CountOption.exact);
+    return result.count;
+  }
+}
+
 class ManageEventPage extends StatefulWidget {
   final Event? event;
+  final ManageEventRepository? repository;
 
-  const ManageEventPage({super.key, this.event});
+  const ManageEventPage({super.key, this.event, this.repository});
 
   @override
   State<ManageEventPage> createState() => _ManageEventPageState();
 }
 
 class _ManageEventPageState extends State<ManageEventPage> {
+  late final ManageEventRepository _repo;
   List<Crew> _crews = [];
   List<CrewType> _availableCrewTypes = [];
   List<CrewType> _allCrewTypes = [];
@@ -29,6 +208,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
   String? _error;
   bool _isSuperUser = false;
   bool _useSms = false;
+  bool _notifySuperusers = true;
 
   late TextEditingController _nameController;
   late TextEditingController _cityController;
@@ -53,12 +233,14 @@ class _ManageEventPageState extends State<ManageEventPage> {
       text: _count > 0 ? _count.toString() : '',
     );
     _useSms = widget.event?.useSms ?? false;
+    _notifySuperusers = widget.event?.notifySuperusers ?? true;
+    _repo = widget.repository ?? DefaultManageEventRepository();
     _checkSuperUser();
     _loadCrewsAndTypes();
   }
 
   Future<void> _checkSuperUser() async {
-    final isSuperUser = await auth.isSuperUser();
+    final isSuperUser = await _repo.checkSuperUser();
     if (mounted) {
       setState(() {
         _isSuperUser = isSuperUser;
@@ -92,29 +274,16 @@ class _ManageEventPageState extends State<ManageEventPage> {
     });
 
     try {
-      final crewsResponse = await Supabase.instance.client
-          .from('crews')
-          .select('*, crew_chief:users(firstname, lastname)')
-          .eq('event', widget.event!.id)
-          .order('crew_type');
-      final crewTypesResponse = await Supabase.instance.client
-          .from('crewtypes')
-          .select()
-          .order('crewtype');
-      final usedTypeIds = crewsResponse.map((c) => c['crewtype']).toSet();
-      final availableTypes = crewTypesResponse
-          .where((t) => !usedTypeIds.contains(t['id']))
+      final crews = await _repo.loadCrews(widget.event!.id);
+      final allCrewTypes = await _repo.loadCrewTypes();
+      final usedTypeIds = crews.map((c) => c.crewTypeId).toSet();
+      final availableTypes = allCrewTypes
+          .where((t) => !usedTypeIds.contains(t.id))
           .toList();
       setState(() {
-        _crews = crewsResponse
-            .map<Crew>((json) => Crew.fromJson(json))
-            .toList();
-        _availableCrewTypes = availableTypes
-            .map<CrewType>((json) => CrewType.fromJson(json))
-            .toList();
-        _allCrewTypes = crewTypesResponse
-            .map<CrewType>((json) => CrewType.fromJson(json))
-            .toList();
+        _crews = crews;
+        _availableCrewTypes = availableTypes;
+        _allCrewTypes = allCrewTypes;
         _isLoading = false;
       });
     } catch (e) {
@@ -144,18 +313,11 @@ class _ManageEventPageState extends State<ManageEventPage> {
     }
 
     try {
-      var query = Supabase.instance.client
-          .from('events')
-          .select('id, name')
-          .eq('use_sms', true)
-          .lt('startdatetime', _endDate!.toIso8601String())
-          .gt('enddatetime', _startDate!.toIso8601String());
-
-      if (widget.event != null) {
-        query = query.neq('id', widget.event!.id);
-      }
-
-      final overlapping = await query;
+      final overlapping = await _repo.checkSmsOverlap(
+        _startDate!,
+        _endDate!,
+        widget.event?.id,
+      );
 
       if (overlapping.isNotEmpty) {
         final conflictName = overlapping.first['name'] ?? 'Unknown';
@@ -219,14 +381,15 @@ class _ManageEventPageState extends State<ManageEventPage> {
         'stripnumbering': _stripNumbering,
         'count': _count,
         if (_isSuperUser) 'use_sms': _useSms,
+        if (_isSuperUser) 'notify_superusers': _notifySuperusers,
       };
 
       if (widget.event == null) {
-        final userId = Supabase.instance.client.auth.currentUser?.id;
+        final userId = _repo.currentUserId;
         if (userId != null) {
           eventData['organizer'] = userId;
         }
-        await Supabase.instance.client.from('events').insert(eventData);
+        await _repo.saveEvent(eventData);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Event created successfully')),
@@ -234,10 +397,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
           context.pop();
         }
       } else {
-        await Supabase.instance.client
-            .from('events')
-            .update(eventData)
-            .eq('id', widget.event!.id);
+        await _repo.saveEvent(eventData, eventId: widget.event!.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Event updated successfully')),
@@ -312,20 +472,11 @@ class _ManageEventPageState extends State<ManageEventPage> {
     if (!mounted) return;
     if (result != null) {
       try {
-        final crewResponse = await Supabase.instance.client
-            .from('crews')
-            .insert({
-              'event': widget.event!.id,
-              'crew_chief': result.supabaseId,
-              'crew_type': selectedType.id,
-            })
-            .select('id')
-            .single();
-
-        await Supabase.instance.client.from('crewmembers').insert({
-          'crew': crewResponse['id'],
-          'crewmember': result.supabaseId,
-        });
+        await _repo.addCrew(
+          widget.event!.id,
+          result.supabaseId,
+          selectedType.id,
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -354,10 +505,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
 
     if (result != null) {
       try {
-        await Supabase.instance.client
-            .from('crews')
-            .update({'crew_chief': result.supabaseId})
-            .eq('id', crew.id);
+        await _repo.updateCrewChief(crew.id, result.supabaseId);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -380,28 +528,12 @@ class _ManageEventPageState extends State<ManageEventPage> {
 
   Future<void> _deleteCrew(int crewId) async {
     try {
-      final problemCount = await Supabase.instance.client
-          .from('problem')
-          .select('id')
-          .eq('crew', crewId)
-          .count(CountOption.exact);
-
-      final messageCount = await Supabase.instance.client
-          .from('messages')
-          .select('id')
-          .eq('crew', crewId)
-          .count(CountOption.exact);
-
-      final crewMessageCount = await Supabase.instance.client
-          .from('crew_messages')
-          .select('id')
-          .eq('crew', crewId)
-          .count(CountOption.exact);
+      final problemCount = await _repo.getCrewProblemCount(crewId);
+      final messageCount = await _repo.getCrewMessageCount(crewId);
+      final crewMessageCount = await _repo.getCrewCrewMessageCount(crewId);
 
       final hasActivity =
-          problemCount.count > 0 ||
-          messageCount.count > 0 ||
-          crewMessageCount.count > 0;
+          problemCount > 0 || messageCount > 0 || crewMessageCount > 0;
 
       if (hasActivity) {
         if (!mounted) return;
@@ -409,8 +541,8 @@ class _ManageEventPageState extends State<ManageEventPage> {
           context: context,
           title: 'Delete Active Crew?',
           message:
-              'This crew has been active with ${problemCount.count} problems and '
-              '${messageCount.count + crewMessageCount.count} messages. '
+              'This crew has been active with $problemCount problems and '
+              '${messageCount + crewMessageCount} messages. '
               'Deleting it will also delete all associated data.\n\n'
               'Are you sure you want to delete this crew?',
           confirmText: 'Delete',
@@ -418,59 +550,9 @@ class _ManageEventPageState extends State<ManageEventPage> {
         );
 
         if (confirmed != true) return;
-
-        await Supabase.instance.client
-            .from('messages')
-            .delete()
-            .eq('crew', crewId);
-
-        final problemIds = await Supabase.instance.client
-            .from('problem')
-            .select('id')
-            .eq('crew', crewId);
-
-        if (problemIds.isNotEmpty) {
-          final ids = problemIds.map((p) => p['id'] as int).toList();
-          await Supabase.instance.client
-              .from('responders')
-              .delete()
-              .inFilter('problem', ids);
-
-          await Supabase.instance.client
-              .from('oldproblemsymptom')
-              .delete()
-              .inFilter('problem', ids);
-        }
-
-        await Supabase.instance.client
-            .from('problem')
-            .delete()
-            .eq('crew', crewId);
-
-        await Supabase.instance.client
-            .from('crew_messages')
-            .delete()
-            .eq('crew', crewId);
-
-        await Supabase.instance.client
-            .from('sms_reply_slots')
-            .delete()
-            .eq('crew_id', crewId);
-
-        await Supabase.instance.client
-            .from('sms_crew_slot_counter')
-            .delete()
-            .eq('crew_id', crewId);
       }
 
-      // Always delete crewmembers before deleting the crew
-      // (every crew has at least one crewmember: the crew chief)
-      await Supabase.instance.client
-          .from('crewmembers')
-          .delete()
-          .eq('crew', crewId);
-
-      await Supabase.instance.client.from('crews').delete().eq('id', crewId);
+      await _repo.deleteCrew(crewId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -598,6 +680,17 @@ class _ManageEventPageState extends State<ManageEventPage> {
               subtitle: const Text('Route Twilio SMS to this event'),
               value: _useSms,
               onChanged: _isSuperUser ? _toggleUseSms : null,
+              contentPadding: EdgeInsets.zero,
+            ),
+          if (widget.event != null)
+            SwitchListTile(
+              key: const ValueKey('manage_event_notify_superusers_switch'),
+              title: const Text('Notify Superusers'),
+              subtitle: const Text('Send push notifications to superusers'),
+              value: _notifySuperusers,
+              onChanged: _isSuperUser
+                  ? (val) => setState(() => _notifySuperusers = val)
+                  : null,
               contentPadding: EdgeInsets.zero,
             ),
           AppSpacing.verticalLg,
