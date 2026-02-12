@@ -24,48 +24,39 @@ tags:
       id: "new_problem_dialog"
     timeout: 5000
 
-# Select the first crew radio button
+# Step 1: Select the first crew radio button
 - tapOn:
     id: "new_problem_crew_radio_.*"
     index: 0
 - waitForAnimationToEnd
 
-# Select a strip (tap the first strip chip)
+# Step 2: Select strip 1
 - tapOn:
     text: "1"
     index: 0
-
-# Wait for symptom class dropdown to become enabled
 - waitForAnimationToEnd
 
-# Select a symptom class (tap dropdown)
+# Step 3: Select symptom class - tap dropdown then select "Weapon Issue"
 - tapOn:
     id: "new_problem_symptom_class_dropdown"
 - waitForAnimationToEnd
-
-# Select first option in dropdown
 - tapOn:
-    text: ".*"
-    index: 0
-
-# Wait for symptoms to load
+    text: "Weapon Issue"
 - waitForAnimationToEnd
 
-# Select a symptom
+# Step 4: Select symptom - tap dropdown then select "Blade broken"
 - tapOn:
     id: "new_problem_symptom_dropdown"
 - waitForAnimationToEnd
-
-# Select first symptom option
 - tapOn:
-    text: ".*"
-    index: 0
+    text: "Blade broken"
 
-# Submit the problem
+# Step 5: Submit the problem
+- waitForAnimationToEnd
 - tapOn:
-    id: "new_problem_submit_button"
+    text: "Submit"
 
-# Wait for dialog to close and problem to appear
+# Wait for dialog to close
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:

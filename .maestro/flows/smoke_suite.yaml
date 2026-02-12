@@ -8,13 +8,12 @@ tags:
   - suite
 
 ---
-# Launch app and wait for it to fully load
+# Stop any running instance, clear state, and launch fresh
+- stopApp:
+    appId: "com.brianrosen.stripcall"
 - launchApp:
     appId: "com.brianrosen.stripcall"
-- extendedWaitUntil:
-    visible:
-      id: "login_email_field"
-    timeout: 15000
+    clearState: true
 
 # Run all smoke tests in sequence
 - runFlow: 01_login.yaml

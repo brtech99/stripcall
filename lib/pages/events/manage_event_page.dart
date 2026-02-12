@@ -281,20 +281,25 @@ class _ManageEventPageState extends State<ManageEventPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Select Crew Type'),
-        content: DropdownButtonFormField<int>(
-          items: _availableCrewTypes
-              .map(
-                (type) => DropdownMenuItem<int>(
-                  value: type.id,
-                  child: Text(type.crewType),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            Navigator.of(
-              context,
-            ).pop(_availableCrewTypes.firstWhere((t) => t.id == value));
-          },
+        content: Semantics(
+          identifier: 'add_crew_type_dropdown',
+          child: DropdownButtonFormField<int>(
+            key: const ValueKey('add_crew_type_dropdown'),
+            hint: const Text('Choose crew type'),
+            items: _availableCrewTypes
+                .map(
+                  (type) => DropdownMenuItem<int>(
+                    value: type.id,
+                    child: Text(type.crewType),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              Navigator.of(
+                context,
+              ).pop(_availableCrewTypes.firstWhere((t) => t.id == value));
+            },
+          ),
         ),
       ),
     );
@@ -680,70 +685,79 @@ class _ManageEventPageState extends State<ManageEventPage> {
             ),
           )
         else
-          Container(
-            constraints: const BoxConstraints(maxHeight: 300),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _crews.length,
-              itemBuilder: (context, index) {
-                final crew = _crews[index];
-                String chiefName;
-                if (crew.crewChief != null) {
-                  final firstName =
-                      crew.crewChief!['firstname'] as String? ?? '';
-                  final lastName = crew.crewChief!['lastname'] as String? ?? '';
-                  if (firstName.isNotEmpty || lastName.isNotEmpty) {
-                    chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
-                  } else {
-                    chiefName = 'Chief ID: ${crew.crewChiefId}';
-                  }
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _crews.length,
+            itemBuilder: (context, index) {
+              final crew = _crews[index];
+              String chiefName;
+              if (crew.crewChief != null) {
+                final firstName = crew.crewChief!['firstname'] as String? ?? '';
+                final lastName = crew.crewChief!['lastname'] as String? ?? '';
+                if (firstName.isNotEmpty || lastName.isNotEmpty) {
+                  chiefName = '${firstName.trim()} ${lastName.trim()}'.trim();
                 } else {
                   chiefName = 'Chief ID: ${crew.crewChiefId}';
                 }
+              } else {
+                chiefName = 'Chief ID: ${crew.crewChiefId}';
+              }
 
-                String crewTypeName = crew.crewTypeId.toString();
-                final crewTypeObj = _allCrewTypes.firstWhere(
-                  (t) => t.id == crew.crewTypeId,
-                  orElse: () => CrewType(id: -1, crewType: 'Unknown'),
-                );
-                if (crewTypeObj.id != -1) {
-                  crewTypeName = crewTypeObj.crewType;
-                }
+              String crewTypeName = crew.crewTypeId.toString();
+              final crewTypeObj = _allCrewTypes.firstWhere(
+                (t) => t.id == crew.crewTypeId,
+                orElse: () => CrewType(id: -1, crewType: 'Unknown'),
+              );
+              if (crewTypeObj.id != -1) {
+                crewTypeName = crewTypeObj.crewType;
+              }
 
-                return AppCard(
-                  key: ValueKey('manage_event_crew_card_$index'),
-                  margin: EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: AppListTile(
-                    title: Text(crewTypeName),
-                    subtitle: Text('Crew Chief: $chiefName'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Semantics(
-                          identifier: 'manage_event_crew_edit_$index',
+              return AppCard(
+                key: ValueKey('manage_event_crew_card_$index'),
+                margin: EdgeInsets.only(bottom: AppSpacing.sm),
+                child: AppListTile(
+                  title: Text(crewTypeName),
+                  subtitle: Text('Crew Chief: $chiefName'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Semantics(
+                        identifier: 'manage_event_crew_edit_$index',
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
                           child: IconButton(
                             key: ValueKey('manage_event_crew_edit_$index'),
-                            icon: const Icon(Icons.edit),
+                            icon: const Icon(Icons.edit, size: 20),
+                            padding: EdgeInsets.zero,
                             onPressed: () => _editCrew(crew),
                           ),
                         ),
-                        Semantics(
-                          identifier: 'manage_event_crew_delete_$index',
+                      ),
+                      Semantics(
+                        identifier: 'manage_event_crew_delete_$index',
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
                           child: IconButton(
                             key: ValueKey('manage_event_crew_delete_$index'),
                             icon: Icon(
                               Icons.delete,
+                              size: 20,
                               color: AppColors.statusError,
                             ),
+                            padding: EdgeInsets.zero,
+                            tooltip: 'Delete Crew',
                             onPressed: () => _deleteCrew(crew.id),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
       ],
     );

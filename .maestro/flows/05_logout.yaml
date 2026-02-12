@@ -9,7 +9,6 @@ tags:
   - auth
 
 ---
-
 # Open settings menu
 - tapOn:
     id: "settings_menu_button"
@@ -19,7 +18,7 @@ tags:
 
 # Tap logout
 - tapOn:
-    id: "settings_menu_logout"
+    text: "Logout"
 
 # Wait for logout to complete
 - waitForAnimationToEnd

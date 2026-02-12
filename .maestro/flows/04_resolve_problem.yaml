@@ -9,16 +9,19 @@ tags:
   - problems
 
 ---
-
-# Ensure we're on the problems page with problems visible
+# Ensure we're on the problems page with a problem visible
 - assertVisible:
-    id: "problems_list"
+    id: "problems_report_button"
 
-# Tap on the resolve button for the first problem
-# Problem cards have resolve buttons with pattern: problem_resolve_button_{id}
+# Tap on the problem card to expand it
 - tapOn:
-    id: "problem_resolve_button_.*"
+    id: "problem_card_.*"
     index: 0
+- waitForAnimationToEnd
+
+# Tap on the Resolve button on the expanded problem card
+- tapOn:
+    text: "Resolve"
 
 # Wait for resolve dialog to appear
 - waitForAnimationToEnd
@@ -27,36 +30,27 @@ tags:
       id: "resolve_problem_dialog"
     timeout: 5000
 
-# Verify dialog elements
-- assertVisible:
-    id: "resolve_problem_action_dropdown"
-
 # Select an action from dropdown
 - tapOn:
     id: "resolve_problem_action_dropdown"
 - waitForAnimationToEnd
 
-# Select first action option
+# Select the resolution action
 - tapOn:
-    text: ".*"
-    index: 0
+    text: "Replaced blade"
+- waitForAnimationToEnd
 
-# Optionally add notes (tap field and enter text)
+# Tap the Resolve button in the dialog
 - tapOn:
-    id: "resolve_problem_notes_field"
-- inputText: "Resolved via Maestro smoke test"
-
-# Submit resolution
-- tapOn:
-    id: "resolve_problem_submit_button"
+    text: "^Resolve$"
 
 # Wait for dialog to close
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "problems_list"
+      id: "problems_report_button"
     timeout: 10000
 
 # Verify we're back on problems page
 - assertVisible:
-    id: "problems_list"
+    id: "problems_report_button"

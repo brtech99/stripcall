@@ -278,16 +278,19 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                       child: const Text('Cancel'),
                     ),
                     AppSpacing.horizontalSm,
-                    TextButton(
-                      key: const ValueKey('resolve_problem_submit_button'),
-                      onPressed: _isLoading ? null : _submitAction,
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: AppLoadingIndicator(),
-                            )
-                          : const Text('Resolve'),
+                    Semantics(
+                      identifier: 'resolve_problem_submit_button',
+                      child: TextButton(
+                        key: const ValueKey('resolve_problem_submit_button'),
+                        onPressed: _isLoading ? null : _submitAction,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: AppLoadingIndicator(),
+                              )
+                            : const Text('Resolve'),
+                      ),
                     ),
                   ],
                 ),

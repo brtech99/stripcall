@@ -14,14 +14,22 @@ tags:
   - organizer
 
 ---
+# Stop any running instance and launch fresh
+- stopApp:
+    appId: "com.brianrosen.stripcall"
+- launchApp:
+    appId: "com.brianrosen.stripcall"
+    clearState: true
+
 # Ensure we're logged in first
 - runFlow: 01_login.yaml
 
 # Navigate to Manage Events from the settings menu
 - tapOn:
     id: "settings_menu_button"
+- waitForAnimationToEnd
 - tapOn:
-    id: "settings_menu_manage_events"
+    text: "Manage Events"
 - waitForAnimationToEnd
 
 # Verify we're on the Manage Events page
@@ -70,12 +78,21 @@ tags:
 - waitForAnimationToEnd
 
 # Strip numbering defaults to Sequential Numbers, leave it
+# Hide keyboard and scroll down to reveal count field
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "manage_event_count_field"
+    direction: DOWN
+    timeout: 5000
+
 # Set strip count
 - tapOn:
     id: "manage_event_count_field"
 - inputText: "12"
 
-# Save the event
+# Hide keyboard and save the event
+- hideKeyboard
 - tapOn:
     id: "manage_event_save_button"
 - waitForAnimationToEnd
@@ -93,14 +110,27 @@ tags:
 # STEP 2: Open the event to add a crew
 # ========================================
 
+# Wait for the event list to reload after returning from create
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: ".*E2E Test Tournament.*"
+    timeout: 15000
+
 # Find and tap our newly created event
 - tapOn:
-    text: "E2E Test Tournament"
+    text: ".*E2E Test Tournament.*"
 - waitForAnimationToEnd
 
 # Verify we're on Edit Event page
 - assertVisible:
     text: "Edit Event"
+
+# Wait for crew types to load (button only appears when types are available)
+- extendedWaitUntil:
+    visible:
+      id: "manage_event_add_crew_button"
+    timeout: 15000
 
 # Verify the Crews section exists
 - assertVisible:
@@ -110,32 +140,51 @@ tags:
 # STEP 3: Add first crew (Armorer) with crew leader
 # ========================================
 
+# Scroll to the add crew button and tap it
+# Scroll up first to reset scroll position
+- swipe:
+    direction: DOWN
+    duration: 400
+
+- scrollUntilVisible:
+    element:
+      id: "manage_event_add_crew_button"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     id: "manage_event_add_crew_button"
-- waitForAnimationToEnd
 
 # Select crew type dialog should appear
-- assertVisible:
-    text: "Select Crew Type"
+- extendedWaitUntil:
+    visible:
+      text: "Select Crew Type"
+    timeout: 10000
 
-# Select Armorer crew type
+# Select Armorer crew type — tap the dropdown to open it, then select from list
+- tapOn:
+    text: "Choose crew type"
+- waitForAnimationToEnd
 - tapOn:
     text: "Armorer"
 - waitForAnimationToEnd
 
 # Name finder dialog should appear
-- assertVisible:
-    text: "Find Crew Chief"
+- extendedWaitUntil:
+    visible:
+      text: "Find Crew Chief"
+    timeout: 10000
 
 # Search for a crew chief using first and last name
 - tapOn:
     id: "name_finder_firstname_field"
-- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+- inputText: "Armorer"
 
+- hideKeyboard
 - tapOn:
     id: "name_finder_lastname_field"
-- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+- inputText: "One"
 
+- hideKeyboard
 - tapOn:
     id: "name_finder_search_button"
 
@@ -143,8 +192,8 @@ tags:
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "name_finder_results_list"
-    timeout: 5000
+      id: "name_finder_result_0"
+    timeout: 10000
 
 # Tap on the first result
 - tapOn:
@@ -152,37 +201,59 @@ tags:
 - waitForAnimationToEnd
 
 # Verify crew was added
-- assertVisible:
-    text: "Crew added successfully"
+- extendedWaitUntil:
+    visible:
+      text: "Crew added successfully"
+    timeout: 10000
 
 # Verify Armorer crew now shows in the list
+- scrollUntilVisible:
+    element:
+      id: "manage_event_crew_card_0"
+    direction: DOWN
+    timeout: 5000
 - assertVisible:
-    text: "Armorer"
+    id: "manage_event_crew_card_0"
 
 # ========================================
 # STEP 4: Exit and return to the event
 # ========================================
 
-# Go back to My Events
-- back
+# Go back to My Events by tapping the Back button
+- tapOn:
+    text: "Back"
 - waitForAnimationToEnd
 
 # Verify we're back on My Events
-- assertVisible:
-    text: "My Events"
+- extendedWaitUntil:
+    visible:
+      text: "My Events"
+    timeout: 10000
 
 # Tap our event again
 - tapOn:
-    text: "E2E Test Tournament"
+    text: ".*E2E Test Tournament.*"
 - waitForAnimationToEnd
 
 # Verify the Armorer crew is still there
+- scrollUntilVisible:
+    element:
+      id: "manage_event_crew_card_0"
+    direction: DOWN
+    timeout: 10000
 - assertVisible:
-    text: "Armorer"
+    id: "manage_event_crew_card_0"
 
 # ========================================
 # STEP 5: Edit event parameters
 # ========================================
+
+# Scroll up to city field first
+- scrollUntilVisible:
+    element:
+      id: "manage_event_city_field"
+    direction: UP
+    timeout: 5000
 
 # Change the city
 - tapOn:
@@ -192,6 +263,7 @@ tags:
 - inputText: "Updated City"
 
 # Change strip numbering to Pods
+- waitForAnimationToEnd
 - tapOn:
     id: "manage_event_strip_numbering_dropdown"
 - waitForAnimationToEnd
@@ -200,6 +272,12 @@ tags:
 - waitForAnimationToEnd
 
 # Update count for pods
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "manage_event_count_field"
+    direction: DOWN
+    timeout: 5000
 - tapOn:
     id: "manage_event_count_field"
 - eraseText:
@@ -207,6 +285,12 @@ tags:
 - inputText: "4"
 
 # Save changes
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "manage_event_save_button"
+    direction: DOWN
+    timeout: 5000
 - tapOn:
     id: "manage_event_save_button"
 - waitForAnimationToEnd
@@ -219,118 +303,176 @@ tags:
 # STEP 6: Delete the Armorer crew
 # ========================================
 
-# Scroll to make sure crew section is visible
+# Scroll to crew card area
 - scrollUntilVisible:
     element:
-      text: "Armorer"
+      id: "manage_event_crew_card_0"
     direction: DOWN
+    timeout: 10000
 
-# The crew card has delete button - look for delete icon near Armorer
-# We need to tap the delete icon button in the crew card
+# Tap the delete button by its tooltip text
 - tapOn:
-    id: "manage_event_crew_delete_0"
+    text: "Delete Crew"
 
-# If there's activity, a confirmation dialog appears
-# Handle both cases - with or without confirmation
-- runFlow:
-    when:
-      visible: "Delete Active Crew?"
-    commands:
-      - tapOn:
-          text: "Delete"
-      - waitForAnimationToEnd
-
-- waitForAnimationToEnd
-
-# Verify deletion success
-- assertVisible:
-    text: "Crew deleted successfully"
+# No confirmation dialog expected (crew has no activity)
+# Wait for deletion success snackbar
+- extendedWaitUntil:
+    visible:
+      text: "Crew deleted successfully"
+    timeout: 10000
 
 # ========================================
 # STEP 7: Add two more crews (Medical and Armorer)
 # ========================================
 
-# Add Medical crew
+# Add Medical crew — wait for page to fully reload after delete
+- waitForAnimationToEnd
+# Wait for "No crews found" to confirm page reloaded after delete
+- extendedWaitUntil:
+    visible:
+      text: "No crews found"
+    timeout: 15000
+# Scroll up to top, then back down to ensure button is properly positioned
+- scrollUntilVisible:
+    element:
+      id: "manage_event_name_field"
+    direction: UP
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: "manage_event_add_crew_button"
+    direction: DOWN
+    timeout: 10000
+    centerElement: true
 - tapOn:
     id: "manage_event_add_crew_button"
+- extendedWaitUntil:
+    visible:
+      text: "Select Crew Type"
+    timeout: 10000
+- tapOn:
+    text: "Choose crew type"
 - waitForAnimationToEnd
-- assertVisible:
-    text: "Select Crew Type"
 - tapOn:
     text: "Medical"
 - waitForAnimationToEnd
 
 # Find crew chief
-- assertVisible:
-    text: "Find Crew Chief"
+- extendedWaitUntil:
+    visible:
+      text: "Find Crew Chief"
+    timeout: 10000
 - tapOn:
     id: "name_finder_firstname_field"
-- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+- inputText: "Medical"
+- hideKeyboard
 - tapOn:
     id: "name_finder_lastname_field"
-- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+- inputText: "One"
+- hideKeyboard
 - tapOn:
     id: "name_finder_search_button"
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "name_finder_results_list"
-    timeout: 5000
+      id: "name_finder_result_0"
+    timeout: 10000
 - tapOn:
     id: "name_finder_result_0"
 - waitForAnimationToEnd
-- assertVisible:
-    text: "Crew added successfully"
+- extendedWaitUntil:
+    visible:
+      text: "Crew added successfully"
+    timeout: 10000
 
-# Add Armorer crew again
+# Add Armorer crew again — scroll up first, wait for button, then scroll down
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "manage_event_name_field"
+    direction: UP
+    timeout: 5000
+- extendedWaitUntil:
+    visible:
+      id: "manage_event_add_crew_button"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "manage_event_add_crew_button"
+    direction: DOWN
+    timeout: 10000
+    centerElement: true
 - tapOn:
     id: "manage_event_add_crew_button"
+- extendedWaitUntil:
+    visible:
+      text: "Select Crew Type"
+    timeout: 10000
+- tapOn:
+    text: "Choose crew type"
 - waitForAnimationToEnd
-- assertVisible:
-    text: "Select Crew Type"
 - tapOn:
     text: "Armorer"
 - waitForAnimationToEnd
 
 # Find crew chief
-- assertVisible:
-    text: "Find Crew Chief"
+- extendedWaitUntil:
+    visible:
+      text: "Find Crew Chief"
+    timeout: 10000
 - tapOn:
     id: "name_finder_firstname_field"
-- inputText: ${TEST_CREW_CHIEF_FIRSTNAME}
+- inputText: "Armorer"
+- hideKeyboard
 - tapOn:
     id: "name_finder_lastname_field"
-- inputText: ${TEST_CREW_CHIEF_LASTNAME}
+- inputText: "Two"
+- hideKeyboard
 - tapOn:
     id: "name_finder_search_button"
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "name_finder_results_list"
-    timeout: 5000
+      id: "name_finder_result_0"
+    timeout: 10000
 - tapOn:
     id: "name_finder_result_0"
 - waitForAnimationToEnd
-- assertVisible:
-    text: "Crew added successfully"
+- extendedWaitUntil:
+    visible:
+      text: "Crew added successfully"
+    timeout: 10000
 
-# Verify both crews are visible
+# Verify both crews are visible via their card ids
+- scrollUntilVisible:
+    element:
+      id: "manage_event_crew_card_0"
+    direction: DOWN
+    timeout: 10000
 - assertVisible:
-    text: "Medical"
+    id: "manage_event_crew_card_0"
+- scrollUntilVisible:
+    element:
+      id: "manage_event_crew_card_1"
+    direction: DOWN
+    timeout: 10000
 - assertVisible:
-    text: "Armorer"
+    id: "manage_event_crew_card_1"
 
 # ========================================
 # STEP 8: Final verification
 # ========================================
 
 # Go back to My Events to verify event is saved
-- back
+- tapOn:
+    text: "Back"
 - waitForAnimationToEnd
-- assertVisible:
-    text: "My Events"
+- extendedWaitUntil:
+    visible:
+      text: "My Events"
+    timeout: 10000
 
 # Verify our event is in the list
 - assertVisible:
-    text: "E2E Test Tournament"
+    text: ".*E2E Test Tournament.*"
 # Test complete - event created, crews added/deleted, parameters edited

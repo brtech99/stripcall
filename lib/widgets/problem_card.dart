@@ -313,15 +313,18 @@ class _ProblemCardState extends State<ProblemCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      key: ValueKey('problem_card_${widget.problem.id}'),
-      child: InkWell(
-        onTap: widget.onToggleExpansion,
-        child: Padding(
-          padding: AppSpacing.cardPadding,
-          child: widget.isExpanded
-              ? _buildExpandedProblem()
-              : _buildCollapsedProblem(),
+    return Semantics(
+      identifier: 'problem_card_${widget.problem.id}',
+      child: Card(
+        key: ValueKey('problem_card_${widget.problem.id}'),
+        child: InkWell(
+          onTap: widget.onToggleExpansion,
+          child: Padding(
+            padding: AppSpacing.cardPadding,
+            child: widget.isExpanded
+                ? _buildExpandedProblem()
+                : _buildCollapsedProblem(),
+          ),
         ),
       ),
     );

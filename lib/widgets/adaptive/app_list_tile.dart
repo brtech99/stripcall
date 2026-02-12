@@ -60,7 +60,11 @@ class AppListTile extends StatelessWidget {
         ? (effectiveKey as ValueKey<String>).value
         : null;
     if (keyId != null) {
-      return Semantics(identifier: keyId, child: tile);
+      return Semantics(
+        identifier: keyId,
+        explicitChildNodes: true,
+        child: tile,
+      );
     }
 
     return tile;

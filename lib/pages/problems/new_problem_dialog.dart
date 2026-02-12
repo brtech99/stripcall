@@ -549,16 +549,19 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                     : () => Navigator.of(context).pop(),
                 child: const Text('Cancel'),
               ),
-              TextButton(
-                key: const ValueKey('new_problem_submit_button'),
-                onPressed: _isLoading || !_canSubmit ? null : _submitProblem,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AppLoadingIndicator(),
-                      )
-                    : const Text('Submit'),
+              Semantics(
+                identifier: 'new_problem_submit_button',
+                child: TextButton(
+                  key: const ValueKey('new_problem_submit_button'),
+                  onPressed: _isLoading || !_canSubmit ? null : _submitProblem,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: AppLoadingIndicator(),
+                        )
+                      : const Text('Submit'),
+                ),
               ),
             ],
           ),
