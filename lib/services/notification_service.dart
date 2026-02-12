@@ -214,7 +214,7 @@ class NotificationService {
         iOS: iosSettings,
       );
 
-      await _localNotifications.initialize(initSettings);
+      await _localNotifications.initialize(settings: initSettings);
 
       // Create notification channel for Android (iOS doesn't use channels)
       if (platform.isAndroid()) {
@@ -672,7 +672,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     iOS: iosSettings,
   );
 
-  await localNotifications.initialize(initSettings);
+  await localNotifications.initialize(settings: initSettings);
 
   // Show local notification for background messages
   if (message.notification != null) {
@@ -696,10 +696,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     );
 
     await localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      message.notification!.title ?? 'New Message',
-      message.notification!.body ?? '',
-      details,
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: message.notification!.title ?? 'New Message',
+      body: message.notification!.body ?? '',
+      notificationDetails: details,
       payload: message.data.isNotEmpty ? json.encode(message.data) : null,
     );
   }
