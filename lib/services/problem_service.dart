@@ -10,6 +10,56 @@ class ProblemService {
   factory ProblemService() => _instance;
   ProblemService._internal();
 
+  static const _problemSelectFields = '''
+    id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
+    symptom_data:symptom(id, symptomstring),
+    originator_data:originator(supabase_id, firstname, lastname),
+    actionby_data:actionby(supabase_id, firstname, lastname),
+    action_data:action(id, actionstring),
+    messages_data:messages(*)
+  ''';
+
+  /// Parse raw JSON rows into [ProblemWithDetails], filtering out resolved
+  /// problems older than 5 minutes. When [deduplicate] is true, duplicate
+  /// problem IDs are skipped (used for the OR query that may return the same
+  /// problem via both crew and originator match).
+  List<ProblemWithDetails> _parseAndFilterProblems(
+    List<dynamic> response, {
+    bool deduplicate = false,
+  }) {
+    final problems = <ProblemWithDetails>[];
+    final seenIds = <int>{};
+
+    for (final json in response) {
+      try {
+        final problem = ProblemWithDetails.fromJson(json);
+
+        if (deduplicate) {
+          if (seenIds.contains(problem.id)) continue;
+          seenIds.add(problem.id);
+        }
+
+        // Filter out resolved problems older than 5 minutes
+        if (problem.resolvedDateTimeParsed != null) {
+          final minutesSinceResolved = DateTime.now()
+              .difference(problem.resolvedDateTimeParsed!)
+              .inMinutes;
+          if (minutesSinceResolved >= 5) continue;
+        }
+
+        problems.add(problem);
+      } catch (e) {
+        debugLogError('Error parsing problem', e);
+        debugLog('Failed JSON: $json');
+      }
+    }
+
+    debugLog(
+      'Parsed ${problems.length} problems out of ${response.length} total',
+    );
+    return problems;
+  }
+
   Future<List<ProblemWithDetails>> loadProblems({
     required int eventId,
     required String userId,
@@ -17,81 +67,37 @@ class ProblemService {
     bool isSuperUser = false,
   }) async {
     try {
-      print(
-        'DEBUG: loadProblems START (isSuperUser=$isSuperUser, crewId=$crewId)',
-      );
+      debugLog('loadProblems START (isSuperUser=$isSuperUser, crewId=$crewId)');
       final startTime = DateTime.now();
 
       // Super users bypass crew membership check when viewing a specific crew
       if (isSuperUser && crewId != null) {
-        print(
-          'DEBUG: Super user viewing crew $crewId, loading crew problems only',
-        );
+        debugLog('Super user viewing crew $crewId, loading crew problems only');
         final queryStart = DateTime.now();
 
         final response = await Supabase.instance.client
             .from('problem')
-            .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
-              symptom_data:symptom(id, symptomstring),
-              originator_data:originator(supabase_id, firstname, lastname),
-              actionby_data:actionby(supabase_id, firstname, lastname),
-              action_data:action(id, actionstring),
-              messages_data:messages(*)
-            ''')
+            .select(_problemSelectFields)
             .eq('event', eventId)
             .eq('crew', crewId)
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print(
-          'DEBUG: Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        debugLog(
+          'Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = <ProblemWithDetails>[];
-        for (final json in response) {
-          try {
-            debugLog('RAW JSON keys: ${json.keys.toList()}');
-            debugLog(
-              'RAW JSON symptom: ${json['symptom']} (type: ${json['symptom'].runtimeType})',
-            );
-            final problem = ProblemWithDetails.fromJson(json);
-
-            // Filter out resolved problems that are older than 5 minutes
-            if (problem.resolvedDateTimeParsed != null) {
-              final resolvedTime = problem.resolvedDateTimeParsed!;
-              final now = DateTime.now();
-              final minutesSinceResolved = now
-                  .difference(resolvedTime)
-                  .inMinutes;
-
-              if (minutesSinceResolved >= 5) {
-                continue;
-              }
-            }
-
-            problems.add(problem);
-          } catch (e) {
-            debugLogError('Error parsing problem', e);
-            print('DEBUG: Failed JSON: $json');
-          }
-        }
-
-        print(
-          'DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total',
-        );
-
-        // Enrich with SMS reporter names
+        final problems = _parseAndFilterProblems(response);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print(
-          'DEBUG: Total loadProblems time (super user): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        debugLog(
+          'Total loadProblems time (super user): ${DateTime.now().difference(startTime).inMilliseconds}ms',
         );
         return enrichedProblems;
       }
 
       // First, check if user is part of a crew for this event
-      print('DEBUG: Checking crew membership for user=$userId, crewId=$crewId');
+      debugLog('Checking crew membership for user=$userId, crewId=$crewId');
       final crewMemberResponse = crewId != null
           ? await Supabase.instance.client
                 .from('crewmembers')
@@ -102,139 +108,59 @@ class ProblemService {
           : null;
 
       final afterCrewCheck = DateTime.now();
-      print(
-        'DEBUG: Crew check completed in ${afterCrewCheck.difference(startTime).inMilliseconds}ms, result=${crewMemberResponse != null}',
+      debugLog(
+        'Crew check completed in ${afterCrewCheck.difference(startTime).inMilliseconds}ms, result=${crewMemberResponse != null}',
       );
 
       // If user is not part of any crew OR not part of the specified crew, only show their own problems
       if (crewId == null || crewMemberResponse == null) {
         // User is not part of this crew, only show problems they created
-        print('DEBUG: User not in crew, loading only their own problems');
+        debugLog('User not in crew, loading only their own problems');
         final queryStart = DateTime.now();
 
         final response = await Supabase.instance.client
             .from('problem')
-            .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
-              symptom_data:symptom(id, symptomstring),
-              originator_data:originator(supabase_id, firstname, lastname),
-              actionby_data:actionby(supabase_id, firstname, lastname),
-              action_data:action(id, actionstring),
-              messages_data:messages(*)
-            ''')
+            .select(_problemSelectFields)
             .eq('event', eventId)
             .eq('originator', userId)
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print(
-          'DEBUG: Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        debugLog(
+          'Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = <ProblemWithDetails>[];
-        for (final json in response) {
-          try {
-            final problem = ProblemWithDetails.fromJson(json);
-
-            // Filter out resolved problems that are older than 5 minutes
-            if (problem.resolvedDateTimeParsed != null) {
-              final resolvedTime = problem.resolvedDateTimeParsed!;
-              final now = DateTime.now();
-              final minutesSinceResolved = now
-                  .difference(resolvedTime)
-                  .inMinutes;
-
-              if (minutesSinceResolved >= 5) {
-                continue;
-              }
-            }
-
-            problems.add(problem);
-          } catch (e) {
-            debugLogError('Error parsing problem', e);
-            print('DEBUG: Failed JSON: $json');
-          }
-        }
-
-        print(
-          'DEBUG: Successfully parsed ${problems.length} problems out of ${response.length} total',
-        );
-
-        // Enrich with SMS reporter names
+        final problems = _parseAndFilterProblems(response);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print(
-          'DEBUG: Total loadProblems time (non-crew): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        debugLog(
+          'Total loadProblems time (non-crew): ${DateTime.now().difference(startTime).inMilliseconds}ms',
         );
         return enrichedProblems;
       } else {
         // User is part of the crew: show crew's problems + any problems user created for other crews
-        print(
-          'DEBUG: User is in crew $crewId, loading crew problems + user\'s problems for other crews',
+        debugLog(
+          'User is in crew $crewId, loading crew problems + user\'s problems for other crews',
         );
         final queryStart = DateTime.now();
 
         final response = await Supabase.instance.client
             .from('problem')
-            .select('''
-              id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
-              symptom_data:symptom(id, symptomstring),
-              originator_data:originator(supabase_id, firstname, lastname),
-              actionby_data:actionby(supabase_id, firstname, lastname),
-              action_data:action(id, actionstring),
-              messages_data:messages(*)
-            ''')
+            .select(_problemSelectFields)
             .eq('event', eventId)
             .or('crew.eq.$crewId,originator.eq.$userId')
             .order('startdatetime', ascending: false);
 
         final afterQuery = DateTime.now();
-        print(
-          'DEBUG: Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
+        debugLog(
+          'Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = <ProblemWithDetails>[];
-        final seenProblemIds = <int>{}; // Track IDs to avoid duplicates
-
-        for (final json in response) {
-          try {
-            final problem = ProblemWithDetails.fromJson(json);
-
-            // Skip if we've already added this problem (avoid duplicates when user reports to their own crew)
-            if (seenProblemIds.contains(problem.id)) {
-              continue;
-            }
-            seenProblemIds.add(problem.id);
-
-            // Filter out resolved problems that are older than 5 minutes
-            if (problem.resolvedDateTimeParsed != null) {
-              final resolvedTime = problem.resolvedDateTimeParsed!;
-              final now = DateTime.now();
-              final minutesSinceResolved = now
-                  .difference(resolvedTime)
-                  .inMinutes;
-
-              if (minutesSinceResolved >= 5) {
-                continue;
-              }
-            }
-
-            problems.add(problem);
-          } catch (e) {
-            debugLogError('Error parsing problem', e);
-            print('DEBUG: Failed JSON: $json');
-          }
-        }
-
-        print(
-          'DEBUG: Successfully parsed ${problems.length} unique problems out of ${response.length} total',
-        );
-
-        // Enrich with SMS reporter names
+        final problems = _parseAndFilterProblems(response, deduplicate: true);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
-        print(
-          'DEBUG: Total loadProblems time (crew member): ${DateTime.now().difference(startTime).inMilliseconds}ms',
+        debugLog(
+          'Total loadProblems time (crew member): ${DateTime.now().difference(startTime).inMilliseconds}ms',
         );
         return enrichedProblems;
       }
@@ -258,7 +184,7 @@ class ProblemService {
           )
           .inFilter('problem', problemIds);
 
-      print('DEBUG loadResponders: Raw response = $response');
+      debugLog('loadResponders: Raw response = $response');
 
       final respondersMap = <int, List<Map<String, dynamic>>>{};
       for (final responder in response) {
@@ -269,10 +195,10 @@ class ProblemService {
         respondersMap[problemId]!.add(responder);
       }
 
-      print('DEBUG loadResponders: Final map = $respondersMap');
+      debugLog('loadResponders: Final map = $respondersMap');
       return respondersMap;
     } catch (e) {
-      print('DEBUG loadResponders: Error = $e');
+      debugLogError('loadResponders error', e);
       return {};
     }
   }
@@ -342,6 +268,7 @@ class ProblemService {
               'Failed to send notification (responder was recorded successfully)',
               e,
             );
+            return false;
           });
 
       // Send SMS to reporter if problem was created via SMS (fire and forget - don't block UI)
@@ -372,6 +299,7 @@ class ProblemService {
                 'Failed to send SMS to reporter (responder was recorded successfully)',
                 e,
               );
+              return http.Response('', 500);
             });
       }
     } catch (e) {
@@ -394,6 +322,7 @@ class ProblemService {
 
       return symptomResponse;
     } catch (e) {
+      debugLogError('Error loading missing symptom data', e);
       return null;
     }
   }
@@ -410,6 +339,7 @@ class ProblemService {
 
       return userResponse;
     } catch (e) {
+      debugLogError('Error loading missing originator data', e);
       return null;
     }
   }
@@ -426,6 +356,7 @@ class ProblemService {
 
       return userResponse;
     } catch (e) {
+      debugLogError('Error loading missing resolver data', e);
       return null;
     }
   }
@@ -441,8 +372,7 @@ class ProblemService {
     final result = <String, Map<String, dynamic>>{};
 
     try {
-      // Call the database function for each phone number
-      // The function handles normalization and lookup priority
+      // TODO: Batch into single RPC call to avoid N+1 queries (requires DB-side changes)
       for (final phone in phoneNumbers) {
         final response = await Supabase.instance.client.rpc(
           'get_reporter_name',
@@ -501,21 +431,11 @@ class ProblemService {
     bool isSuperUser = false,
   }) async {
     try {
-      // Use same filtering logic as loadProblems
-      const selectFields = '''
-        id, event, crew, originator, strip, symptom, startdatetime, action, actionby, enddatetime, notes, reporter_phone,
-        symptom_data:symptom(id, symptomstring),
-        originator_data:originator(supabase_id, firstname, lastname),
-        actionby_data:actionby(supabase_id, firstname, lastname),
-        action_data:action(id, actionstring),
-        messages_data:messages(*)
-      ''';
-
       // Super users viewing a specific crew: only that crew's new problems
       if (isSuperUser && crewId != null) {
         final response = await Supabase.instance.client
             .from('problem')
-            .select(selectFields)
+            .select(_problemSelectFields)
             .eq('event', eventId)
             .eq('crew', crewId)
             .gt('startdatetime', since.toIso8601String())
@@ -537,7 +457,7 @@ class ProblemService {
       if (crewId == null || crewMemberResponse == null) {
         final response = await Supabase.instance.client
             .from('problem')
-            .select(selectFields)
+            .select(_problemSelectFields)
             .eq('event', eventId)
             .eq('originator', userId)
             .gt('startdatetime', since.toIso8601String())
@@ -548,7 +468,7 @@ class ProblemService {
       // Crew member: crew's problems + their problems for other crews
       final response = await Supabase.instance.client
           .from('problem')
-          .select(selectFields)
+          .select(_problemSelectFields)
           .eq('event', eventId)
           .or('crew.eq.$crewId,originator.eq.$userId')
           .gt('startdatetime', since.toIso8601String())
@@ -579,6 +499,7 @@ class ProblemService {
 
       return List<Map<String, dynamic>>.from(newMessages ?? []);
     } catch (e) {
+      debugLogError('Error checking for new messages', e);
       return [];
     }
   }
@@ -591,7 +512,7 @@ class ProblemService {
     try {
       if (problemIds.isEmpty) return [];
 
-      const selectFields = '''
+      const updateSelectFields = '''
         id,
         enddatetime,
         action,
@@ -606,7 +527,7 @@ class ProblemService {
 
       final response = await Supabase.instance.client
           .from('problem')
-          .select(selectFields)
+          .select(updateSelectFields)
           .or(idConditions)
           .not('enddatetime', 'is', null) // Only get resolved problems
           .gte('enddatetime', since.toIso8601String());
@@ -631,6 +552,7 @@ class ProblemService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
+      debugLogError('Error loading messages for problem', e);
       return [];
     }
   }
@@ -642,7 +564,7 @@ class ProblemService {
   }) async {
     try {
       // Use direct query to get full resolution data including action_data and actionby_data
-      const selectFields = '''
+      const resolvedSelectFields = '''
         id,
         enddatetime,
         action,
@@ -653,7 +575,7 @@ class ProblemService {
 
       final response = await Supabase.instance.client
           .from('problem')
-          .select(selectFields)
+          .select(resolvedSelectFields)
           .eq('event', eventId)
           .eq('crew', crewId)
           .not('enddatetime', 'is', null)

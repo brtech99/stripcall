@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
 
@@ -55,43 +56,14 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       final symptomId = problemResponse['symptom'] as int?;
       _problemSymptomId = symptomId;
 
-      // Now get actions filtered by symptom
-      List<Map<String, dynamic>> actionsResponse;
-      if (symptomId != null) {
-        try {
-          // Try to get actions filtered by symptom, ordered by display_order
-          actionsResponse = await Supabase.instance.client
-              .from('action')
-              .select('*')
-              .eq('symptom', symptomId)
-              .order('display_order', ascending: true);
-        } catch (e) {
-          // If display_order doesn't exist or filtering fails, fall back to alphabetical
-          try {
-            actionsResponse = await Supabase.instance.client
-                .from('action')
-                .select('*')
-                .eq('symptom', symptomId)
-                .order('actionstring');
-          } catch (e2) {
-            // If filtering by symptom fails, get all actions
-            actionsResponse = await Supabase.instance.client
-                .from('action')
-                .select('*')
-                .order('actionstring');
-          }
-        }
-      } else {
-        // If no symptom ID, get all actions
-        actionsResponse = await Supabase.instance.client
-            .from('action')
-            .select('*')
-            .order('display_order', ascending: true);
-      }
+      // Get actions filtered by symptom via shared lookup
+      final actionsResponse = await LookupService.getActionsForSymptom(
+        symptomId,
+      );
 
       if (mounted) {
         setState(() {
-          _actions = List<Map<String, dynamic>>.from(actionsResponse);
+          _actions = actionsResponse;
           _isLoading = false;
         });
       }
@@ -188,6 +160,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
               'Failed to send notification (problem was resolved successfully)',
               e,
             );
+            return false;
           });
     } catch (e) {
       debugLogError('Failed to resolve problem', e);
@@ -201,119 +174,125 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      key: const ValueKey('resolve_problem_dialog'),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-        child: Padding(
-          padding: AppSpacing.screenPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Resolve Problem',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              AppSpacing.verticalMd,
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            _error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+    return Semantics(
+      identifier: 'resolve_problem_dialog',
+      child: Dialog(
+        key: const ValueKey('resolve_problem_dialog'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+          child: Padding(
+            padding: AppSpacing.screenPadding,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Resolve Problem',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                AppSpacing.verticalMd,
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        if (_problemSymptomId != null) ...[
+                          Text(
+                            'Available resolutions for this problem (${_actions.length} found)',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          ),
+                          AppSpacing.verticalSm,
+                        ],
+                        Semantics(
+                          identifier: 'resolve_problem_action_dropdown',
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: DropdownButtonFormField<String>(
+                              key: const ValueKey(
+                                'resolve_problem_action_dropdown',
+                              ),
+                              value: _selectedAction,
+                              decoration: const InputDecoration(
+                                labelText: 'Resolution',
+                              ),
+                              menuMaxHeight: 200,
+                              isExpanded: true,
+                              items: _actions.isEmpty
+                                  ? [
+                                      const DropdownMenuItem(
+                                        value: null,
+                                        child: Text('No Resolutions Available'),
+                                      ),
+                                    ]
+                                  : _actions.map((action) {
+                                      return DropdownMenuItem(
+                                        value: action['id'].toString(),
+                                        child: Text(
+                                          action['actionstring'],
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                        ),
+                                      );
+                                    }).toList(),
+                              onChanged: _actions.isEmpty
+                                  ? null
+                                  : (value) {
+                                      setState(() => _selectedAction = value);
+                                    },
                             ),
                           ),
                         ),
-                      if (_problemSymptomId != null) ...[
-                        Text(
-                          'Available resolutions for this problem (${_actions.length} found)',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        AppSpacing.verticalMd,
+                        AppTextField(
+                          key: const ValueKey('resolve_problem_notes_field'),
+                          controller: _notesController,
+                          label: 'Notes (Optional)',
+                          maxLines: 3,
                         ),
-                        AppSpacing.verticalSm,
                       ],
-                      SizedBox(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<String>(
-                          key: const ValueKey(
-                            'resolve_problem_action_dropdown',
-                          ),
-                          value: _selectedAction,
-                          decoration: const InputDecoration(
-                            labelText: 'Resolution',
-                          ),
-                          menuMaxHeight: 200,
-                          isExpanded: true,
-                          items: _actions.isEmpty
-                              ? [
-                                  const DropdownMenuItem(
-                                    value: null,
-                                    child: Text('No Resolutions Available'),
-                                  ),
-                                ]
-                              : _actions.map((action) {
-                                  return DropdownMenuItem(
-                                    value: action['id'].toString(),
-                                    child: Text(
-                                      action['actionstring'],
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 2,
-                                    ),
-                                  );
-                                }).toList(),
-                          onChanged: _actions.isEmpty
-                              ? null
-                              : (value) {
-                                  setState(() => _selectedAction = value);
-                                },
-                        ),
-                      ),
-                      AppSpacing.verticalMd,
-                      AppTextField(
-                        key: const ValueKey('resolve_problem_notes_field'),
-                        controller: _notesController,
-                        label: 'Notes (Optional)',
-                        maxLines: 3,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              AppSpacing.verticalMd,
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    key: const ValueKey('resolve_problem_cancel_button'),
-                    onPressed: _isLoading
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  AppSpacing.horizontalSm,
-                  TextButton(
-                    key: const ValueKey('resolve_problem_submit_button'),
-                    onPressed: _isLoading ? null : _submitAction,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: AppLoadingIndicator(),
-                          )
-                        : const Text('Resolve'),
-                  ),
-                ],
-              ),
-            ],
+                AppSpacing.verticalMd,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      key: const ValueKey('resolve_problem_cancel_button'),
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    AppSpacing.horizontalSm,
+                    TextButton(
+                      key: const ValueKey('resolve_problem_submit_button'),
+                      onPressed: _isLoading ? null : _submitAction,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: AppLoadingIndicator(),
+                            )
+                          : const Text('Resolve'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

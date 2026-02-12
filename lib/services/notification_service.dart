@@ -10,7 +10,8 @@ import '../utils/debug_utils.dart';
 // Conditional imports for platform-specific code
 import 'notification_service_stub.dart'
     if (dart.library.io) 'notification_service_io.dart'
-    if (dart.library.html) 'notification_service_web.dart' as platform;
+    if (dart.library.html) 'notification_service_web.dart'
+    as platform;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -18,7 +19,8 @@ class NotificationService {
   NotificationService._internal();
 
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
   final SupabaseClient _supabase = Supabase.instance.client;
 
   String? _fcmToken;
@@ -35,7 +37,10 @@ class NotificationService {
       try {
         await Firebase.initializeApp();
       } catch (e) {
-        debugLogError('Firebase not available, continue with local notifications only', e);
+        debugLogError(
+          'Firebase not available, continue with local notifications only',
+          e,
+        );
         _isInitialized = true;
         return;
       }
@@ -53,30 +58,41 @@ class NotificationService {
           // For web, call the JavaScript initialization function
           if (kIsWeb) {
             try {
-              debugLog('Calling window.initializeNotifications() for FCM setup...');
+              debugLog(
+                'Calling window.initializeNotifications() for FCM setup...',
+              );
               await platform.initializeWebNotifications();
             } catch (webError) {
-              debugLogError('Error calling initializeNotifications()', webError);
+              debugLogError(
+                'Error calling initializeNotifications()',
+                webError,
+              );
             }
           }
 
-          NotificationSettings settings = await _firebaseMessaging.requestPermission(
-            alert: true,
-            announcement: false,
-            badge: true,
-            carPlay: false,
-            criticalAlert: false,
-            provisional: false,
-            sound: true,
-          );
+          NotificationSettings settings = await _firebaseMessaging
+              .requestPermission(
+                alert: true,
+                announcement: false,
+                badge: true,
+                carPlay: false,
+                criticalAlert: false,
+                provisional: false,
+                sound: true,
+              );
 
-          debugLog('Notification permission status: ${settings.authorizationStatus}');
+          debugLog(
+            'Notification permission status: ${settings.authorizationStatus}',
+          );
           if (settings.authorizationStatus == AuthorizationStatus.authorized) {
             debugLog('Notification permission granted');
-          } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+          } else if (settings.authorizationStatus ==
+              AuthorizationStatus.provisional) {
             debugLog('Provisional notification permission granted');
           } else {
-            debugLog('Notification permission denied: ${settings.authorizationStatus}');
+            debugLog(
+              'Notification permission denied: ${settings.authorizationStatus}',
+            );
           }
         } catch (e) {
           debugLogError('Continue without FCM permissions', e);
@@ -96,7 +112,9 @@ class NotificationService {
           if (kIsWeb) {
             _fcmToken = await platform.getFCMTokenFromJS();
             if (_fcmToken != null) {
-              debugLog('FCM token obtained from JavaScript: ${_fcmToken!.substring(0, 20)}...');
+              debugLog(
+                'FCM token obtained from JavaScript: ${_fcmToken!.substring(0, 20)}...',
+              );
             }
           }
         }
@@ -118,7 +136,9 @@ class NotificationService {
       // Handle foreground messages
       try {
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          debugLog('Received foreground message: ${message.notification?.title}');
+          debugLog(
+            'Received foreground message: ${message.notification?.title}',
+          );
           // For foreground messages, we'll show a custom in-app notification
           // instead of relying on system notification banner
           if (message.notification != null) {
@@ -136,7 +156,9 @@ class NotificationService {
       // Handle background messages (not supported on web)
       if (!kIsWeb) {
         try {
-          FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+          FirebaseMessaging.onBackgroundMessage(
+            _firebaseMessagingBackgroundHandler,
+          );
         } catch (e) {
           debugLogError('Continue without background message handling', e);
         }
@@ -170,7 +192,6 @@ class NotificationService {
       }
 
       _isInitialized = true;
-
     } catch (e) {
       _isInitialized = true; // Mark as initialized to prevent retry loops
     }
@@ -179,7 +200,9 @@ class NotificationService {
   /// Initialize local notifications
   Future<void> _initializeLocalNotifications() async {
     try {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
@@ -205,8 +228,10 @@ class NotificationService {
             enableVibration: true,
           );
 
-          final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+          final androidPlugin = _localNotifications
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
 
           if (androidPlugin != null) {
             await androidPlugin.createNotificationChannel(androidChannel);
@@ -219,8 +244,10 @@ class NotificationService {
       // Request permissions explicitly for iOS
       if (platform.isIOS()) {
         try {
-          final iosPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>();
+          final iosPlugin = _localNotifications
+              .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin
+              >();
 
           if (iosPlugin != null) {
             await iosPlugin.requestPermissions(
@@ -235,46 +262,6 @@ class NotificationService {
       }
     } catch (e) {
       debugLogError('Continue without local notifications', e);
-    }
-  }
-
-  /// Show a local notification
-  Future<void> _showLocalNotification(
-    String title,
-    String body,
-    Map<String, dynamic>? data,
-  ) async {
-    if (kIsWeb) return; // Local notifications not supported on web
-
-    try {
-      const androidDetails = AndroidNotificationDetails(
-        'stripcall_channel',
-        'StripCall Notifications',
-        channelDescription: 'Notifications for StripCall app',
-        importance: Importance.high,
-        priority: Priority.high,
-      );
-
-      const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      await _localNotifications.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        details,
-        payload: data != null ? json.encode(data) : null,
-      );
-    } catch (e) {
-      // Silently fail for local notifications
     }
   }
 
@@ -299,11 +286,19 @@ class NotificationService {
       // First, let's check if the device_tokens table exists by trying to query it
       try {
         debugLog('Checking if device_tokens table exists...');
-        final tableCheck = await _supabase.from('device_tokens').select('count').limit(1);
+        final tableCheck = await _supabase
+            .from('device_tokens')
+            .select('count')
+            .limit(1);
         debugLog('device_tokens table exists, check result: $tableCheck');
       } catch (e) {
-        debugLogError('device_tokens table does not exist or is not accessible', e);
-        debugLogError('You need to create the device_tokens table in your Supabase database');
+        debugLogError(
+          'device_tokens table does not exist or is not accessible',
+          e,
+        );
+        debugLogError(
+          'You need to create the device_tokens table in your Supabase database',
+        );
         return;
       }
 
@@ -320,7 +315,9 @@ class NotificationService {
 
       if (existingToken == null) {
         debugLog('Token does not exist, inserting new token...');
-        debugLog('Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platformName"}');
+        debugLog(
+          'Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platformName"}',
+        );
 
         // Insert new token
         final result = await _supabase.from('device_tokens').insert({
@@ -362,7 +359,9 @@ class NotificationService {
     String? problemId,
   }) async {
     try {
-      debugLog('Sending notification: $title - $body to ${userIds.length} users');
+      debugLog(
+        'Sending notification: $title - $body to ${userIds.length} users',
+      );
 
       // Use the Edge Function (FCM) for all platforms
       final session = _supabase.auth.currentSession;
@@ -371,21 +370,26 @@ class NotificationService {
         return false;
       }
 
-      final response = await _supabase.functions.invoke(
-        'send-fcm-notification',
-        body: {
-          'title': title,
-          'body': body,
-          'userIds': userIds,
-          'data': data,
-          'problemId': problemId,
-        },
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Edge Function call timed out', const Duration(seconds: 30));
-        },
-      );
+      final response = await _supabase.functions
+          .invoke(
+            'send-fcm-notification',
+            body: {
+              'title': title,
+              'body': body,
+              'userIds': userIds,
+              'data': data,
+              'problemId': problemId,
+            },
+          )
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw TimeoutException(
+                'Edge Function call timed out',
+                const Duration(seconds: 30),
+              );
+            },
+          );
 
       debugLog('Notification response: ${response.status}');
       return response.status == 200;
@@ -414,17 +418,15 @@ class NotificationService {
         return true; // Not an error, just no one to notify
       }
 
-      final userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
+      final userIds = crewMembers
+          .map((member) => member['crewmember'] as String)
+          .toList();
 
       return await sendNotification(
         title: 'New Problem Reported',
         body: problemTitle,
         userIds: userIds,
-        data: {
-          'type': 'new_problem',
-          'problemId': problemId,
-          'crewId': crewId,
-        },
+        data: {'type': 'new_problem', 'problemId': problemId, 'crewId': crewId},
         problemId: problemId,
       );
     } catch (e) {
@@ -452,7 +454,9 @@ class NotificationService {
         return true; // Not an error, just no one to notify
       }
 
-      final userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
+      final userIds = crewMembers
+          .map((member) => member['crewmember'] as String)
+          .toList();
 
       return await sendNotification(
         title: 'Problem Resolved',
@@ -491,17 +495,15 @@ class NotificationService {
         return true;
       }
 
-      final userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
+      final userIds = crewMembers
+          .map((member) => member['crewmember'] as String)
+          .toList();
 
       return await sendNotification(
         title: 'New Message',
         body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
         userIds: userIds,
-        data: {
-          'type': 'new_message',
-          'problemId': problemId,
-          'crewId': crewId,
-        },
+        data: {'type': 'new_message', 'problemId': problemId, 'crewId': crewId},
         problemId: problemId,
       );
     } catch (e) {
@@ -539,10 +541,14 @@ class NotificationService {
       }
 
       // Start with all crew members
-      List<String> userIds = crewMembers.map((member) => member['crewmember'] as String).toList();
+      List<String> userIds = crewMembers
+          .map((member) => member['crewmember'] as String)
+          .toList();
 
       // Add reporter if includeReporter is true and reporter is not already in the list
-      if (includeReporter && reporterId != null && !userIds.contains(reporterId)) {
+      if (includeReporter &&
+          reporterId != null &&
+          !userIds.contains(reporterId)) {
         userIds.add(reporterId);
       }
 
@@ -621,10 +627,7 @@ class NotificationService {
       // Remove all FCM tokens for current user from database
       final userId = _supabase.auth.currentUser?.id;
       if (userId != null) {
-        await _supabase
-            .from('device_tokens')
-            .delete()
-            .eq('user_id', userId);
+        await _supabase.from('device_tokens').delete().eq('user_id', userId);
       }
     } catch (e) {
       // Error cleaning up device tokens
@@ -654,7 +657,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
   // Initialize local notifications for background messages
-  final FlutterLocalNotificationsPlugin localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosSettings = DarwinInitializationSettings(

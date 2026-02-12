@@ -107,82 +107,91 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      key: const ValueKey('name_finder_dialog'),
-      child: Padding(
-        padding: AppSpacing.screenPadding,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.title, style: AppTypography.titleLarge(context)),
-            AppSpacing.verticalMd,
-            AppTextField(
-              key: const ValueKey('name_finder_firstname_field'),
-              controller: _firstNameController,
-              label: 'First Name',
-              hint: 'Enter first name or * for wildcard',
-              onSubmitted: (_) => _searchUsers(),
-            ),
-            AppSpacing.verticalSm,
-            AppTextField(
-              key: const ValueKey('name_finder_lastname_field'),
-              controller: _lastNameController,
-              label: 'Last Name',
-              hint: 'Enter last name or * for wildcard',
-              onSubmitted: (_) => _searchUsers(),
-            ),
-            AppSpacing.verticalMd,
-            if (_error != null)
-              Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.md),
-                child: Text(
-                  _error!,
-                  style: AppTypography.bodyMedium(
-                    context,
-                  ).copyWith(color: AppColors.statusError),
-                ),
+    return Semantics(
+      identifier: 'name_finder_dialog',
+      child: Dialog(
+        key: const ValueKey('name_finder_dialog'),
+        child: Padding(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.title, style: AppTypography.titleLarge(context)),
+              AppSpacing.verticalMd,
+              AppTextField(
+                key: const ValueKey('name_finder_firstname_field'),
+                controller: _firstNameController,
+                label: 'First Name',
+                hint: 'Enter first name or * for wildcard',
+                onSubmitted: (_) => _searchUsers(),
               ),
-            if (_isLoading)
-              const Center(child: AppLoadingIndicator())
-            else if (_users.isNotEmpty)
-              Flexible(
-                child: ListView.builder(
-                  key: const ValueKey('name_finder_results_list'),
-                  shrinkWrap: true,
-                  itemCount: _users.length,
-                  itemBuilder: (context, index) {
-                    final user = _users[index];
-                    return AppListTile(
-                      key: ValueKey('name_finder_result_$index'),
-                      title: Text(user.fullName),
-                      onTap: () {
-                        Navigator.pop(context, user);
+              AppSpacing.verticalSm,
+              AppTextField(
+                key: const ValueKey('name_finder_lastname_field'),
+                controller: _lastNameController,
+                label: 'Last Name',
+                hint: 'Enter last name or * for wildcard',
+                onSubmitted: (_) => _searchUsers(),
+              ),
+              AppSpacing.verticalMd,
+              if (_error != null)
+                Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.md),
+                  child: Text(
+                    _error!,
+                    style: AppTypography.bodyMedium(
+                      context,
+                    ).copyWith(color: AppColors.statusError),
+                  ),
+                ),
+              if (_isLoading)
+                const Center(child: AppLoadingIndicator())
+              else if (_users.isNotEmpty)
+                Flexible(
+                  child: Semantics(
+                    identifier: 'name_finder_results_list',
+                    child: ListView.builder(
+                      key: const ValueKey('name_finder_results_list'),
+                      shrinkWrap: true,
+                      itemCount: _users.length,
+                      itemBuilder: (context, index) {
+                        final user = _users[index];
+                        return AppListTile(
+                          key: ValueKey('name_finder_result_$index'),
+                          title: Text(user.fullName),
+                          onTap: () {
+                            Navigator.pop(context, user);
+                          },
+                        );
                       },
-                    );
-                  },
+                    ),
+                  ),
+                )
+              else if (_firstNameController.text.isNotEmpty ||
+                  _lastNameController.text.isNotEmpty)
+                Text(
+                  'No users found',
+                  style: AppTypography.bodyMedium(context),
                 ),
-              )
-            else if (_firstNameController.text.isNotEmpty ||
-                _lastNameController.text.isNotEmpty)
-              Text('No users found', style: AppTypography.bodyMedium(context)),
-            AppSpacing.verticalMd,
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AppButton.secondary(
-                  key: const ValueKey('name_finder_cancel_button'),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                AppSpacing.horizontalSm,
-                AppButton(
-                  key: const ValueKey('name_finder_search_button'),
-                  onPressed: _searchButtonDisabled ? null : _searchUsers,
-                  child: const Text('Search'),
-                ),
-              ],
-            ),
-          ],
+              AppSpacing.verticalMd,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  AppButton.secondary(
+                    key: const ValueKey('name_finder_cancel_button'),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  AppSpacing.horizontalSm,
+                  AppButton(
+                    key: const ValueKey('name_finder_search_button'),
+                    onPressed: _searchButtonDisabled ? null : _searchUsers,
+                    child: const Text('Search'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

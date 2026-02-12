@@ -19,11 +19,11 @@ tags:
 # Enter credentials
 - tapOn:
     id: "login_email_field"
-- inputText: "${TEST_EMAIL}"
+- inputText: "e2e_superuser@test.com"
 
 - tapOn:
     id: "login_password_field"
-- inputText: "${TEST_PASSWORD}"
+- inputText: "TestPassword123!"
 
 # Submit login
 - tapOn:

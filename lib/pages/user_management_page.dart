@@ -42,7 +42,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
       // Debug: Check current user's superuser status
       await _checkCurrentUserStatus();
 
-      print('=== USER MANAGEMENT: Loading all user data via Edge Function ===');
+      debugLog(
+        '=== USER MANAGEMENT: Loading all user data via Edge Function ===',
+      );
 
       // Load public and pending users using working Edge Function
       final publicResponse = await Supabase.instance.client.functions.invoke(
@@ -51,7 +53,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
       if (publicResponse.status != 200) {
         final errorData = publicResponse.data as Map<String, dynamic>?;
-        throw Exception(errorData?['error'] ?? 'Failed to load public user data');
+        throw Exception(
+          errorData?['error'] ?? 'Failed to load public user data',
+        );
       }
 
       // Load auth users using working auth function
@@ -67,10 +71,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
       final publicData = publicResponse.data as Map<String, dynamic>;
       final authData = authResponse.data as Map<String, dynamic>;
 
-      final publicUsers = List<Map<String, dynamic>>.from(publicData['publicUsers'] ?? []);
-      final pendingUsers = List<Map<String, dynamic>>.from(publicData['pendingUsers'] ?? []);
-      final authUsers = List<Map<String, dynamic>>.from(authData['authUsers'] ?? []);
+      final publicUsers = List<Map<String, dynamic>>.from(
+        publicData['publicUsers'] ?? [],
+      );
+      final pendingUsers = List<Map<String, dynamic>>.from(
+        publicData['pendingUsers'] ?? [],
+      );
+      final authUsers = List<Map<String, dynamic>>.from(
+        authData['authUsers'] ?? [],
+      );
 
+      if (!mounted) return;
       setState(() {
         _authUsers = authUsers;
         _publicUsers = publicUsers;
@@ -78,9 +89,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         _isLoading = false;
       });
 
-      print('=== USER MANAGEMENT: Loaded ${authUsers.length} auth users, ${publicUsers.length} public users, and ${pendingUsers.length} pending users ===');
+      debugLog(
+        '=== USER MANAGEMENT: Loaded ${authUsers.length} auth users, ${publicUsers.length} public users, and ${pendingUsers.length} pending users ===',
+      );
     } catch (e) {
       debugLogError('Error loading users', e);
+      if (!mounted) return;
       setState(() {
         _error = 'Error loading users: $e';
         _isLoading = false;
@@ -92,8 +106,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        print('=== CURRENT USER CHECK: User ID: ${user.id} ===');
-        print('=== CURRENT USER CHECK: User Email: ${user.email} ===');
+        debugLog('=== CURRENT USER CHECK: User ID: ${user.id} ===');
+        debugLog('=== CURRENT USER CHECK: User Email: ${user.email} ===');
 
         final userData = await Supabase.instance.client
             .from('users')
@@ -101,12 +115,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
             .eq('supabase_id', user.id)
             .single();
 
-        print('=== CURRENT USER CHECK: User Data: $userData ===');
-        print('=== CURRENT USER CHECK: Superuser: ${userData['superuser']} ===');
-        print('=== CURRENT USER CHECK: Organizer: ${userData['organizer']} ===');
+        debugLog('=== CURRENT USER CHECK: User Data: $userData ===');
+        debugLog(
+          '=== CURRENT USER CHECK: Superuser: ${userData['superuser']} ===',
+        );
+        debugLog(
+          '=== CURRENT USER CHECK: Organizer: ${userData['organizer']} ===',
+        );
       }
     } catch (e) {
-      print('=== CURRENT USER CHECK ERROR: $e ===');
+      debugLogError('=== CURRENT USER CHECK ERROR ===', e);
     }
   }
 
@@ -116,23 +134,53 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     switch (_selectedTable) {
       case 'auth_users':
-        users = _authUsers.where((user) =>
-          user['email']?.toString().toLowerCase().contains(searchTerm) ?? false
-        ).toList();
+        users = _authUsers
+            .where(
+              (user) =>
+                  user['email']?.toString().toLowerCase().contains(
+                    searchTerm,
+                  ) ??
+                  false,
+            )
+            .toList();
         break;
       case 'public_users':
-        users = _publicUsers.where((user) =>
-          (user['firstname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
-          (user['lastname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
-          (user['supabase_id']?.toString().toLowerCase().contains(searchTerm) ?? false)
-        ).toList();
+        users = _publicUsers
+            .where(
+              (user) =>
+                  (user['firstname']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false) ||
+                  (user['lastname']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false) ||
+                  (user['supabase_id']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false),
+            )
+            .toList();
         break;
       case 'pending_users':
-        users = _pendingUsers.where((user) =>
-          (user['email']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
-          (user['firstname']?.toString().toLowerCase().contains(searchTerm) ?? false) ||
-          (user['lastname']?.toString().toLowerCase().contains(searchTerm) ?? false)
-        ).toList();
+        users = _pendingUsers
+            .where(
+              (user) =>
+                  (user['email']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false) ||
+                  (user['firstname']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false) ||
+                  (user['lastname']?.toString().toLowerCase().contains(
+                        searchTerm,
+                      ) ??
+                      false),
+            )
+            .toList();
         break;
       default:
         users = [];
@@ -179,7 +227,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               'superuser': _selectedUser!['public_user']?['superuser'],
               'organizer': _selectedUser!['public_user']?['organizer'],
               'is_sms_mode': _selectedUser!['public_user']?['is_sms_mode'],
-            }
+            },
           };
 
           final response = await Supabase.instance.client.functions.invoke(
@@ -189,7 +237,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
           if (response.status != 200) {
             final errorData = response.data as Map<String, dynamic>?;
-            throw Exception(errorData?['error'] ?? 'Failed to update auth user');
+            throw Exception(
+              errorData?['error'] ?? 'Failed to update auth user',
+            );
           }
           break;
         case 'public_users':
@@ -218,6 +268,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       }
 
       await _loadUsers();
+      if (!mounted) return;
       setState(() {
         _isEditing = false;
         _selectedUser = null;
@@ -228,9 +279,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
       );
     } catch (e) {
       debugLogError('Error updating user', e);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating user: $e')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating user: $e')));
     }
   }
 
@@ -241,7 +293,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Delete'),
-        content: Text('Are you sure you want to delete this user? This action cannot be undone.'),
+        content: Text(
+          'Are you sure you want to delete this user? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -259,30 +313,32 @@ class _UserManagementPageState extends State<UserManagementPage> {
     if (confirmed != true) return;
 
     try {
-      print('=== DELETE USER: Starting deletion process ===');
-      print('=== DELETE USER: Selected table: $_selectedTable ===');
-      print('=== DELETE USER: Selected user: $_selectedUser ===');
+      debugLog('=== DELETE USER: Starting deletion process ===');
+      debugLog('=== DELETE USER: Selected table: $_selectedTable ===');
+      debugLog('=== DELETE USER: Selected user: $_selectedUser ===');
 
       switch (_selectedTable) {
         case 'auth_users':
           // Delete from auth.users using Edge Function
-          print('=== DELETE USER: Attempting to delete auth user with ID: ${_selectedUser!['id']} ===');
+          debugLog(
+            '=== DELETE USER: Attempting to delete auth user with ID: ${_selectedUser!['id']} ===',
+          );
 
           final response = await Supabase.instance.client.functions.invoke(
             'delete-user',
             body: {'user_id': _selectedUser!['id']},
           );
 
-          print('=== DELETE USER: Response status: ${response.status} ===');
-          print('=== DELETE USER: Response data: ${response.data} ===');
+          debugLog('=== DELETE USER: Response status: ${response.status} ===');
+          debugLog('=== DELETE USER: Response data: ${response.data} ===');
 
           if (response.status != 200) {
             final errorData = response.data as Map<String, dynamic>?;
-            print('=== DELETE USER: Error response: $errorData ===');
+            debugLog('=== DELETE USER: Error response: $errorData ===');
             throw Exception(errorData?['error'] ?? 'Failed to delete user');
           }
 
-          print('=== DELETE USER: Auth user deletion successful ===');
+          debugLog('=== DELETE USER: Auth user deletion successful ===');
           break;
         case 'public_users':
           await Supabase.instance.client
@@ -299,6 +355,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       }
 
       await _loadUsers();
+      if (!mounted) return;
       setState(() {
         _selectedUser = null;
         _isEditing = false;
@@ -308,13 +365,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const SnackBar(content: Text('User deleted successfully')),
       );
     } catch (e) {
-      print('=== DELETE USER: Exception caught ===');
-      print('=== DELETE USER: Exception type: ${e.runtimeType} ===');
-      print('=== DELETE USER: Exception message: $e ===');
       debugLogError('Error deleting user', e);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting user: $e')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error deleting user: $e')));
     }
   }
 
@@ -332,32 +387,31 @@ class _UserManagementPageState extends State<UserManagementPage> {
             // result will be {'success': true} if successful
             if (result['success'] == true) {
               await _loadUsers();
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('User created successfully')),
               );
             }
             return;
           case 'public_users':
-            await Supabase.instance.client
-                .from('users')
-                .insert(result);
+            await Supabase.instance.client.from('users').insert(result);
             break;
           case 'pending_users':
-            await Supabase.instance.client
-                .from('pending_users')
-                .insert(result);
+            await Supabase.instance.client.from('pending_users').insert(result);
             break;
         }
 
         await _loadUsers();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('User added successfully')),
         );
       } catch (e) {
         debugLogError('Error adding user', e);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding user: $e')),
-        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error adding user: $e')));
       }
     }
   }
@@ -369,7 +423,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
       itemCount: users.length,
       itemBuilder: (context, index) {
         final user = users[index];
-        final isSelected = _selectedUser != null &&
+        final isSelected =
+            _selectedUser != null &&
             _getUserKey(user) == _getUserKey(_selectedUser!);
 
         final userKey = _getUserKey(user);
@@ -407,11 +462,19 @@ class _UserManagementPageState extends State<UserManagementPage> {
       case 'public_users':
         final firstName = user['firstname'] ?? '';
         final lastName = user['lastname'] ?? '';
-        return Text('$firstName $lastName'.trim().isEmpty ? 'No name' : '$firstName $lastName');
+        return Text(
+          '$firstName $lastName'.trim().isEmpty
+              ? 'No name'
+              : '$firstName $lastName',
+        );
       case 'pending_users':
         final firstName = user['firstname'] ?? '';
         final lastName = user['lastname'] ?? '';
-        return Text('$firstName $lastName'.trim().isEmpty ? 'No name' : '$firstName $lastName');
+        return Text(
+          '$firstName $lastName'.trim().isEmpty
+              ? 'No name'
+              : '$firstName $lastName',
+        );
       default:
         return const Text('Unknown');
     }
@@ -421,12 +484,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
     switch (_selectedTable) {
       case 'auth_users':
         final confirmed = user['email_confirmed_at'] != null;
-        return Text('${user['email']} - ${confirmed ? 'Confirmed' : 'Not confirmed'}');
+        return Text(
+          '${user['email']} - ${confirmed ? 'Confirmed' : 'Not confirmed'}',
+        );
       case 'public_users':
         final roles = <String>[];
         if (user['superuser'] == true) roles.add('Super User');
         if (user['organizer'] == true) roles.add('Organizer');
-        return Text('${user['phonenbr'] ?? 'No phone'} - ${roles.isEmpty ? 'User' : roles.join(', ')}');
+        return Text(
+          '${user['phonenbr'] ?? 'No phone'} - ${roles.isEmpty ? 'User' : roles.join(', ')}',
+        );
       case 'pending_users':
         return Text('${user['email']} - ${user['phone_number'] ?? 'No phone'}');
       default:
@@ -455,7 +522,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (user['superuser'] == true)
-              const Icon(Icons.admin_panel_settings, color: Colors.red, size: 16),
+              const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.red,
+                size: 16,
+              ),
             if (user['organizer'] == true)
               const Icon(Icons.event, color: Colors.blue, size: 16),
             const SizedBox(width: 8),
@@ -471,9 +542,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildUserDetails() {
     if (_selectedUser == null) {
-      return const Center(
-        child: Text('Select a user to view details'),
-      );
+      return const Center(child: Text('Select a user to view details'));
     }
 
     return Card(
@@ -542,35 +611,122 @@ class _UserManagementPageState extends State<UserManagementPage> {
       case 'auth_users':
         fields.addAll([
           _buildDetailField('ID', _selectedUser!['id'], isEditing: false),
-          _buildDetailField('Email', _selectedUser!['email'], isEditing: _isEditing),
-          _buildDetailField('First Name', _selectedUser!['public_user']?['firstname'] ?? '', isEditing: _isEditing),
-          _buildDetailField('Last Name', _selectedUser!['public_user']?['lastname'] ?? '', isEditing: _isEditing),
-          _buildDetailField('Phone', _selectedUser!['public_user']?['phonenbr'] ?? '', isEditing: _isEditing),
-          _buildDetailField('Super User', _selectedUser!['public_user']?['superuser']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
-          _buildDetailField('Organizer', _selectedUser!['public_user']?['organizer']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
-          _buildDetailField('SMS Mode', _selectedUser!['public_user']?['is_sms_mode']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
-          _buildDetailField('Confirmed At', _selectedUser!['email_confirmed_at']?.toString() ?? 'Not confirmed', isEditing: false),
-          _buildDetailField('Created At', _selectedUser!['created_at']?.toString() ?? '', isEditing: false),
+          _buildDetailField(
+            'Email',
+            _selectedUser!['email'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'First Name',
+            _selectedUser!['public_user']?['firstname'] ?? '',
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Last Name',
+            _selectedUser!['public_user']?['lastname'] ?? '',
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Phone',
+            _selectedUser!['public_user']?['phonenbr'] ?? '',
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Super User',
+            _selectedUser!['public_user']?['superuser']?.toString() ?? 'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
+          _buildDetailField(
+            'Organizer',
+            _selectedUser!['public_user']?['organizer']?.toString() ?? 'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
+          _buildDetailField(
+            'SMS Mode',
+            _selectedUser!['public_user']?['is_sms_mode']?.toString() ??
+                'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
+          _buildDetailField(
+            'Confirmed At',
+            _selectedUser!['email_confirmed_at']?.toString() ?? 'Not confirmed',
+            isEditing: false,
+          ),
+          _buildDetailField(
+            'Created At',
+            _selectedUser!['created_at']?.toString() ?? '',
+            isEditing: false,
+          ),
         ]);
         break;
       case 'public_users':
         fields.addAll([
-          _buildDetailField('Supabase ID', _selectedUser!['supabase_id'], isEditing: false),
-          _buildDetailField('First Name', _selectedUser!['firstname'], isEditing: _isEditing),
-          _buildDetailField('Last Name', _selectedUser!['lastname'], isEditing: _isEditing),
-          _buildDetailField('Phone', _selectedUser!['phonenbr'], isEditing: _isEditing),
-          _buildDetailField('Super User', _selectedUser!['superuser']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
-          _buildDetailField('Organizer', _selectedUser!['organizer']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
-          _buildDetailField('SMS Mode', _selectedUser!['is_sms_mode']?.toString() ?? 'false', isEditing: _isEditing, isBoolean: true),
+          _buildDetailField(
+            'Supabase ID',
+            _selectedUser!['supabase_id'],
+            isEditing: false,
+          ),
+          _buildDetailField(
+            'First Name',
+            _selectedUser!['firstname'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Last Name',
+            _selectedUser!['lastname'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Phone',
+            _selectedUser!['phonenbr'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Super User',
+            _selectedUser!['superuser']?.toString() ?? 'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
+          _buildDetailField(
+            'Organizer',
+            _selectedUser!['organizer']?.toString() ?? 'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
+          _buildDetailField(
+            'SMS Mode',
+            _selectedUser!['is_sms_mode']?.toString() ?? 'false',
+            isEditing: _isEditing,
+            isBoolean: true,
+          ),
         ]);
         break;
       case 'pending_users':
         fields.addAll([
           _buildDetailField('Email', _selectedUser!['email'], isEditing: false),
-          _buildDetailField('First Name', _selectedUser!['firstname'], isEditing: _isEditing),
-          _buildDetailField('Last Name', _selectedUser!['lastname'], isEditing: _isEditing),
-          _buildDetailField('Phone', _selectedUser!['phone_number'], isEditing: _isEditing),
-          _buildDetailField('Created At', _selectedUser!['created_at']?.toString() ?? '', isEditing: false),
+          _buildDetailField(
+            'First Name',
+            _selectedUser!['firstname'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Last Name',
+            _selectedUser!['lastname'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Phone',
+            _selectedUser!['phone_number'],
+            isEditing: _isEditing,
+          ),
+          _buildDetailField(
+            'Created At',
+            _selectedUser!['created_at']?.toString() ?? '',
+            isEditing: false,
+          ),
         ]);
         break;
     }
@@ -596,7 +752,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
   }
 
-  Widget _buildDetailField(String label, String value, {bool isEditing = false, bool isBoolean = false}) {
+  Widget _buildDetailField(
+    String label,
+    String value, {
+    bool isEditing = false,
+    bool isBoolean = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -630,33 +791,36 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     },
                   )
                 : isEditing
-                    ? TextFormField(
-                        initialValue: value,
-                        onChanged: (newValue) {
-                          setState(() {
-                            final fieldName = _labelToFieldName(label);
-                            // Handle nested public_user fields for auth users
-                            if (_selectedTable == 'auth_users') {
-                              if (label == 'Email') {
-                                // Email is stored directly on the auth user, not in public_user
-                                _selectedUser!['email'] = newValue;
-                              } else {
-                                if (_selectedUser!['public_user'] == null) {
-                                  _selectedUser!['public_user'] = {};
-                                }
-                                _selectedUser!['public_user'][fieldName] = newValue;
-                              }
-                            } else {
-                              _selectedUser![fieldName] = newValue;
+                ? TextFormField(
+                    initialValue: value,
+                    onChanged: (newValue) {
+                      setState(() {
+                        final fieldName = _labelToFieldName(label);
+                        // Handle nested public_user fields for auth users
+                        if (_selectedTable == 'auth_users') {
+                          if (label == 'Email') {
+                            // Email is stored directly on the auth user, not in public_user
+                            _selectedUser!['email'] = newValue;
+                          } else {
+                            if (_selectedUser!['public_user'] == null) {
+                              _selectedUser!['public_user'] = {};
                             }
-                          });
-                        },
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        ),
-                      )
-                    : Text(value),
+                            _selectedUser!['public_user'][fieldName] = newValue;
+                          }
+                        } else {
+                          _selectedUser![fieldName] = newValue;
+                        }
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                    ),
+                  )
+                : Text(value),
           ),
         ],
       ),
@@ -679,93 +843,99 @@ class _UserManagementPageState extends State<UserManagementPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: $_error'),
+                  ElevatedButton(
+                    onPressed: _loadUsers,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : Row(
+              children: [
+                // Left panel - Table selector and user list
+                Expanded(
+                  flex: 2,
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Error: $_error'),
-                      ElevatedButton(
-                        onPressed: _loadUsers,
-                        child: const Text('Retry'),
+                      // Table selector
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: 'auth_users',
+                                    label: Text('Auth Users'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'public_users',
+                                    label: Text('Public Users'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'pending_users',
+                                    label: Text('Pending Users'),
+                                  ),
+                                ],
+                                selected: {_selectedTable},
+                                onSelectionChanged: (Set<String> selection) {
+                                  setState(() {
+                                    _selectedTable = selection.first;
+                                    _selectedUser = null;
+                                    _isEditing = false;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: _addUser,
+                              icon: const Icon(Icons.add),
+                              tooltip: 'Add User',
+                            ),
+                          ],
+                        ),
                       ),
+                      // Search field
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: const InputDecoration(
+                            hintText: 'Search users...',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (value) {
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // User count
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text(
+                          '${_filteredUsers.length} users found',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // User list
+                      Expanded(child: _buildUserList()),
                     ],
                   ),
-                )
-              : Row(
-                  children: [
-                    // Left panel - Table selector and user list
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          // Table selector
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: SegmentedButton<String>(
-                                    segments: const [
-                                      ButtonSegment(value: 'auth_users', label: Text('Auth Users')),
-                                      ButtonSegment(value: 'public_users', label: Text('Public Users')),
-                                      ButtonSegment(value: 'pending_users', label: Text('Pending Users')),
-                                    ],
-                                    selected: {_selectedTable},
-                                    onSelectionChanged: (Set<String> selection) {
-                                      setState(() {
-                                        _selectedTable = selection.first;
-                                        _selectedUser = null;
-                                        _isEditing = false;
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  onPressed: _addUser,
-                                  icon: const Icon(Icons.add),
-                                  tooltip: 'Add User',
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Search field
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: const InputDecoration(
-                                hintText: 'Search users...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                              ),
-                              onChanged: (value) {
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          // User count
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              '${_filteredUsers.length} users found',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          // User list
-                          Expanded(child: _buildUserList()),
-                        ],
-                      ),
-                    ),
-                    // Right panel - User details
-                    Expanded(
-                      flex: 1,
-                      child: _buildUserDetails(),
-                    ),
-                  ],
                 ),
+                // Right panel - User details
+                Expanded(flex: 1, child: _buildUserDetails()),
+              ],
+            ),
     );
   }
 }
@@ -820,7 +990,9 @@ class _AddUserDialogState extends State<AddUserDialog> {
           'password': _passwordController.text,
           'firstname': _firstNameController.text.trim(),
           'lastname': _lastNameController.text.trim(),
-          'phonenbr': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+          'phonenbr': _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
           'superuser': _isSuperUser,
           'is_sms_mode': _isSmsMode,
           'skip_email_confirmation': true,
@@ -832,8 +1004,10 @@ class _AddUserDialogState extends State<AddUserDialog> {
         throw Exception(errorData?['error'] ?? 'Failed to create user');
       }
 
+      if (!mounted) return;
       Navigator.of(context).pop({'success': true});
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -959,7 +1133,8 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-              if (widget.tableType == 'public_users' || widget.tableType == 'pending_users') ...[
+              if (widget.tableType == 'public_users' ||
+                  widget.tableType == 'pending_users') ...[
                 TextFormField(
                   controller: _firstNameController,
                   decoration: const InputDecoration(labelText: 'First Name *'),
@@ -996,7 +1171,8 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 ),
                 const SizedBox(height: 16),
               ],
-              if (widget.tableType == 'public_users' || widget.tableType == 'pending_users') ...[
+              if (widget.tableType == 'public_users' ||
+                  widget.tableType == 'pending_users') ...[
                 TextFormField(
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone'),

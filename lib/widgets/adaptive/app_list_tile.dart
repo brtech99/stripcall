@@ -24,6 +24,7 @@ class AppListTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool enabled;
   final bool selected;
+  final bool dense;
   final EdgeInsetsGeometry? contentPadding;
   final Key? tileKey;
 
@@ -37,6 +38,7 @@ class AppListTile extends StatelessWidget {
     this.onLongPress,
     this.enabled = true,
     this.selected = false,
+    this.dense = false,
     this.contentPadding,
     this.tileKey,
   });
@@ -45,11 +47,23 @@ class AppListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isApple = AppTheme.isApplePlatform(context);
 
+    Widget tile;
     if (isApple) {
-      return _buildCupertinoTile(context);
+      tile = _buildCupertinoTile(context);
+    } else {
+      tile = _buildMaterialTile(context);
     }
 
-    return _buildMaterialTile(context);
+    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
+    final effectiveKey = tileKey ?? key;
+    final keyId = effectiveKey is ValueKey<String>
+        ? (effectiveKey as ValueKey<String>).value
+        : null;
+    if (keyId != null) {
+      return Semantics(identifier: keyId, child: tile);
+    }
+
+    return tile;
   }
 
   Widget _buildCupertinoTile(BuildContext context) {
@@ -58,7 +72,11 @@ class AppListTile extends StatelessWidget {
       onTap: enabled ? onTap : null,
       onLongPress: enabled ? onLongPress : null,
       child: Container(
-        padding: contentPadding ?? AppSpacing.listItemPadding,
+        padding:
+            contentPadding ??
+            (dense
+                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
+                : AppSpacing.listItemPadding),
         decoration: BoxDecoration(
           color: selected
               ? AppColors.primary(context).withValues(alpha: 0.1)
@@ -143,6 +161,7 @@ class AppListTile extends StatelessWidget {
       onLongPress: enabled ? onLongPress : null,
       enabled: enabled,
       selected: selected,
+      dense: dense,
       contentPadding: contentPadding,
     );
   }

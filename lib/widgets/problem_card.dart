@@ -152,45 +152,58 @@ class _ProblemCardState extends State<ProblemCard> {
                 widget.problem.actionString == null &&
                 !widget.problem.isResolved) ...[
               if (!widget.isUserResponding)
-                ElevatedButton(
-                  key: ValueKey('problem_onmyway_button_${widget.problem.id}'),
-                  onPressed: widget.onGoOnMyWay,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm + 4,
-                      vertical: AppSpacing.sm,
+                Semantics(
+                  identifier: 'problem_onmyway_button_${widget.problem.id}',
+                  child: ElevatedButton(
+                    key: ValueKey(
+                      'problem_onmyway_button_${widget.problem.id}',
                     ),
-                    textStyle: AppTypography.labelSmall(context),
+                    onPressed: widget.onGoOnMyWay,
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm + 4,
+                        vertical: AppSpacing.sm,
+                      ),
+                      textStyle: AppTypography.labelSmall(context),
+                    ),
+                    child: const Text('On my way'),
                   ),
-                  child: const Text('On my way'),
                 )
               else
-                ElevatedButton(
-                  key: ValueKey('problem_enroute_button_${widget.problem.id}'),
-                  onPressed: null, // Disabled
+                Semantics(
+                  identifier: 'problem_enroute_button_${widget.problem.id}',
+                  child: ElevatedButton(
+                    key: ValueKey(
+                      'problem_enroute_button_${widget.problem.id}',
+                    ),
+                    onPressed: null, // Disabled
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm + 4,
+                        vertical: AppSpacing.sm,
+                      ),
+                      textStyle: AppTypography.labelSmall(context),
+                      backgroundColor: AppColors.statusWarning,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('En route'),
+                  ),
+                ),
+              AppSpacing.horizontalMd,
+              Semantics(
+                identifier: 'problem_resolve_button_${widget.problem.id}',
+                child: ElevatedButton(
+                  key: ValueKey('problem_resolve_button_${widget.problem.id}'),
+                  onPressed: widget.onResolve,
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm + 4,
                       vertical: AppSpacing.sm,
                     ),
                     textStyle: AppTypography.labelSmall(context),
-                    backgroundColor: AppColors.statusWarning,
-                    foregroundColor: Colors.white,
                   ),
-                  child: const Text('En route'),
+                  child: const Text('Resolve'),
                 ),
-              AppSpacing.horizontalMd,
-              ElevatedButton(
-                key: ValueKey('problem_resolve_button_${widget.problem.id}'),
-                onPressed: widget.onResolve,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm + 4,
-                    vertical: AppSpacing.sm,
-                  ),
-                  textStyle: AppTypography.labelSmall(context),
-                ),
-                child: const Text('Resolve'),
               ),
             ],
             const Spacer(),

@@ -37,10 +37,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
   }
 
   Future<void> _loadCrewData() async {
-    await Future.wait([
-      _loadCrewMembers(),
-      _loadCrewChief(),
-    ]);
+    await Future.wait([_loadCrewMembers(), _loadCrewChief()]);
   }
 
   Future<void> _loadCrewChief() async {
@@ -61,6 +58,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
       }
     } catch (e) {
       debugLogError('Error loading crew chief', e);
+      if (!mounted) return;
       setState(() {
         _error = 'Failed to load crew chief: $e';
         _isLoading = false;
@@ -85,7 +83,9 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         return;
       }
 
-      final userIds = crewMemberResponse.map((record) => record['crewmember'] as String).toList();
+      final userIds = crewMemberResponse
+          .map((record) => record['crewmember'] as String)
+          .toList();
 
       final userResponse = await Supabase.instance.client
           .from('users')
@@ -100,20 +100,20 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
       final combinedData = crewMemberResponse.map((crewMember) {
         final userId = crewMember['crewmember'] as String;
         final userData = userMap[userId];
-        return {
-          ...crewMember,
-          'crewmember': userData,
-        };
+        return {...crewMember, 'crewmember': userData};
       }).toList();
 
       if (mounted) {
         setState(() {
-          _crewMembers = combinedData.map<CrewMember>((json) => CrewMember.fromJson(json)).toList();
+          _crewMembers = combinedData
+              .map<CrewMember>((json) => CrewMember.fromJson(json))
+              .toList();
           _isLoading = false;
         });
       }
     } catch (e) {
       debugLogError('Error loading crew members', e);
+      if (!mounted) return;
       setState(() {
         _error = 'Failed to load crew members: $e';
         _isLoading = false;
@@ -129,12 +129,10 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
     if (result != null) {
       try {
-        await Supabase.instance.client
-            .from('crewmembers')
-            .insert({
-              'crew': widget.crewId,
-              'crewmember': result.supabaseId,
-            });
+        await Supabase.instance.client.from('crewmembers').insert({
+          'crew': widget.crewId,
+          'crewmember': result.supabaseId,
+        });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -188,9 +186,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.eventName} - ${widget.crewType} Crew'),
-        actions: const [
-          SettingsMenu(),
-        ],
+        actions: const [SettingsMenu()],
       ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
@@ -213,24 +209,17 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: AppColors.statusError,
-              ),
+              Icon(Icons.error_outline, size: 48, color: AppColors.statusError),
               AppSpacing.verticalMd,
               Text(
                 _error!,
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: AppColors.statusError,
-                ),
+                style: AppTypography.bodyMedium(
+                  context,
+                ).copyWith(color: AppColors.statusError),
                 textAlign: TextAlign.center,
               ),
               AppSpacing.verticalLg,
-              AppButton(
-                onPressed: _loadCrewData,
-                child: const Text('Retry'),
-              ),
+              AppButton(onPressed: _loadCrewData, child: const Text('Retry')),
             ],
           ),
         ),
@@ -258,10 +247,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                Text(
-                  _crewChiefName!,
-                  style: AppTypography.bodyMedium(context),
-                ),
+                Text(_crewChiefName!, style: AppTypography.bodyMedium(context)),
               ],
             ),
           ),
@@ -297,7 +283,9 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
                         title: Text(user.fullName),
                         subtitle: Text(user.phoneNumber ?? 'No phone'),
                         trailing: IconButton(
-                          key: ValueKey('manage_crew_remove_${user.supabaseId}'),
+                          key: ValueKey(
+                            'manage_crew_remove_${user.supabaseId}',
+                          ),
                           icon: Icon(
                             Icons.delete,
                             color: AppColors.statusError,

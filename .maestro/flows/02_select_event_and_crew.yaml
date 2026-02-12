@@ -1,6 +1,8 @@
-# Select Event and Crew Flow - Smoke Test
-# Tests: User can select an event and crew after login
-# Prerequisites: User must be logged in
+# Select Event Flow - Smoke Test
+# Tests: User can select an event after login and land on the problems page
+# Prerequisites: User must be logged in (on event selection page)
+# Note: App navigates directly to problems page after event selection
+#       (no separate crew selection step in the normal flow)
 # Tags: smoke
 
 appId: com.brianrosen.stripcall
@@ -8,7 +10,6 @@ tags:
   - smoke
 
 ---
-
 # Ensure we're on the event selection page
 - assertVisible:
     id: "select_event_list"
@@ -19,31 +20,13 @@ tags:
     id: "select_event_item_.*"
     index: 0
 
-# Wait for crew selection page
+# Wait for problems page to load (app goes directly to problems after event selection)
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "select_crew_list"
-    timeout: 10000
-
-# Verify crew list is visible
-- assertVisible:
-    id: "select_crew_list"
-
-# Select the first crew
-- tapOn:
-    id: "select_crew_item_.*"
-    index: 0
-
-# Wait for problems page to load
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible:
-      id: "problems_list"
-    timeout: 10000
+      id: "problems_report_button"
+    timeout: 15000
 
 # Verify we're on the problems page
-- assertVisible:
-    id: "problems_list"
 - assertVisible:
     id: "problems_report_button"

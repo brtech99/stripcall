@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../routes.dart';
-import '../../widgets/app_menu.dart';
 import '../../widgets/settings_menu.dart';
 import '../../models/event.dart';
 import '../../utils/debug_utils.dart';
@@ -28,7 +27,7 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
   @override
   void initState() {
     super.initState();
-    print('=== SELECT EVENT PAGE: initState called ===');
+    debugLog('=== SELECT EVENT PAGE: initState called ===');
     _loadEvents();
   }
 
@@ -54,7 +53,10 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
   }
 
   Future<void> _loadEvents() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final now = DateTime.now();
       final twoDaysFromNow = now.add(const Duration(days: 2));
@@ -134,9 +136,9 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    print('=== SELECT EVENT PAGE: build() method called ===');
-    print('=== SELECT EVENT PAGE: _isLoading = $_isLoading ===');
-    print('=== SELECT EVENT PAGE: _events.length = ${_events.length} ===');
+    debugLog('=== SELECT EVENT PAGE: build() method called ===');
+    debugLog('=== SELECT EVENT PAGE: _isLoading = $_isLoading ===');
+    debugLog('=== SELECT EVENT PAGE: _events.length = ${_events.length} ===');
 
     return Scaffold(
       appBar: AppBar(
@@ -184,22 +186,25 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
       );
     }
 
-    return ListView.builder(
-      key: const ValueKey('select_event_list'),
-      itemCount: _events.length,
-      itemBuilder: (context, index) {
-        final event = _events[index];
-        return AppListTile(
-          key: ValueKey('select_event_item_${event.id}'),
-          title: Text(event.name),
-          subtitle: Text(_formatDate(event.startDateTime)),
-          trailing: Icon(
-            Icons.chevron_right,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          onTap: () => _navigateToProblems(event),
-        );
-      },
+    return Semantics(
+      identifier: 'select_event_list',
+      child: ListView.builder(
+        key: const ValueKey('select_event_list'),
+        itemCount: _events.length,
+        itemBuilder: (context, index) {
+          final event = _events[index];
+          return AppListTile(
+            key: ValueKey('select_event_item_${event.id}'),
+            title: Text(event.name),
+            subtitle: Text(_formatDate(event.startDateTime)),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            onTap: () => _navigateToProblems(event),
+          );
+        },
+      ),
     );
   }
 }

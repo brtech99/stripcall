@@ -1,6 +1,6 @@
 # Report Problem Flow - Smoke Test
 # Tests: User can report a new problem
-# Prerequisites: User must be on the problems page (logged in, event/crew selected)
+# Prerequisites: User must be on the problems page (logged in, event selected)
 # Tags: smoke, problems
 
 appId: com.brianrosen.stripcall
@@ -9,7 +9,6 @@ tags:
   - problems
 
 ---
-
 # Ensure we're on the problems page
 - assertVisible:
     id: "problems_report_button"
@@ -25,9 +24,19 @@ tags:
       id: "new_problem_dialog"
     timeout: 5000
 
-# Verify dialog elements are visible
-- assertVisible:
-    id: "new_problem_symptom_class_dropdown"
+# Select the first crew radio button
+- tapOn:
+    id: "new_problem_crew_radio_.*"
+    index: 0
+- waitForAnimationToEnd
+
+# Select a strip (tap the first strip chip)
+- tapOn:
+    text: "1"
+    index: 0
+
+# Wait for symptom class dropdown to become enabled
+- waitForAnimationToEnd
 
 # Select a symptom class (tap dropdown)
 - tapOn:
@@ -60,9 +69,9 @@ tags:
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "problems_list"
+      id: "problems_report_button"
     timeout: 10000
 
 # Verify we're back on problems page
 - assertVisible:
-    id: "problems_list"
+    id: "problems_report_button"

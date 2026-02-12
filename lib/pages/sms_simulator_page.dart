@@ -78,11 +78,10 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
 
       // Group by phone
       for (final phone in _simulatedPhones) {
-        _messages[phone] = messages
-            .where((m) => m['phone'] == phone)
-            .toList();
+        _messages[phone] = messages.where((m) => m['phone'] == phone).toList();
       }
 
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -90,14 +89,13 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
       // Scroll to bottom for each phone after the list is built
       _scrollAllToBottom();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading messages: $e')),
-        );
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error loading messages: $e')));
     }
   }
 
@@ -105,8 +103,10 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
     try {
       // Use the database function to get names for each simulated phone
       for (final phone in _simulatedPhones) {
-        final response = await Supabase.instance.client
-            .rpc('get_reporter_name', params: {'reporter_phone': phone});
+        final response = await Supabase.instance.client.rpc(
+          'get_reporter_name',
+          params: {'reporter_phone': phone},
+        );
 
         if (response != null && response is String && response.isNotEmpty) {
           _phoneNames[phone] = response;
@@ -179,11 +179,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
       // Call the simulator-send-sms edge function which will invoke receive-sms
       final response = await Supabase.instance.client.functions.invoke(
         'simulator-send-sms',
-        body: {
-          'from': phone,
-          'to': crewPhone,
-          'body': message,
-        },
+        body: {'from': phone, 'to': crewPhone, 'body': message},
       );
 
       if (response.status != 200) {
@@ -193,9 +189,9 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
       controller.clear();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending message: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error sending message: $e')));
       }
     }
   }
@@ -205,7 +201,9 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear All Messages'),
-        content: const Text('Are you sure you want to clear all simulated SMS messages?'),
+        content: const Text(
+          'Are you sure you want to clear all simulated SMS messages?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -226,17 +224,17 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
             .delete()
             .neq('id', 0); // Delete all
 
+        if (!mounted) return;
         setState(() {
           for (final phone in _simulatedPhones) {
             _messages[phone] = [];
           }
         });
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error clearing messages: $e')),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error clearing messages: $e')));
       }
     }
   }
@@ -302,7 +300,9 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.blue.shade100,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(11),
+              ),
             ),
             child: Column(
               children: [
@@ -340,11 +340,16 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
                   decoration: const InputDecoration(
                     labelText: 'Send to',
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
                   ),
                   items: _crewPhones.entries.map((entry) {
                     return DropdownMenuItem(
-                      key: ValueKey('sms_simulator_crew_option_${phoneIndex}_${entry.value.toLowerCase()}'),
+                      key: ValueKey(
+                        'sms_simulator_crew_option_${phoneIndex}_${entry.value.toLowerCase()}',
+                      ),
                       value: entry.key,
                       child: Text('${entry.value} (${entry.key})'),
                     );
@@ -379,7 +384,12 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
                       itemBuilder: (context, index) {
                         final msg = messages[index];
                         final isOutbound = msg['direction'] == 'outbound';
-                        return _buildMessageBubble(msg, isOutbound, phoneIndex, index);
+                        return _buildMessageBubble(
+                          msg,
+                          isOutbound,
+                          phoneIndex,
+                          index,
+                        );
                       },
                     ),
             ),
@@ -389,7 +399,9 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(11)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(11),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.grey.shade300,
@@ -407,7 +419,10 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
                     decoration: const InputDecoration(
                       hintText: 'Type message...',
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _sendMessage(phone),
@@ -428,7 +443,12 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> msg, bool isOutbound, int phoneIndex, int messageIndex) {
+  Widget _buildMessageBubble(
+    Map<String, dynamic> msg,
+    bool isOutbound,
+    int phoneIndex,
+    int messageIndex,
+  ) {
     final message = msg['message'] as String? ?? '';
     final createdAt = DateTime.tryParse(msg['created_at'] ?? '');
     final timeStr = createdAt != null
@@ -454,7 +474,9 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
           ],
         ),
         child: Column(
-          crossAxisAlignment: isOutbound ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isOutbound
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             Text(
               message,

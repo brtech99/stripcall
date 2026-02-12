@@ -8,6 +8,13 @@ tags:
   - suite
 
 ---
+# Launch app and wait for it to fully load
+- launchApp:
+    appId: "com.brianrosen.stripcall"
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 15000
 
 # Run all smoke tests in sequence
 - runFlow: 01_login.yaml

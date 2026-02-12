@@ -73,11 +73,24 @@ class AppTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final isApple = AppTheme.isApplePlatform(context);
 
+    Widget field;
     if (isApple) {
-      return _buildCupertinoTextField(context);
+      field = _buildCupertinoTextField(context);
+    } else {
+      field = _buildMaterialTextField(context);
     }
 
-    return _buildMaterialTextField(context);
+    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
+    // Check fieldKey first, then fall back to the widget's own key
+    final effectiveKey = fieldKey ?? key;
+    final keyId = effectiveKey is ValueKey<String>
+        ? (effectiveKey as ValueKey<String>).value
+        : null;
+    if (keyId != null) {
+      return Semantics(identifier: keyId, child: field);
+    }
+
+    return field;
   }
 
   Widget _buildCupertinoTextField(BuildContext context) {
@@ -112,7 +125,10 @@ class AppTextField extends StatelessWidget {
               ? Padding(padding: const EdgeInsets.only(left: 8), child: prefix)
               : null,
           suffix: (suffix ?? suffixIcon) != null
-              ? Padding(padding: const EdgeInsets.only(right: 8), child: suffix ?? suffixIcon)
+              ? Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: suffix ?? suffixIcon,
+                )
               : null,
           readOnly: readOnly,
           focusNode: focusNode,

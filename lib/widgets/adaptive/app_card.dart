@@ -97,8 +97,10 @@ class AppCard extends StatelessWidget {
       );
     }
 
+    Widget card;
+
     if (outlined) {
-      return Card(
+      card = Card(
         key: cardKey,
         margin: margin,
         color: color ?? AppColors.surface(context),
@@ -110,17 +112,28 @@ class AppCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: cardContent,
       );
+    } else {
+      card = Card(
+        key: cardKey,
+        margin: margin,
+        color: color,
+        elevation: elevation,
+        shape: RoundedRectangleBorder(borderRadius: effectiveBorderRadius),
+        clipBehavior: Clip.antiAlias,
+        child: cardContent,
+      );
     }
 
-    return Card(
-      key: cardKey,
-      margin: margin,
-      color: color,
-      elevation: elevation,
-      shape: RoundedRectangleBorder(borderRadius: effectiveBorderRadius),
-      clipBehavior: Clip.antiAlias,
-      child: cardContent,
-    );
+    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
+    final effectiveKey = cardKey ?? key;
+    final keyId = effectiveKey is ValueKey<String>
+        ? (effectiveKey as ValueKey<String>).value
+        : null;
+    if (keyId != null) {
+      return Semantics(identifier: keyId, child: card);
+    }
+
+    return card;
   }
 }
 

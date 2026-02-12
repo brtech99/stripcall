@@ -394,9 +394,9 @@ class _ManageEventPageState extends State<ManageEventPage> {
           .count(CountOption.exact);
 
       final hasActivity =
-          (problemCount.count ?? 0) > 0 ||
-          (messageCount.count ?? 0) > 0 ||
-          (crewMessageCount.count ?? 0) > 0;
+          problemCount.count > 0 ||
+          messageCount.count > 0 ||
+          crewMessageCount.count > 0;
 
       if (hasActivity) {
         if (!mounted) return;
@@ -404,8 +404,8 @@ class _ManageEventPageState extends State<ManageEventPage> {
           context: context,
           title: 'Delete Active Crew?',
           message:
-              'This crew has been active with ${problemCount.count ?? 0} problems and '
-              '${(messageCount.count ?? 0) + (crewMessageCount.count ?? 0)} messages. '
+              'This crew has been active with ${problemCount.count} problems and '
+              '${messageCount.count + crewMessageCount.count} messages. '
               'Deleting it will also delete all associated data.\n\n'
               'Are you sure you want to delete this crew?',
           confirmText: 'Delete',
@@ -554,20 +554,23 @@ class _ManageEventPageState extends State<ManageEventPage> {
             buttonKey: 'manage_event_end_date_button',
           ),
           AppSpacing.verticalMd,
-          DropdownButtonFormField<String>(
-            key: const ValueKey('manage_event_strip_numbering_dropdown'),
-            value: _stripNumbering,
-            decoration: const InputDecoration(labelText: 'Strip Numbering'),
-            items: const [
-              DropdownMenuItem(value: 'Pods', child: Text('Pods')),
-              DropdownMenuItem(
-                value: 'SequentialNumbers',
-                child: Text('Sequential Numbers'),
-              ),
-            ],
-            onChanged: (val) {
-              if (val != null) setState(() => _stripNumbering = val);
-            },
+          Semantics(
+            identifier: 'manage_event_strip_numbering_dropdown',
+            child: DropdownButtonFormField<String>(
+              key: const ValueKey('manage_event_strip_numbering_dropdown'),
+              value: _stripNumbering,
+              decoration: const InputDecoration(labelText: 'Strip Numbering'),
+              items: const [
+                DropdownMenuItem(value: 'Pods', child: Text('Pods')),
+                DropdownMenuItem(
+                  value: 'SequentialNumbers',
+                  child: Text('Sequential Numbers'),
+                ),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _stripNumbering = val);
+              },
+            ),
           ),
           AppSpacing.verticalMd,
           AppTextField(
@@ -623,10 +626,13 @@ class _ManageEventPageState extends State<ManageEventPage> {
             style: AppTypography.bodyMedium(context),
           ),
         ),
-        TextButton(
-          key: ValueKey(buttonKey),
-          onPressed: onPick,
-          child: Text('Pick', style: TextStyle(color: colorScheme.primary)),
+        Semantics(
+          identifier: buttonKey,
+          child: TextButton(
+            key: ValueKey(buttonKey),
+            onPressed: onPick,
+            child: Text('Pick', style: TextStyle(color: colorScheme.primary)),
+          ),
         ),
       ],
     );
@@ -646,14 +652,17 @@ class _ManageEventPageState extends State<ManageEventPage> {
               ).copyWith(fontWeight: FontWeight.bold),
             ),
             if (_availableCrewTypes.isNotEmpty)
-              IconButton(
-                key: const ValueKey('manage_event_add_crew_button'),
-                onPressed: _addCrew,
-                icon: Icon(
-                  Icons.add,
-                  color: Theme.of(context).colorScheme.primary,
+              Semantics(
+                identifier: 'manage_event_add_crew_button',
+                child: IconButton(
+                  key: const ValueKey('manage_event_add_crew_button'),
+                  onPressed: _addCrew,
+                  icon: Icon(
+                    Icons.add,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  tooltip: 'Add Crew',
                 ),
-                tooltip: 'Add Crew',
               ),
           ],
         ),
@@ -710,18 +719,24 @@ class _ManageEventPageState extends State<ManageEventPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          key: ValueKey('manage_event_crew_edit_$index'),
-                          icon: const Icon(Icons.edit),
-                          onPressed: () => _editCrew(crew),
-                        ),
-                        IconButton(
-                          key: ValueKey('manage_event_crew_delete_$index'),
-                          icon: Icon(
-                            Icons.delete,
-                            color: AppColors.statusError,
+                        Semantics(
+                          identifier: 'manage_event_crew_edit_$index',
+                          child: IconButton(
+                            key: ValueKey('manage_event_crew_edit_$index'),
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _editCrew(crew),
                           ),
-                          onPressed: () => _deleteCrew(crew.id),
+                        ),
+                        Semantics(
+                          identifier: 'manage_event_crew_delete_$index',
+                          child: IconButton(
+                            key: ValueKey('manage_event_crew_delete_$index'),
+                            icon: Icon(
+                              Icons.delete,
+                              color: AppColors.statusError,
+                            ),
+                            onPressed: () => _deleteCrew(crew.id),
+                          ),
                         ),
                       ],
                     ),

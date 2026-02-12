@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
 
@@ -65,24 +66,16 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
   }
 
   Future<void> _loadData() async {
-    await Future.wait([
-      _loadStripConfig(),
-      _loadSymptomClasses(),
-    ]);
+    await Future.wait([_loadStripConfig(), _loadSymptomClasses()]);
   }
 
   Future<void> _loadStripConfig() async {
     try {
-      final response = await Supabase.instance.client
-          .from('events')
-          .select('stripnumbering, count')
-          .eq('id', widget.eventId)
-          .single();
-
+      final config = await LookupService.getStripConfig(widget.eventId);
       if (mounted) {
         setState(() {
-          _isPodBased = response['stripnumbering'] == 'Pods';
-          _stripCount = response['count'] ?? 0;
+          _isPodBased = config.isPodBased;
+          _stripCount = config.stripCount;
         });
       }
     } catch (e) {
@@ -92,39 +85,13 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
 
   Future<void> _loadSymptomClasses() async {
     try {
-      List<Map<String, dynamic>> response;
-
-      if (widget.crewTypeId != null) {
-        try {
-          response = await Supabase.instance.client
-              .from('symptomclass')
-              .select('id, symptomclassstring')
-              .eq('crewType', widget.crewTypeId!)
-              .order('display_order', ascending: true);
-        } catch (e) {
-          response = await Supabase.instance.client
-              .from('symptomclass')
-              .select('id, symptomclassstring')
-              .eq('crewType', widget.crewTypeId!)
-              .order('symptomclassstring');
-        }
-      } else {
-        try {
-          response = await Supabase.instance.client
-              .from('symptomclass')
-              .select('id, symptomclassstring')
-              .order('display_order', ascending: true);
-        } catch (e) {
-          response = await Supabase.instance.client
-              .from('symptomclass')
-              .select('id, symptomclassstring')
-              .order('symptomclassstring');
-        }
-      }
+      final response = await LookupService.getSymptomClassesForCrewType(
+        widget.crewTypeId,
+      );
 
       if (mounted) {
         setState(() {
-          _symptomClasses = List<Map<String, dynamic>>.from(response);
+          _symptomClasses = response;
           _isLoadingData = false;
         });
       }
@@ -179,24 +146,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         return;
       }
 
-      List<Map<String, dynamic>> response;
-      try {
-        response = await Supabase.instance.client
-            .from('symptom')
-            .select('id, symptomstring')
-            .eq('symptomclass', int.parse(_selectedSymptomClass!))
-            .order('display_order', ascending: true);
-      } catch (e) {
-        response = await Supabase.instance.client
-            .from('symptom')
-            .select('id, symptomstring')
-            .eq('symptomclass', int.parse(_selectedSymptomClass!))
-            .order('symptomstring');
-      }
-
+      final response = await LookupService.getSymptomsForClass(
+        int.parse(_selectedSymptomClass!),
+      );
       if (mounted) {
         setState(() {
-          _symptoms = List<Map<String, dynamic>>.from(response);
+          _symptoms = response;
         });
       }
     } catch (e) {
@@ -224,7 +179,10 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
       }
       podLetters.add('Finals');
 
-      final List<String> stripNumbers = List.generate(4, (i) => (i + 1).toString());
+      final List<String> stripNumbers = List.generate(
+        4,
+        (i) => (i + 1).toString(),
+      );
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,16 +206,23 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 showCheckmark: false,
                 labelStyle: const TextStyle(fontWeight: FontWeight.w500),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                selectedColor: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedPod == podLetter
                       ? Theme.of(context).colorScheme.primary
                       : Colors.grey.shade400,
                 ),
                 visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
                 labelPadding: const EdgeInsets.symmetric(horizontal: 0),
                 avatar: null,
               );
@@ -281,16 +246,23 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                   showCheckmark: false,
                   labelStyle: const TextStyle(fontWeight: FontWeight.w500),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   backgroundColor: Theme.of(context).colorScheme.surface,
-                  selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                  selectedColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.15),
                   side: BorderSide(
                     color: _selectedStripNumber == stripNum
                         ? Theme.of(context).colorScheme.primary
                         : Colors.grey.shade400,
                   ),
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
                   labelPadding: const EdgeInsets.symmetric(horizontal: 0),
                   avatar: null,
                 );
@@ -302,7 +274,10 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
     } else {
       // Sequential strips: 1 to count-1, then Finals
       final List<String> stripNumbers = [
-        ...List.generate(_stripCount > 1 ? _stripCount - 1 : 0, (i) => (i + 1).toString()),
+        ...List.generate(
+          _stripCount > 1 ? _stripCount - 1 : 0,
+          (i) => (i + 1).toString(),
+        ),
         'Finals',
       ];
       return Column(
@@ -323,16 +298,23 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 showCheckmark: false,
                 labelStyle: const TextStyle(fontWeight: FontWeight.w500),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                selectedColor: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedStrip == stripNumber
                       ? Theme.of(context).colorScheme.primary
                       : Colors.grey.shade400,
                 ),
                 visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
                 labelPadding: const EdgeInsets.symmetric(horizontal: 0),
                 avatar: null,
               );
@@ -346,7 +328,9 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
   Future<void> _submitChange() async {
     final newStrip = _selectedStrip;
     final stripChanged = newStrip != null && newStrip != widget.currentStrip;
-    final symptomChanged = _selectedSymptom != null && int.parse(_selectedSymptom!) != widget.currentSymptomId;
+    final symptomChanged =
+        _selectedSymptom != null &&
+        int.parse(_selectedSymptom!) != widget.currentSymptomId;
 
     if (!stripChanged && !symptomChanged) {
       setState(() {
@@ -379,10 +363,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
 
       String newSymptomName;
       if (symptomChanged) {
-        newSymptomName = _symptoms.firstWhere(
-          (s) => s['id'].toString() == _selectedSymptom,
-          orElse: () => {'symptomstring': 'Unknown'},
-        )['symptomstring'] as String;
+        newSymptomName =
+            _symptoms.firstWhere(
+                  (s) => s['id'].toString() == _selectedSymptom,
+                  orElse: () => {'symptomstring': 'Unknown'},
+                )['symptomstring']
+                as String;
       } else {
         newSymptomName = widget.currentSymptomString ?? 'Unknown';
       }
@@ -410,11 +396,17 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         updateData['strip'] = newStrip;
       }
 
-      await Supabase.instance.client.from('problem').update(updateData).eq('id', widget.problemId);
+      await Supabase.instance.client
+          .from('problem')
+          .update(updateData)
+          .eq('id', widget.problemId);
 
       // Capture values needed for notification before popping
-      final changerName = '${userResponse['firstname']} ${userResponse['lastname']}';
-      final displayStrip = stripChanged ? newStrip : (problemResponse['strip'] as String);
+      final changerName =
+          '${userResponse['firstname']} ${userResponse['lastname']}';
+      final displayStrip = stripChanged
+          ? newStrip
+          : (problemResponse['strip'] as String);
       final crewId = problemResponse['crew'].toString();
       final reporterId = problemResponse['originator'] as String?;
       final problemId = widget.problemId;
@@ -422,33 +414,42 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
 
       String notificationBody;
       if (stripChanged && symptomChanged) {
-        notificationBody = '$changerName changed strip to $newStrip and problem to "$newSymptomName"';
+        notificationBody =
+            '$changerName changed strip to $newStrip and problem to "$newSymptomName"';
       } else if (stripChanged) {
-        notificationBody = '$changerName changed strip from $currentStrip to $newStrip';
+        notificationBody =
+            '$changerName changed strip from $currentStrip to $newStrip';
       } else {
-        notificationBody = 'Strip $displayStrip: $changerName changed problem to "$newSymptomName"';
+        notificationBody =
+            'Strip $displayStrip: $changerName changed problem to "$newSymptomName"';
       }
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
 
       // Send notification (fire and forget - don't block UI)
-      NotificationService().sendCrewNotification(
-        title: 'Problem Updated',
-        body: notificationBody,
-        crewId: crewId,
-        senderId: userId,
-        data: {
-          'type': 'problem_updated',
-          'problemId': problemId.toString(),
-          'crewId': crewId,
-          'strip': displayStrip,
-        },
-        includeReporter: true,
-        reporterId: reporterId,
-      ).catchError((e) {
-        debugLogError('Failed to send notification (problem was updated successfully)', e);
-      });
+      NotificationService()
+          .sendCrewNotification(
+            title: 'Problem Updated',
+            body: notificationBody,
+            crewId: crewId,
+            senderId: userId,
+            data: {
+              'type': 'problem_updated',
+              'problemId': problemId.toString(),
+              'crewId': crewId,
+              'strip': displayStrip,
+            },
+            includeReporter: true,
+            reporterId: reporterId,
+          )
+          .catchError((e) {
+            debugLogError(
+              'Failed to send notification (problem was updated successfully)',
+              e,
+            );
+            return false;
+          });
     } catch (e) {
       debugLogError('Failed to update problem', e);
       if (!mounted) return;
@@ -490,15 +491,18 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                             padding: const EdgeInsets.only(bottom: 16),
                             child: Text(
                               _error!,
-                              style: TextStyle(color: Theme.of(context).colorScheme.error),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
                           ),
                         Text(
                           'Current: Strip ${widget.currentStrip ?? '?'} - ${widget.currentSymptomString ?? 'Unknown'}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            color: Colors.grey[600],
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey[600],
+                              ),
                         ),
                         AppSpacing.verticalMd,
                         _buildStripSelector(),
@@ -558,7 +562,9 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                                 ? [
                                     const DropdownMenuItem(
                                       value: null,
-                                      child: Text('Select a Problem Area first'),
+                                      child: Text(
+                                        'Select a Problem Area first',
+                                      ),
                                     ),
                                   ]
                                 : _symptoms.map((symptom) {
@@ -588,7 +594,9 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 children: [
                   TextButton(
                     key: const ValueKey('edit_symptom_cancel_button'),
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                   AppSpacing.horizontalSm,

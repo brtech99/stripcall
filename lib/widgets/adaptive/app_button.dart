@@ -102,7 +102,17 @@ class AppButton extends StatelessWidget {
     }
 
     if (expand) {
-      return SizedBox(width: double.infinity, child: button);
+      button = SizedBox(width: double.infinity, child: button);
+    }
+
+    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
+    // Check buttonKey first, then fall back to the widget's own key
+    final effectiveKey = buttonKey ?? key;
+    final keyId = effectiveKey is ValueKey<String>
+        ? (effectiveKey as ValueKey<String>).value
+        : null;
+    if (keyId != null) {
+      return Semantics(identifier: keyId, child: button);
     }
 
     return button;
@@ -192,12 +202,14 @@ class AppIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isApple = AppTheme.isApplePlatform(context);
 
+    Widget button;
+
     if (isApple) {
-      return CupertinoButton(
+      button = CupertinoButton(
         key: buttonKey,
         onPressed: onPressed,
         padding: EdgeInsets.zero,
-        minSize: 44, // iOS minimum touch target
+        minimumSize: const Size(44, 44), // iOS minimum touch target
         child: IconTheme(
           data: IconThemeData(
             color: color ?? AppColors.primary(context),
@@ -206,15 +218,27 @@ class AppIconButton extends StatelessWidget {
           child: icon,
         ),
       );
+    } else {
+      button = IconButton(
+        key: buttonKey,
+        onPressed: onPressed,
+        icon: icon,
+        tooltip: tooltip,
+        color: color,
+        iconSize: iconSize,
+      );
     }
 
-    return IconButton(
-      key: buttonKey,
-      onPressed: onPressed,
-      icon: icon,
-      tooltip: tooltip,
-      color: color,
-      iconSize: iconSize,
-    );
+    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
+    // Check buttonKey first, then fall back to the widget's own key
+    final effectiveKey = buttonKey ?? key;
+    final keyId = effectiveKey is ValueKey<String>
+        ? (effectiveKey as ValueKey<String>).value
+        : null;
+    if (keyId != null) {
+      return Semantics(identifier: keyId, child: button);
+    }
+
+    return button;
   }
 }

@@ -1,3 +1,5 @@
+import '../utils/debug_utils.dart';
+
 class Problem {
   final int id;
   final int eventId;
@@ -9,7 +11,7 @@ class Problem {
   final int? actionId;
   final String? actionById;
   final DateTime? endDateTime;
-  final String? reporterPhone;  // For SMS-originated problems
+  final String? reporterPhone; // For SMS-originated problems
 
   const Problem({
     required this.id,
@@ -27,7 +29,9 @@ class Problem {
 
   /// Create a Problem from a JSON map (typically from Supabase)
   factory Problem.fromJson(Map<String, dynamic> json) {
-    print('DEBUG Problem.fromJson ENTRY: symptom type=${json['symptom'].runtimeType}, value=${json['symptom']}');
+    debugLog(
+      'Problem.fromJson ENTRY: symptom type=${json['symptom'].runtimeType}, value=${json['symptom']}',
+    );
 
     // Handle symptom - could be int or Map from joined data
     int symptomId;
@@ -77,9 +81,15 @@ class Problem {
     }
 
     return Problem(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
-      eventId: json['event'] is int ? json['event'] : int.tryParse(json['event'].toString()) ?? 0,
-      crewId: json['crew'] is int ? json['crew'] : int.tryParse(json['crew'].toString()) ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id'].toString()) ?? 0,
+      eventId: json['event'] is int
+          ? json['event']
+          : int.tryParse(json['event'].toString()) ?? 0,
+      crewId: json['crew'] is int
+          ? json['crew']
+          : int.tryParse(json['crew'].toString()) ?? 0,
       originatorId: originatorId,
       strip: json['strip'] ?? '',
       symptomId: symptomId,

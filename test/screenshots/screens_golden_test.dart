@@ -5,8 +5,6 @@ import 'screenshot_wrapper.dart';
 
 // Import the screens we want to screenshot
 import 'package:stripcall/pages/auth/login_page.dart';
-import 'package:stripcall/pages/auth/create_account_page.dart';
-import 'package:stripcall/pages/auth/forgot_password_page.dart';
 import 'package:stripcall/widgets/adaptive/adaptive.dart';
 import 'package:stripcall/theme/theme.dart';
 
@@ -15,9 +13,7 @@ void main() {
     group('Material (Android)', () {
       testWidgets('Login Page', (tester) async {
         await tester.pumpWidget(
-          ScreenshotWrapper.material(
-            child: const LoginPage(),
-          ),
+          ScreenshotWrapper.material(child: const LoginPage()),
         );
         await tester.pump();
 
@@ -194,9 +190,7 @@ void main() {
     group('Cupertino (iOS)', () {
       testWidgets('Login Page', (tester) async {
         await tester.pumpWidget(
-          ScreenshotWrapper.cupertino(
-            child: const LoginPage(),
-          ),
+          ScreenshotWrapper.cupertino(child: const LoginPage()),
         );
         await tester.pump();
 

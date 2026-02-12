@@ -595,17 +595,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
       );
     }
 
-    return ListView.builder(
-      key: const ValueKey('problems_list'),
-      padding: EdgeInsets.only(
-        left: AppSpacing.sm,
-        right: AppSpacing.sm,
-        top: AppSpacing.sm,
-        bottom: 80,
+    return Semantics(
+      identifier: 'problems_list',
+      child: ListView.builder(
+        key: const ValueKey('problems_list'),
+        padding: EdgeInsets.only(
+          left: AppSpacing.sm,
+          right: AppSpacing.sm,
+          top: AppSpacing.sm,
+          bottom: 80,
+        ),
+        itemCount: _state.problems.length,
+        itemBuilder: (context, index) =>
+            _buildProblemItem(_state.problems[index]),
       ),
-      itemCount: _state.problems.length,
-      itemBuilder: (context, index) =>
-          _buildProblemItem(_state.problems[index]),
     );
   }
 
@@ -680,22 +683,28 @@ class _ProblemsPageState extends State<ProblemsPage> {
         child: Row(
           children: [
             Expanded(
-              child: ElevatedButton.icon(
-                key: const ValueKey('problems_report_button'),
-                onPressed: _showNewProblemDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Report Problem'),
+              child: Semantics(
+                identifier: 'problems_report_button',
+                child: ElevatedButton.icon(
+                  key: const ValueKey('problems_report_button'),
+                  onPressed: _showNewProblemDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Report Problem'),
+                ),
               ),
             ),
             AppSpacing.horizontalSm,
-            IconButton(
-              key: const ValueKey('problems_refresh_button'),
-              onPressed: () {
-                _updateState(_state.copyWith(isLoading: true));
-                _loadProblems();
-              },
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh',
+            Semantics(
+              identifier: 'problems_refresh_button',
+              child: IconButton(
+                key: const ValueKey('problems_refresh_button'),
+                onPressed: () {
+                  _updateState(_state.copyWith(isLoading: true));
+                  _loadProblems();
+                },
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh',
+              ),
             ),
           ],
         ),

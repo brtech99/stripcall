@@ -10,7 +10,7 @@ import 'utils/debug_utils.dart';
 import 'theme/theme.dart';
 
 void main() async {
-  print('=== STRIPCALL BUILD 2026-01-21-TEST ===');
+  debugLog('=== STRIPCALL BUILD 2026-01-21-TEST ===');
   WidgetsFlutterBinding.ensureInitialized();
 
   debugLog('=== APP STARTING ===');

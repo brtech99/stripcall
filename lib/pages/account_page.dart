@@ -116,6 +116,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           .eq('supabase_id', user.id)
           .single();
 
+      if (!mounted) return;
       setState(() {
         _firstName = userData['firstname'] ?? '';
         _lastName = userData['lastname'] ?? '';
@@ -128,6 +129,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       });
     } catch (e) {
       debugLogError('Error loading user data', e);
+      if (!mounted) return;
       setState(() {
         _error = 'Error loading user data: $e';
         _isLoading = false;
@@ -158,6 +160,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           })
           .eq('supabase_id', user.id);
 
+      if (!mounted) return;
       setState(() {
         _firstName = _firstNameController.text.trim();
         _lastName = _lastNameController.text.trim();
@@ -165,19 +168,16 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
         _isSaving = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
     } catch (e) {
       debugLogError('Error saving profile', e);
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving profile: $e')),
-        );
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error saving profile: $e')));
     }
   }
 
@@ -227,6 +227,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        if (!mounted) return;
         setState(() {
           _pendingPhone = data['phone'] ?? newPhone;
           _isVerifyingPhone = true;
@@ -235,22 +236,19 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           _otpController.clear();
         });
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Verification code sent to your phone')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Verification code sent to your phone')),
+        );
       } else {
         throw Exception(data['error'] ?? 'Failed to send verification code');
       }
     } catch (e) {
       debugLogError('Error sending phone OTP', e);
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -282,15 +280,13 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           'Authorization': 'Bearer ${session.accessToken}',
           'apikey': supabaseAnonKey,
         },
-        body: jsonEncode({
-          'phone': _pendingPhone,
-          'code': code,
-        }),
+        body: jsonEncode({'phone': _pendingPhone, 'code': code}),
       );
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        if (!mounted) return;
         setState(() {
           _phoneNumber = data['phone'] ?? _pendingPhone;
           _phoneController.text = _phoneNumber;
@@ -300,22 +296,19 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           _isSaving = false;
         });
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Phone number verified and updated successfully')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone number verified and updated successfully'),
+          ),
+        );
       } else {
         throw Exception(data['error'] ?? 'Verification failed');
       }
     } catch (e) {
       debugLogError('Error verifying phone OTP', e);
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -337,7 +330,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       return;
     }
 
-    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
     if (!emailRegex.hasMatch(newEmail)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid email address')),
@@ -358,6 +353,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
         emailRedirectTo: 'https://stripcall.us/app/email-changed.html',
       );
 
+      if (!mounted) return;
       setState(() {
         _pendingEmail = newEmail;
         _isVerifyingEmail = true;
@@ -365,22 +361,21 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
         _isSaving = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Confirmation emails sent to both addresses. Click the link in BOTH emails to complete the change.'),
-            duration: Duration(seconds: 8),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Confirmation emails sent to both addresses. Click the link in BOTH emails to complete the change.',
           ),
-        );
-      }
+          duration: Duration(seconds: 8),
+        ),
+      );
     } catch (e) {
       debugLogError('Error initiating email change', e);
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error changing email: $e')),
-        );
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error changing email: $e')));
     }
   }
 
@@ -393,30 +388,30 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
         redirectTo: 'https://stripcall.us/auth/reset-password',
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset email sent. Please check your inbox.'),
-            duration: Duration(seconds: 5),
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent. Please check your inbox.'),
+          duration: Duration(seconds: 5),
+        ),
+      );
     } catch (e) {
       debugLogError('Error sending password reset email', e);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending password reset email: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sending password reset email: $e')),
+      );
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> _toggleSmsMode(bool value) async {
     if (value && _phoneNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add a phone number first to enable SMS mode')),
+        const SnackBar(
+          content: Text('Please add a phone number first to enable SMS mode'),
+        ),
       );
       return;
     }
@@ -432,28 +427,28 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           .update({'is_sms_mode': value})
           .eq('supabase_id', user.id);
 
+      if (!mounted) return;
       setState(() {
         _isSmsMode = value;
         _isSaving = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(value
-              ? 'SMS mode enabled. You will receive messages via SMS.'
-              : 'SMS mode disabled. You will receive messages in the app.'),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'SMS mode enabled. You will receive messages via SMS.'
+                : 'SMS mode disabled. You will receive messages in the app.',
           ),
-        );
-      }
+        ),
+      );
     } catch (e) {
       debugLogError('Error toggling SMS mode', e);
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating SMS mode: $e')),
-        );
-      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating SMS mode: $e')));
     }
   }
 
@@ -466,9 +461,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     } catch (e) {
       debugLogError('Error signing out', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error signing out: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error signing out: $e')));
       }
     }
   }
@@ -484,9 +479,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Account'),
-      ),
+      appBar: AppBar(title: const Text('Account')),
       body: _buildBody(),
     );
   }
@@ -503,24 +496,17 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: AppColors.statusError,
-              ),
+              Icon(Icons.error_outline, size: 48, color: AppColors.statusError),
               AppSpacing.verticalMd,
               Text(
                 _error!,
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: AppColors.statusError,
-                ),
+                style: AppTypography.bodyMedium(
+                  context,
+                ).copyWith(color: AppColors.statusError),
                 textAlign: TextAlign.center,
               ),
               AppSpacing.verticalLg,
-              AppButton(
-                onPressed: _loadUserData,
-                child: const Text('Retry'),
-              ),
+              AppButton(onPressed: _loadUserData, child: const Text('Retry')),
             ],
           ),
         ),
@@ -560,9 +546,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
               children: [
                 Text(
                   'Profile',
-                  style: AppTypography.titleMedium(context).copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppTypography.titleMedium(
+                    context,
+                  ).copyWith(fontWeight: FontWeight.bold),
                 ),
                 if (!_isEditingProfile)
                   IconButton(
@@ -632,9 +618,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
               children: [
                 Text(
                   'Phone Number',
-                  style: AppTypography.titleMedium(context).copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppTypography.titleMedium(
+                    context,
+                  ).copyWith(fontWeight: FontWeight.bold),
                 ),
                 if (!_isEditingPhone && !_isVerifyingPhone)
                   IconButton(
@@ -707,7 +693,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.phone),
                 title: Text(_phoneNumber.isNotEmpty ? _phoneNumber : 'Not set'),
-                subtitle: const Text('Used for SMS notifications when not logged in'),
+                subtitle: const Text(
+                  'Used for SMS notifications when not logged in',
+                ),
               ),
             ],
           ],
@@ -725,9 +713,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           children: [
             Text(
               'SMS Mode',
-              style: AppTypography.titleMedium(context).copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppTypography.titleMedium(
+                context,
+              ).copyWith(fontWeight: FontWeight.bold),
             ),
             AppSpacing.verticalSm,
             SwitchListTile(
@@ -746,9 +734,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
               AppSpacing.verticalSm,
               Text(
                 'Add a phone number above to enable SMS mode',
-                style: AppTypography.labelSmall(context).copyWith(
-                  color: AppColors.statusWarning,
-                ),
+                style: AppTypography.labelSmall(
+                  context,
+                ).copyWith(color: AppColors.statusWarning),
               ),
             ],
           ],
@@ -769,9 +757,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
               children: [
                 Text(
                   'Email',
-                  style: AppTypography.titleMedium(context).copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppTypography.titleMedium(
+                    context,
+                  ).copyWith(fontWeight: FontWeight.bold),
                 ),
                 if (!_isEditingEmail && !_isVerifyingEmail)
                   IconButton(
@@ -851,9 +839,9 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
           children: [
             Text(
               'Password',
-              style: AppTypography.titleMedium(context).copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppTypography.titleMedium(
+                context,
+              ).copyWith(fontWeight: FontWeight.bold),
             ),
             AppSpacing.verticalSm,
             AppListTile(
@@ -885,11 +873,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       isDestructive: true,
       child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.logout),
-          SizedBox(width: 8),
-          Text('Sign Out'),
-        ],
+        children: [Icon(Icons.logout), SizedBox(width: 8), Text('Sign Out')],
       ),
     );
   }

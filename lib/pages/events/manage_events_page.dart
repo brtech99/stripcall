@@ -108,13 +108,16 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
         actions: const [SettingsMenu()],
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        key: const ValueKey('manage_events_add_button'),
-        onPressed: () async {
-          await context.push(Routes.manageEvent);
-          _loadEvents();
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Semantics(
+        identifier: 'manage_events_add_button',
+        child: FloatingActionButton(
+          key: const ValueKey('manage_events_add_button'),
+          onPressed: () async {
+            await context.push(Routes.manageEvent);
+            _loadEvents();
+          },
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }

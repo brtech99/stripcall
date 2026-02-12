@@ -11,20 +11,35 @@
    supabase db reset
    ```
 
-### Running Tests
+### Run All Tests
 
-**On iOS Simulator:**
 ```bash
-# Boot a simulator first
+# Boot a simulator first (if not already booted)
 xcrun simctl boot "iPhone 16 Pro"
 open -a Simulator
 
-# Run the test with required environment variables
-flutter test integration_test/exhaustive_problem_page_test.dart --no-pub \
+# Run the full test suite (auto-detects booted simulator)
+./run_all_tests.sh
+
+# Or specify a simulator ID
+./run_all_tests.sh <SIMULATOR_ID>
+```
+
+This runs all three test files in sequence, resetting the database and terminating the app between each:
+1. `exhaustive_problem_page_test` - Full problem workflow
+2. `create_event_test` - Event lifecycle with editing and SMS flag
+3. `manage_crews_test` - Crew member management across user roles
+
+Prints a pass/fail summary at the end. Test logs are saved to `/tmp/stripcall_test_*.log`.
+
+### Run a Single Test
+
+```bash
+supabase db reset
+flutter test integration_test/<test_file>.dart --no-pub \
   -d <SIMULATOR_ID> \
   --dart-define="SUPABASE_URL=http://127.0.0.1:54321" \
-  --dart-define="SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-  --dart-define="SKIP_NOTIFICATIONS=true"
+  --dart-define="SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 ```
 
 **Find available simulators:**

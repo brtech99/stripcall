@@ -34,9 +34,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   Future<void> _signUp() async {
-    print('Starting signup process...');
+    debugLog('Starting signup process...');
     if (!_formKey.currentState!.validate()) {
-      print('Form validation failed');
+      debugLog('Form validation failed');
       return;
     }
 
@@ -50,34 +50,33 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
 
-      print('Attempting to sign up with email: $email');
+      debugLog('Attempting to sign up with email: $email');
       final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
         data: {'firstname': firstName, 'lastname': lastName},
       );
 
-      print(
+      debugLog(
         'Signup response received: ${response.user != null ? 'User created' : 'No user'}',
       );
-      print('Response error: ${response.session}');
-      print('Response user: ${response.user?.id}');
+      debugLog('Response error: ${response.session}');
+      debugLog('Response user: ${response.user?.id}');
 
       if (response.user != null) {
         final userId = response.user!.id;
-        print('User created successfully with ID: $userId');
+        debugLog('User created successfully with ID: $userId');
 
         try {
-          print('Inserting user data into pending_users table...');
+          debugLog('Inserting user data into pending_users table...');
           await Supabase.instance.client.from('pending_users').insert({
             'email': email,
             'firstname': firstName,
             'lastname': lastName,
             'phone_number': _phoneController.text.trim(),
           });
-          print('User data inserted successfully');
+          debugLog('User data inserted successfully');
         } catch (dbError) {
-          print('Database error during account creation: $dbError');
           debugLogError('Database error during account creation', dbError);
           setState(() {
             _error = dbError.toString();
@@ -86,7 +85,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           return;
         }
 
-        print('Account created successfully, redirecting to login');
+        debugLog('Account created successfully, redirecting to login');
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -102,14 +101,13 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           context.go(Routes.login);
         }
       } else {
-        print('No user created in response');
+        debugLog('No user created in response');
         setState(() {
           _error = 'Failed to create account. Please try again.';
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error during signup: $e');
       debugLogError('Error during signup', e);
       setState(() {
         _error = e.toString();
