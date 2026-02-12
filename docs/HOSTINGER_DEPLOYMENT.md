@@ -24,7 +24,7 @@ This guide explains how to deploy your Flutter web app to Hostinger hosting with
 
 1. **Copy the configuration template**:
    ```bash
-   cp hostinger_config.sh hostinger_config_local.sh
+   cp scripts/hostinger_config.sh scripts/hostinger_config_local.sh
    ```
 
 2. **Edit the configuration file** with your actual credentials:
@@ -75,7 +75,7 @@ sudo yum install rsync
 
 **Usage**:
 ```bash
-./deploy_to_hostinger.sh
+./scripts/deploy_to_hostinger.sh
 ```
 
 **What it does**:
@@ -106,7 +106,7 @@ sudo yum install rsync
 cd /path/to/stripcall
 
 # Run the deployment script
-./deploy_to_hostinger.sh
+./scripts/deploy_to_hostinger.sh
 ```
 
 ### 2. What Gets Deployed

@@ -19,17 +19,19 @@ NC='\033[0m' # No Color
 BUILD_DIR="build/web"
 DEPLOY_DIR="deploy/hostinger"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Load configuration
-if [ -f "hostinger_config.sh" ]; then
-    source hostinger_config.sh
+if [ -f "$SCRIPT_DIR/hostinger_config.sh" ]; then
+    source "$SCRIPT_DIR/hostinger_config.sh"
 else
-    echo "Error: hostinger_config.sh not found. Please create this file with your Hostinger credentials."
+    echo "Error: scripts/hostinger_config.sh not found. Please create this file with your Hostinger credentials."
     exit 1
 fi
 
 # Validate configuration
 if [ "$HOSTINGER_FTP_HOST" = "your-ftp-host.hostinger.com" ] || [ "$HOSTINGER_FTP_USER" = "your-ftp-username" ] || [ "$HOSTINGER_FTP_PASS" = "your-ftp-password" ]; then
-    echo "Error: Please update hostinger_config.sh with your actual Hostinger credentials."
+    echo "Error: Please update scripts/hostinger_config.sh with your actual Hostinger credentials."
     exit 1
 fi
 
@@ -53,12 +55,12 @@ print_error() {
 # Check if required tools are installed
 check_dependencies() {
     print_status "Checking dependencies..."
-    
+
     if ! command -v flutter &> /dev/null; then
         print_error "Flutter is not installed or not in PATH"
         exit 1
     fi
-    
+
     if ! command -v lftp &> /dev/null; then
         print_warning "lftp is not installed. Installing via Homebrew..."
         if command -v brew &> /dev/null; then
@@ -71,7 +73,7 @@ check_dependencies() {
             exit 1
         fi
     fi
-    
+
     print_success "All dependencies are available"
 }
 
@@ -87,10 +89,10 @@ check_directory() {
 build_web_app() {
     print_status "Cleaning previous build..."
     flutter clean
-    
+
     print_status "Getting dependencies..."
     flutter pub get
-    
+
     print_status "Building web app for production..."
     flutter build web \
         --dart-define=SUPABASE_URL=https://wpytorahphbnzgikowgz.supabase.co \
@@ -105,12 +107,12 @@ build_web_app() {
         --dart-define=FIREBASE_IOS_APP_ID=1:955423518908:ios:11184007abc8b1fa1660b9 \
         --release \
         --base-href "${HOSTINGER_APP_PATH}/"
-    
+
     if [ ! -d "$BUILD_DIR" ]; then
         print_error "Build failed - $BUILD_DIR not found"
         exit 1
     fi
-    
+
     print_success "Web app built successfully!"
 }
 
@@ -120,7 +122,7 @@ prepare_deploy() {
     rm -rf "$DEPLOY_DIR"
     mkdir -p "$DEPLOY_DIR"
     cp -r "$BUILD_DIR"/* "$DEPLOY_DIR/"
-    
+
     # Create .htaccess for proper routing (SPA support) with subdirectory
     cat > "$DEPLOY_DIR/.htaccess" << EOF
 RewriteEngine On
@@ -157,14 +159,14 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
     AddOutputFilterByType DEFLATE application/x-javascript
 </IfModule>
 EOF
-    
+
     print_success "Deployment directory prepared"
 }
 
 # Deploy to Hostinger via FTP
 deploy_to_hostinger() {
     print_status "Deploying to Hostinger via FTP..."
-    
+
     # Create lftp script
     cat > deploy_script.lftp << EOF
 set ssl:verify-certificate no
@@ -176,7 +178,7 @@ cd ${HOSTINGER_APP_PATH#/}
 mirror --reverse --delete --verbose $DEPLOY_DIR .
 bye
 EOF
-    
+
     # Execute lftp script
     if lftp -f deploy_script.lftp; then
         print_success "Deployment completed successfully!"
@@ -184,7 +186,7 @@ EOF
         print_error "Deployment failed"
         exit 1
     fi
-    
+
     # Clean up
     rm -f deploy_script.lftp
 }
@@ -192,16 +194,16 @@ EOF
 # Main deployment process
 main() {
     print_status "Starting deployment process..."
-    
+
     check_dependencies
     check_directory
     build_web_app
     prepare_deploy
     deploy_to_hostinger
-    
+
     print_success "🎉 StripCall web app deployed to https://$HOSTINGER_DOMAIN$HOSTINGER_APP_PATH"
     print_status "The app should be live in a few minutes."
 }
 
 # Run main function
-main "$@" 
+main "$@"

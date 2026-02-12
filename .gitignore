@@ -51,8 +51,7 @@ app.*.map.json
 !package.json
 !analysis_options.yaml
 !firebase.json
-!deno.jso
-!tsconfig.json
+!deno.json
 !package-lock.json
 !pubspec.lock
 
@@ -63,7 +62,7 @@ firebase-debug.*.log
 GoogleService-Info.plist
 **/GoogleService-Info.plist
 
-# Service account keys
+# Service account keys (CRITICAL)
 *serviceAccountKey*.json
 *firebase-adminsdk*.json
 *admin-sdk*.json
@@ -72,21 +71,8 @@ GoogleService-Info.plist
 .env*
 !.env.example
 
-# Hostinger configuration (contains sensitive credentials)
-hostinger_config.sh
-
-# Test files with potential secrets
-test_*.js
-test_*.sh
-send_fcm_test.js
-keep_function_warm.js
-
 # Node modules
 node_modules/
-
-# Debug logs
-*.log
-pglite-debug.log
 
 # Cursor IDE
 .cursor/
@@ -95,35 +81,27 @@ pglite-debug.log
 *.tmp
 *.temp
 
-# Shell scripts with embedded secrets
-run_*.sh
-deploy_*.sh
-!deploy_android_test.sh
-!deploy_ios_testflight.sh
-!deploy_to_hostinger.sh
-stop_*.sh
+# Shell scripts with embedded secrets (in scripts/ directory)
+scripts/run_*.sh
+scripts/deploy_*.sh
+!scripts/deploy_android_test.sh
+!scripts/deploy_ios_testflight.sh
+!scripts/deploy_to_hostinger.sh
+scripts/stop_*.sh
+scripts/hostinger_config.sh
 
-# Service account keys (CRITICAL)
-serviceAccountKey.json
-*serviceAccountKey*.json
-
-# Hostinger config (already listed but needs to be verified)
-hostinger_config.sh
-
-# Test files with secrets
-test_*.js
-test_*.sh
-keep_function_warm.js
-send_fcm_test.js
+# Test/utility scripts with potential secrets (in scripts/ directory)
+scripts/test_*.js
+scripts/test_*.sh
+scripts/send_fcm_test.js
+scripts/keep_function_warm.js
 
 # Configuration files with credentials
-config/app_config.sh
-config/*.sh
-!config/*.template.sh
-!config/*.example.sh
+scripts/config/app_config.sh
+scripts/config/*.sh
+!scripts/config/*.template.sh
+!scripts/config/*.example.sh
 
-# Compiled web builds (contain embedded secrets)
+# Compiled web builds and coverage
 deploy/
-deploy/web/
-deploy/hostinger/
 coverage/

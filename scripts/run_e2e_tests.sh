@@ -17,7 +17,7 @@
 
 set -e
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # Configuration
 SUPABASE_URL="http://127.0.0.1:54321"

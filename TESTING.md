@@ -19,10 +19,10 @@ xcrun simctl boot "iPhone 16 Pro"
 open -a Simulator
 
 # Run the full test suite (auto-detects booted simulator)
-./run_all_tests.sh
+./scripts/run_all_tests.sh
 
 # Or specify a simulator ID
-./run_all_tests.sh <SIMULATOR_ID>
+./scripts/run_all_tests.sh <SIMULATOR_ID>
 ```
 
 This runs all three test files in sequence, resetting the database and terminating the app between each:
