@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# StripCall Web App Deployment Script for Hostinger
-# This script builds and deploys the Flutter web app to stripcall.us
-# Usage: ./deploy_to_hostinger.sh
+# StripCall Web App Deployment Script for Hostinger (rsync version)
+# This script builds and deploys the Flutter web app to stripcall.us using rsync
+# Usage: ./deploy_to_hostinger_rsync.sh
 
 set -e  # Exit on any error
 
-echo "🚀 Starting StripCall Web App Deployment to Hostinger..."
+echo "🚀 Starting StripCall Web App Deployment to Hostinger (rsync)..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -55,28 +55,15 @@ check_dependencies() {
         exit 1
     fi
 
-    if ! command -v lftp &> /dev/null; then
-        print_warning "lftp is not installed. Installing via Homebrew..."
-        if command -v brew &> /dev/null; then
-            brew install lftp
-        else
-            print_error "Homebrew not found. Please install lftp manually:"
-            print_error "  macOS: brew install lftp"
-            print_error "  Ubuntu/Debian: sudo apt-get install lftp"
-            print_error "  CentOS/RHEL: sudo yum install lftp"
-            exit 1
-        fi
+    if ! command -v rsync &> /dev/null; then
+        print_error "rsync is not installed. Please install it:"
+        print_error "  macOS: brew install rsync"
+        print_error "  Ubuntu/Debian: sudo apt-get install rsync"
+        print_error "  CentOS/RHEL: sudo yum install rsync"
+        exit 1
     fi
 
     print_success "All dependencies are available"
-}
-
-# Check if we're in the right directory
-check_directory() {
-    if [ ! -f "pubspec.yaml" ]; then
-        print_error "pubspec.yaml not found. Please run this script from the Flutter project root."
-        exit 1
-    fi
 }
 
 # Build the web app
@@ -149,32 +136,27 @@ EOF
     print_success "Deployment directory prepared"
 }
 
-# Deploy to Hostinger via FTP
+# Deploy to Hostinger via rsync
 deploy_to_hostinger() {
-    print_status "Deploying to Hostinger via FTP..."
+    print_status "Deploying to Hostinger via rsync..."
 
-    # Create lftp script
-    cat > deploy_script.lftp << EOF
-set ssl:verify-certificate no
-set ftp:ssl-allow no
-open -u $HOSTINGER_FTP_USER,$HOSTINGER_FTP_PASS -p 21 $HOSTINGER_FTP_HOST
-cd $HOSTINGER_FTP_PATH
-mkdir -p ${HOSTINGER_APP_PATH#/}
-cd ${HOSTINGER_APP_PATH#/}
-mirror --reverse --delete --verbose $DEPLOY_DIR .
-bye
-EOF
+    # Construct rsync command
+    RSYNC_CMD="rsync -avz --delete --progress"
 
-    # Execute lftp script
-    if lftp -f deploy_script.lftp; then
+    if [ "$HOSTINGER_VERBOSE_UPLOAD" = "true" ]; then
+        RSYNC_CMD="$RSYNC_CMD -v"
+    fi
+
+    # Add SSH options for better compatibility
+    RSYNC_CMD="$RSYNC_CMD -e 'ssh -o StrictHostKeyChecking=no -p 21'"
+
+    # Execute rsync
+    if $RSYNC_CMD "$DEPLOY_DIR/" "$HOSTINGER_FTP_USER@$HOSTINGER_FTP_HOST:$HOSTINGER_FTP_PATH${HOSTINGER_APP_PATH}/"; then
         print_success "Deployment completed successfully!"
     else
         print_error "Deployment failed"
         exit 1
     fi
-
-    # Clean up
-    rm -f deploy_script.lftp
 }
 
 # Main deployment process
@@ -182,7 +164,6 @@ main() {
     print_status "Starting deployment process..."
 
     check_dependencies
-    check_directory
     build_web_app
     prepare_deploy
     deploy_to_hostinger

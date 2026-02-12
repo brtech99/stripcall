@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# StripCall Web App Deployment Script for Hostinger
-# This script builds and deploys the Flutter web app to stripcall.us
-# Usage: ./deploy_to_hostinger.sh
+# StripCall Web App Safe Deployment Script for Hostinger
+# This script builds and deploys the Flutter web app to stripcall.us/app
+# Usage: ./deploy_to_hostinger_safe.sh
 
 set -e  # Exit on any error
 
-echo "🚀 Starting StripCall Web App Deployment to Hostinger..."
+echo "🚀 Starting StripCall Web App Safe Deployment to Hostinger..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -149,11 +149,11 @@ EOF
     print_success "Deployment directory prepared"
 }
 
-# Deploy to Hostinger via FTP
+# Deploy to Hostinger via FTP (Safe version)
 deploy_to_hostinger() {
-    print_status "Deploying to Hostinger via FTP..."
+    print_status "Deploying to Hostinger via FTP (Safe Mode)..."
 
-    # Create lftp script
+    # Create lftp script (without --delete flag)
     cat > deploy_script.lftp << EOF
 set ssl:verify-certificate no
 set ftp:ssl-allow no
@@ -161,7 +161,7 @@ open -u $HOSTINGER_FTP_USER,$HOSTINGER_FTP_PASS -p 21 $HOSTINGER_FTP_HOST
 cd $HOSTINGER_FTP_PATH
 mkdir -p ${HOSTINGER_APP_PATH#/}
 cd ${HOSTINGER_APP_PATH#/}
-mirror --reverse --delete --verbose $DEPLOY_DIR .
+mirror --reverse --verbose $DEPLOY_DIR .
 bye
 EOF
 
@@ -179,7 +179,7 @@ EOF
 
 # Main deployment process
 main() {
-    print_status "Starting deployment process..."
+    print_status "Starting safe deployment process..."
 
     check_dependencies
     check_directory
@@ -189,6 +189,7 @@ main() {
 
     print_success "🎉 StripCall web app deployed to https://$HOSTINGER_DOMAIN$HOSTINGER_APP_PATH"
     print_status "The app should be live in a few minutes."
+    print_warning "Note: This was a safe deployment (no files were deleted)"
 }
 
 # Run main function

@@ -10,7 +10,6 @@
 .history
 .svn/
 .swiftpm/
-.env
 migrate_working_dir/
 
 # IntelliJ related
@@ -45,7 +44,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Secrets and sensitive files
+# JSON files (default ignore, whitelist specific ones)
 *.json
 !pubspec.json
 !package.json
@@ -62,7 +61,7 @@ firebase-debug.*.log
 GoogleService-Info.plist
 **/GoogleService-Info.plist
 
-# Service account keys (CRITICAL)
+# Service account keys (CRITICAL — never commit)
 *serviceAccountKey*.json
 *firebase-adminsdk*.json
 *admin-sdk*.json
@@ -81,26 +80,8 @@ node_modules/
 *.tmp
 *.temp
 
-# Shell scripts with embedded secrets (in scripts/ directory)
-scripts/run_*.sh
-scripts/deploy_*.sh
-!scripts/deploy_android_test.sh
-!scripts/deploy_ios_testflight.sh
-!scripts/deploy_to_hostinger.sh
-scripts/stop_*.sh
-scripts/hostinger_config.sh
-
-# Test/utility scripts with potential secrets (in scripts/ directory)
-scripts/test_*.js
-scripts/test_*.sh
-scripts/send_fcm_test.js
-scripts/keep_function_warm.js
-
-# Configuration files with credentials
-scripts/config/app_config.sh
-scripts/config/*.sh
-!scripts/config/*.template.sh
-!scripts/config/*.example.sh
+# === Single secrets file — the ONLY gitignored script ===
+scripts/config/secrets.sh
 
 # Compiled web builds and coverage
 deploy/
