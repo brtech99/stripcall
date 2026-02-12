@@ -5,8 +5,8 @@
 
 echo "🚀 Testing Real FCM Notification..."
 
-# Your FCM token from the logs
-TOKEN="eqz8wKYuyECujbgOUPU4Ie:APA91bH0vgozygM1hhFSwmNPO97fwX43BeSMJs70AeBS2eFI5YWc1wHJaQUT7dsNgdnjjRFIMumzGWWwZMoxJQEtYKL2wXI5tEZA5V-IavbOrL0pq5la824"
+# FCM token must be passed as first argument
+TOKEN="${1:?Usage: $0 <FCM_TOKEN>}"
 
 # Your Firebase project ID
 PROJECT_ID="stripcalls-458912"
@@ -91,4 +91,4 @@ echo "You can also test it directly with curl:"
 echo "curl -X POST \\"
 echo "  https://us-central1-stripcalls-458912.cloudfunctions.net/testNotification \\"
 echo "  -H 'Content-Type: application/json' \\"
-echo "  -d '{\"token\": \"YOUR_DEVICE_TOKEN\", \"title\": \"Test\", \"body\": \"Hello from Firebase Function!\"}'" 
+echo "  -d '{\"token\": \"YOUR_DEVICE_TOKEN\", \"title\": \"Test\", \"body\": \"Hello from Firebase Function!\"}'"
