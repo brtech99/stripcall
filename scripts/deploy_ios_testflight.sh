@@ -52,6 +52,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# Source production secrets
+source "$SCRIPT_DIR/config/secrets.sh"
+
 # Configuration
 SCHEME="Runner"
 WORKSPACE="ios/Runner.xcworkspace"
@@ -110,18 +113,20 @@ EOF
 fi
 
 # Clean and get dependencies
-echo "Step 1/5: Cleaning and getting dependencies..."
+echo "Step 1/4: Cleaning and getting dependencies..."
 flutter clean
 flutter pub get
 
 # Build iOS release
 echo ""
-echo "Step 2/5: Building Flutter iOS release..."
-flutter build ios --release
+echo "Step 2/4: Building Flutter iOS release..."
+flutter build ios --release \
+    --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+    --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
 # Archive
 echo ""
-echo "Step 3/5: Creating Xcode archive..."
+echo "Step 3/4: Creating Xcode archive..."
 rm -rf "$ARCHIVE_PATH"
 xcodebuild -workspace "$WORKSPACE" \
     -scheme "$SCHEME" \
@@ -132,10 +137,10 @@ xcodebuild -workspace "$WORKSPACE" \
     CODE_SIGN_STYLE=Automatic \
     -allowProvisioningUpdates
 
-# Export IPA
+# Export and upload to App Store Connect
+# ExportOptions.plist has destination=upload, so this uploads directly
 echo ""
-echo "Step 4/5: Exporting IPA..."
-rm -rf "$IPA_PATH"
+echo "Step 4/4: Exporting and uploading to TestFlight..."
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$IPA_PATH" \
@@ -144,24 +149,6 @@ xcodebuild -exportArchive \
     -authenticationKeyPath "$KEY_PATH" \
     -authenticationKeyID "$KEY_ID" \
     -authenticationKeyIssuerID "$ISSUER_ID"
-
-# Find the IPA file
-IPA_FILE=$(find "$IPA_PATH" -name "*.ipa" | head -1)
-if [ -z "$IPA_FILE" ]; then
-    echo "ERROR: IPA file not found in $IPA_PATH"
-    exit 1
-fi
-
-echo "IPA created: $IPA_FILE"
-
-# Upload to TestFlight
-echo ""
-echo "Step 5/5: Uploading to TestFlight..."
-xcrun altool --upload-app \
-    --type ios \
-    --file "$IPA_FILE" \
-    --apiKey "$KEY_ID" \
-    --apiIssuer "$ISSUER_ID"
 
 echo ""
 echo "=== Deployment Complete ==="

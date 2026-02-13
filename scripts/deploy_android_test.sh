@@ -56,6 +56,12 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Source production secrets
+source "$SCRIPT_DIR/config/secrets.sh"
+
 # Configuration
 FIREBASE_APP_ID="1:842118395137:android:5eb39291bffd86295ad700"
 TESTER_GROUP="beta-testers"
@@ -89,10 +95,14 @@ if [ "$BUILD_TYPE" = "release" ]; then
         echo "ERROR: android/key.properties not found. See script comments for setup instructions."
         exit 1
     fi
-    flutter build apk --release
+    flutter build apk --release \
+        --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
     APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
 else
-    flutter build apk --debug
+    flutter build apk --debug \
+        --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
     APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
 fi
 
