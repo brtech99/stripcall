@@ -1052,6 +1052,9 @@ Future<void> _scrollUntilVisible(
       // Check if widget is actually on-screen (not behind AppBar etc.)
       final renderObj = finder.evaluate().first.renderObject;
       if (renderObj != null && renderObj.attached) {
+        // Use ensureVisible to scroll the widget fully into the viewport
+        await tester.ensureVisible(finder);
+        await _pumpForDuration(tester, const Duration(milliseconds: 500));
         return;
       }
     }

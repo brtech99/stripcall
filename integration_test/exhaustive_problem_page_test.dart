@@ -1881,6 +1881,9 @@ Future<void> _scrollUntilVisible(
     if (finder.evaluate().isNotEmpty) {
       final renderObj = finder.evaluate().first.renderObject;
       if (renderObj != null && renderObj.attached) {
+        // Use ensureVisible to scroll the widget fully into the viewport
+        await tester.ensureVisible(finder);
+        await _pumpForDuration(tester, const Duration(milliseconds: 500));
         return;
       }
     }
