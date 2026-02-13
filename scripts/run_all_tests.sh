@@ -113,7 +113,7 @@ run_flutter_test() {
   local EXIT_CODE=${PIPESTATUS[0]}
 
   if [[ $EXIT_CODE -eq 0 ]]; then
-    if grep -qi "some tests failed\|FAILED\|test.*failed" /tmp/stripcall_test_${TEST_NAME}.log 2>/dev/null; then
+    if grep -q "Some tests failed\." /tmp/stripcall_test_${TEST_NAME}.log 2>/dev/null; then
       echo "  FAILED"
       FAILED+=("$TEST_NAME")
     else
@@ -154,7 +154,7 @@ run_patrol_test() {
   local EXIT_CODE=${PIPESTATUS[0]}
 
   if [[ $EXIT_CODE -eq 0 ]]; then
-    if grep -qi "some tests failed\|FAILED\|test.*failed" /tmp/stripcall_test_${TEST_NAME}.log 2>/dev/null; then
+    if grep -q "Some tests failed\." /tmp/stripcall_test_${TEST_NAME}.log 2>/dev/null; then
       echo "  FAILED"
       FAILED+=("$TEST_NAME")
     else
@@ -230,10 +230,43 @@ for TEST_FILE in "${PATROL_TESTS[@]}"; do
   run_patrol_test "$TEST_FILE"
 done
 
-# --- Run Maestro tests ---
-for TEST_FILE in "${MAESTRO_TESTS[@]}"; do
-  run_maestro_test "$TEST_FILE"
-done
+# --- Build and install app for Maestro tests ---
+if [[ ${#MAESTRO_TESTS[@]} -gt 0 ]]; then
+  echo "----------------------------------------"
+  echo "  Building app for Maestro tests..."
+  echo "----------------------------------------"
+
+  export PATH="$PATH:$HOME/.maestro/bin"
+  if ! command -v maestro &>/dev/null; then
+    echo "  Maestro not installed, skipping all Maestro tests"
+    for TEST_FILE in "${MAESTRO_TESTS[@]}"; do
+      SKIPPED+=("$(basename "$TEST_FILE" .yaml)")
+    done
+  else
+    flutter build ios --simulator --debug \
+      --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+      --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+      2>&1 | tail -5
+    BUILD_EXIT=${PIPESTATUS[0]}
+
+    if [[ $BUILD_EXIT -eq 0 ]]; then
+      echo "  Installing app on simulator..."
+      xcrun simctl install "$SIM_ID" build/ios/iphonesimulator/Runner.app
+      echo "  App installed"
+      echo ""
+
+      # --- Run Maestro tests ---
+      for TEST_FILE in "${MAESTRO_TESTS[@]}"; do
+        run_maestro_test "$TEST_FILE"
+      done
+    else
+      echo "  Build failed, skipping all Maestro tests"
+      for TEST_FILE in "${MAESTRO_TESTS[@]}"; do
+        FAILED+=("$(basename "$TEST_FILE" .yaml)")
+      done
+    fi
+  fi
+fi
 
 # --- Summary ---
 echo "========================================"
