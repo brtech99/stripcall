@@ -2,15 +2,15 @@ import '../services/secret_service.dart';
 
 class FirebaseConfig {
   static final _secretService = SecretService();
-  
+
   // Static project info (non-sensitive)
-  static const String projectId = 'stripcalls-458912';
-  
+  static const String projectId = 'stripcall';
+
   // Notification settings
   static const bool enableNotifications = true;
   static const bool enableSound = true;
   static const bool enableVibration = true;
-  
+
   // Notification types to enable
   static const bool enableNewProblemNotifications = true;
   static const bool enableResponseNotifications = true;
@@ -31,4 +31,4 @@ class FirebaseConfig {
   static Future<String?> getVapidKey() async {
     return await _secretService.getFirebaseVapidKey();
   }
-} 
+}

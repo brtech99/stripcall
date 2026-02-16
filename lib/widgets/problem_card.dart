@@ -274,7 +274,7 @@ class _ProblemCardState extends State<ProblemCard> {
           messages: widget.problem.messages,
           problemId: widget.problem.id,
           crewId: widget.problem.crewId,
-          originator: widget.problem.originatorName ?? 'Unknown',
+          originator: widget.problem.originatorId,
           currentUserId: widget.currentUserId,
           isCrewMember:
               widget.userCrewId != null &&

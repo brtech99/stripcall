@@ -545,9 +545,38 @@ class NotificationService {
           .map((member) => member['crewmember'] as String)
           .toList();
 
+      // Check if superusers should be notified for this event
+      try {
+        final crewData = await _supabase
+            .from('crews')
+            .select('event:events!inner(notify_superusers)')
+            .eq('id', crewIdInt)
+            .maybeSingle();
+
+        final notifySuperusers =
+            crewData?['event']?['notify_superusers'] == true;
+
+        if (notifySuperusers) {
+          final superusers = await _supabase
+              .from('users')
+              .select('supabase_id')
+              .eq('superuser', true);
+
+          for (final su in superusers) {
+            final suId = su['supabase_id'] as String;
+            if (!userIds.contains(suId)) {
+              userIds.add(suId);
+            }
+          }
+        }
+      } catch (e) {
+        debugLogError('Error checking superuser notifications', e);
+      }
+
       // Add reporter if includeReporter is true and reporter is not already in the list
       if (includeReporter &&
           reporterId != null &&
+          reporterId.isNotEmpty &&
           !userIds.contains(reporterId)) {
         userIds.add(reporterId);
       }

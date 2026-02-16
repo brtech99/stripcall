@@ -1,16 +1,18 @@
 // Firebase configuration for web
 const firebaseConfig = {
-  apiKey: "AIzaSyDjMXfc5G1dWJ550vrFPpOttgsZDkZV1o4",
-  authDomain: "stripcalls-458912.firebaseapp.com",
-  projectId: "stripcalls-458912",
-  storageBucket: "stripcalls-458912.firebasestorage.app",
-  messagingSenderId: "955423518908",
-  appId: "1:955423518908:web:f5b75410cb94b99a1660b9",
+  apiKey: "AIzaSyBFzrzdIKWfCt-MOx-EixuhRaLC15iZPSo",
+  authDomain: "stripcall.firebaseapp.com",
+  databaseURL: "https://stripcall.firebaseio.com",
+  projectId: "stripcall",
+  storageBucket: "stripcall.firebasestorage.app",
+  messagingSenderId: "842118395137",
+  appId: "1:842118395137:web:fd1b37f5144e69d25ad700",
+  measurementId: "G-9HZVBN70WK",
 };
 
 // VAPID key for push notifications
 const vapidKey =
-  "BEl62iUYgUivxIkv69yViEuiBIa1lQJHRlVQlBXhsS8JfSxOBuVRjAifBRUONyHNUUxKQllAtojljGUkpl4vTYBg";
+  "BNpNj35JLAXYGoUHWB7UPCUBwDL29f7-4o91fxEcfHHrXnkIaxJPLDH9wOhA6H5ZWUIvDNbnSyspkLoQHDP9sNQ";
 
 // Convert VAPID key to Uint8Array
 function urlBase64ToUint8Array(base64String) {

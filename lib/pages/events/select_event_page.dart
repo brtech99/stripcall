@@ -65,9 +65,10 @@ class DefaultSelectEventRepository implements SelectEventRepository {
   ) async {
     return await Supabase.instance.client
         .from('crewmembers')
-        .select('crew:crews(id, crewtype:crewtypes(crewtype))')
+        .select('crew:crews!inner(id, crewtype:crewtypes(crewtype))')
         .eq('crewmember', userId)
         .eq('crew.event', eventId)
+        .limit(1)
         .maybeSingle();
   }
 
