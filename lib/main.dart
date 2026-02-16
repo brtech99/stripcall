@@ -8,6 +8,7 @@ import 'services/secret_service.dart';
 import 'config/firebase_config.dart';
 import 'utils/debug_utils.dart';
 import 'theme/theme.dart';
+import 'services/supabase_manager.dart';
 
 void main() async {
   debugLog('=== STRIPCALL BUILD 2026-01-21-TEST ===');
@@ -30,8 +31,26 @@ void main() async {
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   debugLog('Supabase initialized successfully');
+
+  // Initialize SupabaseManager with primary and optional secondary
+  const secondaryUrl = String.fromEnvironment('SUPABASE_SECONDARY_URL');
+  const secondaryServiceRoleKey = String.fromEnvironment(
+    'SUPABASE_SECONDARY_SERVICE_ROLE_KEY',
+  );
+
+  SupabaseClient? secondaryClient;
+  if (secondaryUrl.isNotEmpty && secondaryServiceRoleKey.isNotEmpty) {
+    secondaryClient = SupabaseClient(secondaryUrl, secondaryServiceRoleKey);
+    debugLog('Secondary Supabase configured: $secondaryUrl');
+  }
+
+  await SupabaseManager().initialize(
+    primary: Supabase.instance.client,
+    secondary: secondaryClient,
+  );
+
   debugLog(
-    '🔐 Firebase secrets will be fetched from Vault after user authentication',
+    'Firebase secrets will be fetched from Vault after user authentication',
   );
 
   runApp(const MyApp());
