@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import 'manage_crew_page.dart';
 import '../../models/crew.dart';
 import '../../models/crew_type.dart';
@@ -30,14 +30,14 @@ class _SelectCrewPageState extends State<SelectCrewPage> {
 
   Future<void> _loadCrews() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
       final isSuperUserRole = await isSuperUser();
 
       final now = DateTime.now().toIso8601String();
 
-      var query = Supabase.instance.client
+      var query = SupabaseManager()
           .from('crews')
           .select('''
             *,

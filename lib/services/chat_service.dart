@@ -1,7 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'notification_service.dart';
+import 'supabase_manager.dart';
 import '../utils/debug_utils.dart';
 
 /// Service for handling problem chat operations.
@@ -18,7 +18,7 @@ class ChatService {
     required bool isSuperUser,
   }) async {
     try {
-      final messages = await Supabase.instance.client
+      final messages = await SupabaseManager()
           .from('messages')
           .select('*')
           .eq('problem', problemId)
@@ -45,7 +45,7 @@ class ChatService {
   /// Load the display style for a crew.
   Future<String?> loadCrewDisplayStyle(int crewId) async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crews')
           .select('display_style')
           .eq('id', crewId)
@@ -61,7 +61,7 @@ class ChatService {
   /// Get user's full name by ID.
   Future<String?> getUserName(String userId) async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('users')
           .select('firstname, lastname')
           .eq('supabase_id', userId)
@@ -99,7 +99,7 @@ class ChatService {
       'include_reporter': includeReporter,
     };
 
-    await Supabase.instance.client.from('messages').insert(insertData);
+    await SupabaseManager().dualInsert('messages', insertData);
 
     // Send push notification (fire and forget)
     _sendPushNotification(
@@ -154,7 +154,7 @@ class ChatService {
     required bool includeReporter,
   }) async {
     try {
-      final session = Supabase.instance.client.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       if (session == null) return;
 
       // Get sender's name

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:stripcall/routes.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../models/event.dart';
 import '../../widgets/settings_menu.dart';
 import '../../utils/debug_utils.dart';
@@ -18,7 +18,7 @@ class SupabaseEventsRepository implements EventsRepository {
     final now = DateTime.now();
     final cutoffDate = now.subtract(const Duration(days: 2));
 
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('events')
         .select('*, organizer:users(firstname, lastname)')
         .eq('organizer', userId)
@@ -61,8 +61,7 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
     });
 
     try {
-      final userId =
-          widget.userId ?? Supabase.instance.client.auth.currentUser?.id;
+      final userId = widget.userId ?? SupabaseManager().auth.currentUser?.id;
       if (userId == null) {
         throw Exception('User not logged in');
       }

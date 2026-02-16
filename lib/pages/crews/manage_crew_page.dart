@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'name_finder_dialog.dart';
+import '../../services/supabase_manager.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew_member.dart';
 import '../../widgets/settings_menu.dart';
@@ -42,7 +42,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
   Future<void> _loadCrewChief() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crews')
           .select('crew_chief:users(firstname, lastname)')
           .eq('id', widget.crewId)
@@ -68,7 +68,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
   Future<void> _loadCrewMembers() async {
     try {
-      final crewMemberResponse = await Supabase.instance.client
+      final crewMemberResponse = await SupabaseManager()
           .from('crewmembers')
           .select('id, crew, crewmember')
           .eq('crew', widget.crewId);
@@ -87,7 +87,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
           .map((record) => record['crewmember'] as String)
           .toList();
 
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('supabase_id, firstname, lastname, phonenbr')
           .inFilter('supabase_id', userIds);
@@ -129,7 +129,7 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
     if (result != null) {
       try {
-        await Supabase.instance.client.from('crewmembers').insert({
+        await SupabaseManager().dualInsert('crewmembers', {
           'crew': widget.crewId,
           'crewmember': result.supabaseId,
         });
@@ -156,11 +156,10 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
 
   Future<void> _removeCrewMember(String userId) async {
     try {
-      await Supabase.instance.client
-          .from('crewmembers')
-          .delete()
-          .eq('crew', widget.crewId)
-          .eq('crewmember', userId);
+      await SupabaseManager().dualDelete(
+        'crewmembers',
+        filters: {'crew': widget.crewId, 'crewmember': userId},
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

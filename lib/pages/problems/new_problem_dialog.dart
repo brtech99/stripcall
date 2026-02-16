@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 
 import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
@@ -48,7 +48,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
 
   Future<void> _loadCrews() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crews')
           .select('id, crewtype:crewtypes(crewtype)')
           .eq('event', widget.eventId);
@@ -166,21 +166,17 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
     });
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
-      final problemResponse = await Supabase.instance.client
-          .from('problem')
-          .insert({
-            'event': widget.eventId,
-            'crew': _selectedCrewId,
-            'originator': userId,
-            'strip': _selectedStrip,
-            'symptom': int.parse(_selectedSymptom!),
-            'startdatetime': DateTime.now().toUtc().toIso8601String(),
-          })
-          .select()
-          .single();
+      final problemResponse = (await SupabaseManager().dualInsert('problem', {
+        'event': widget.eventId,
+        'crew': _selectedCrewId,
+        'originator': userId,
+        'strip': _selectedStrip,
+        'symptom': int.parse(_selectedSymptom!),
+        'startdatetime': DateTime.now().toUtc().toIso8601String(),
+      })).first;
 
       if (!mounted) return;
       Navigator.of(context).pop(true);

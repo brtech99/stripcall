@@ -1,9 +1,9 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/problem_with_details.dart';
 import 'notification_service.dart';
 import '../utils/debug_utils.dart';
+import 'supabase_manager.dart';
 
 class ProblemService {
   static final ProblemService _instance = ProblemService._internal();
@@ -75,7 +75,7 @@ class ProblemService {
         debugLog('Super user viewing crew $crewId, loading crew problems only');
         final queryStart = DateTime.now();
 
-        final response = await Supabase.instance.client
+        final response = await SupabaseManager()
             .from('problem')
             .select(_problemSelectFields)
             .eq('event', eventId)
@@ -99,7 +99,7 @@ class ProblemService {
       // First, check if user is part of a crew for this event
       debugLog('Checking crew membership for user=$userId, crewId=$crewId');
       final crewMemberResponse = crewId != null
-          ? await Supabase.instance.client
+          ? await SupabaseManager()
                 .from('crewmembers')
                 .select('crew')
                 .eq('crewmember', userId)
@@ -118,7 +118,7 @@ class ProblemService {
         debugLog('User not in crew, loading only their own problems');
         final queryStart = DateTime.now();
 
-        final response = await Supabase.instance.client
+        final response = await SupabaseManager()
             .from('problem')
             .select(_problemSelectFields)
             .eq('event', eventId)
@@ -144,7 +144,7 @@ class ProblemService {
         );
         final queryStart = DateTime.now();
 
-        final response = await Supabase.instance.client
+        final response = await SupabaseManager()
             .from('problem')
             .select(_problemSelectFields)
             .eq('event', eventId)
@@ -177,7 +177,7 @@ class ProblemService {
       if (problems.isEmpty) return {};
 
       final problemIds = problems.map((p) => p.id).toList();
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('responders')
           .select(
             'problem, user_id, responded_at, user:user_id(firstname, lastname)',
@@ -206,20 +206,20 @@ class ProblemService {
   Future<void> goOnMyWay(int problemId, String userId) async {
     try {
       // Get problem details for notification (including originator)
-      final problemResponse = await Supabase.instance.client
+      final problemResponse = await SupabaseManager()
           .from('problem')
           .select('crew, strip, originator')
           .eq('id', problemId)
           .single();
 
       // Get responder name
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('firstname, lastname')
           .eq('supabase_id', userId)
           .single();
 
-      await Supabase.instance.client.from('responders').insert({
+      await SupabaseManager().dualInsert('responders', {
         'problem': problemId,
         'user_id': userId,
         'responded_at': DateTime.now().toUtc().toIso8601String(),
@@ -232,9 +232,8 @@ class ProblemService {
       final reporterId = problemResponse['originator'] as String?;
 
       // Send crew message (fire and forget - don't block UI)
-      Supabase.instance.client
-          .from('crew_messages')
-          .insert({
+      SupabaseManager()
+          .dualInsert('crew_messages', {
             'crew': crewId,
             'author': userId,
             'message': '$responderName is on the way',
@@ -244,6 +243,7 @@ class ProblemService {
               'Failed to send crew message (responder was recorded successfully)',
               e,
             );
+            return <dynamic>[];
           });
 
       // Send notification using Edge Function (fire and forget - don't block UI)
@@ -273,7 +273,7 @@ class ProblemService {
 
       // Send SMS to reporter if problem was created via SMS (fire and forget - don't block UI)
       // (The send-sms function will check if reporter_phone exists)
-      final session = Supabase.instance.client.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       if (session != null) {
         const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
         const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -314,7 +314,7 @@ class ProblemService {
 
   Future<Map<String, dynamic>?> loadMissingSymptomData(int symptomId) async {
     try {
-      final symptomResponse = await Supabase.instance.client
+      final symptomResponse = await SupabaseManager()
           .from('symptom')
           .select('id, symptomstring')
           .eq('id', symptomId)
@@ -331,7 +331,7 @@ class ProblemService {
     String originatorId,
   ) async {
     try {
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('supabase_id, firstname, lastname')
           .eq('supabase_id', originatorId)
@@ -348,7 +348,7 @@ class ProblemService {
     String actionById,
   ) async {
     try {
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('supabase_id, firstname, lastname')
           .eq('supabase_id', actionById)
@@ -374,7 +374,7 @@ class ProblemService {
     try {
       // TODO: Batch into single RPC call to avoid N+1 queries (requires DB-side changes)
       for (final phone in phoneNumbers) {
-        final response = await Supabase.instance.client.rpc(
+        final response = await SupabaseManager().rpc(
           'get_reporter_name',
           params: {'reporter_phone': phone},
         );
@@ -433,7 +433,7 @@ class ProblemService {
     try {
       // Super users viewing a specific crew: only that crew's new problems
       if (isSuperUser && crewId != null) {
-        final response = await Supabase.instance.client
+        final response = await SupabaseManager()
             .from('problem')
             .select(_problemSelectFields)
             .eq('event', eventId)
@@ -445,7 +445,7 @@ class ProblemService {
 
       // Check if user is a crew member
       final crewMemberResponse = crewId != null
-          ? await Supabase.instance.client
+          ? await SupabaseManager()
                 .from('crewmembers')
                 .select('crew')
                 .eq('crewmember', userId)
@@ -455,7 +455,7 @@ class ProblemService {
 
       // Non-crew member or no crew: only their own new problems
       if (crewId == null || crewMemberResponse == null) {
-        final response = await Supabase.instance.client
+        final response = await SupabaseManager()
             .from('problem')
             .select(_problemSelectFields)
             .eq('event', eventId)
@@ -466,7 +466,7 @@ class ProblemService {
       }
 
       // Crew member: crew's problems + their problems for other crews
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('problem')
           .select(_problemSelectFields)
           .eq('event', eventId)
@@ -489,7 +489,7 @@ class ProblemService {
 
       final problemIdsStr = problemIds.join(',');
 
-      final newMessages = await Supabase.instance.client.rpc(
+      final newMessages = await SupabaseManager().rpc(
         'get_new_messages',
         params: {
           'since_time': since.toIso8601String(),
@@ -525,7 +525,7 @@ class ProblemService {
       // Build an OR condition for problem IDs since in_() is not available in older postgrest
       final idConditions = problemIds.map((id) => 'id.eq.$id').join(',');
 
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('problem')
           .select(updateSelectFields)
           .or(idConditions)
@@ -544,7 +544,7 @@ class ProblemService {
     int problemId,
   ) async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('messages')
           .select('*')
           .eq('problem', problemId)
@@ -573,7 +573,7 @@ class ProblemService {
         actionby_data:actionby(supabase_id, firstname, lastname)
       ''';
 
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('problem')
           .select(resolvedSelectFields)
           .eq('event', eventId)
@@ -609,7 +609,7 @@ class ProblemService {
   }) async {
     try {
       // Record the old symptom in oldproblemsymptom table
-      await Supabase.instance.client.from('oldproblemsymptom').insert({
+      await SupabaseManager().dualInsert('oldproblemsymptom', {
         'problem': problemId,
         'oldsymptom': oldSymptomId,
         'changedby': userId,
@@ -617,10 +617,11 @@ class ProblemService {
       });
 
       // Update the problem with the new symptom
-      await Supabase.instance.client
-          .from('problem')
-          .update({'symptom': newSymptomId})
-          .eq('id', problemId);
+      await SupabaseManager().dualUpdate(
+        'problem',
+        {'symptom': newSymptomId},
+        filters: {'id': problemId},
+      );
     } catch (e) {
       debugLogError('Failed to change symptom', e);
       throw Exception('Failed to change symptom: $e');
@@ -630,7 +631,7 @@ class ProblemService {
   /// Load the symptom change history for a problem
   Future<List<Map<String, dynamic>>> loadSymptomHistory(int problemId) async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('oldproblemsymptom')
           .select('''
             *,
@@ -650,10 +651,10 @@ class ProblemService {
   /// Check if the current user is a super user.
   Future<bool> checkSuperUserStatus() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) return false;
 
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('superuser')
           .eq('supabase_id', userId)
@@ -670,7 +671,7 @@ class ProblemService {
   /// Returns crews sorted: Armorer, Medical, then alphabetically.
   Future<List<Map<String, dynamic>>> loadAllCrewsForEvent(int eventId) async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crews')
           .select('''
             id,
@@ -710,10 +711,10 @@ class ProblemService {
   /// Determine if the user is a referee (not a crew member) for the given crew.
   Future<bool> isUserRefereeForCrew(int crewId) async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) return true;
 
-      final crewMemberResponse = await Supabase.instance.client
+      final crewMemberResponse = await SupabaseManager()
           .from('crewmembers')
           .select('crew:crew(id, crewtype:crewtypes(crewtype))')
           .eq('crew', crewId)
@@ -731,10 +732,10 @@ class ProblemService {
   /// Returns (crewId, crewName) or (null, null) if user is not in any crew.
   Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId) async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) return (crewId: null, crewName: null);
 
-      final crewMember = await Supabase.instance.client
+      final crewMember = await SupabaseManager()
           .from('crewmembers')
           .select('''
             crew:crew(
@@ -764,7 +765,7 @@ class ProblemService {
   /// Get the crew type ID for a given crew.
   Future<int?> getCrewTypeId(int crewId) async {
     try {
-      final crewResponse = await Supabase.instance.client
+      final crewResponse = await SupabaseManager()
           .from('crews')
           .select('crew_type')
           .eq('id', crewId)

@@ -1,6 +1,6 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
 import '../utils/debug_utils.dart';
+import 'supabase_manager.dart';
 
 class LookupService {
   static final LookupService _instance = LookupService._internal();
@@ -18,21 +18,21 @@ class LookupService {
   Future<void> loadLookupData() async {
     try {
       // Load crew types
-      final crewTypes = await Supabase.instance.client
+      final crewTypes = await SupabaseManager()
           .from('crewtypes')
           .select()
           .order('crewtype');
       _crewTypes = crewTypes;
 
       // Load symptom classes
-      final symptomClasses = await Supabase.instance.client
+      final symptomClasses = await SupabaseManager()
           .from('symptomclass')
           .select()
           .order('symptomclassstring');
       _symptomClasses = symptomClasses;
 
       // Load symptoms
-      final symptoms = await Supabase.instance.client
+      final symptoms = await SupabaseManager()
           .from('symptom')
           .select('''
             *,
@@ -47,7 +47,7 @@ class LookupService {
 
   static Future<List<Map<String, dynamic>>> getCrewTypes() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crewtypes')
           .select()
           .order('crewtype');
@@ -59,7 +59,7 @@ class LookupService {
 
   static Future<List<app_models.User>> getUsers() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('users')
           .select()
           .order('lastname');
@@ -77,7 +77,7 @@ class LookupService {
     int? crewTypeId,
   ) async {
     try {
-      var query = Supabase.instance.client
+      var query = SupabaseManager()
           .from('symptomclass')
           .select('id, symptomclassstring');
       if (crewTypeId != null) {
@@ -89,7 +89,7 @@ class LookupService {
         );
       } catch (_) {
         // display_order column may not exist — fall back to alphabetical
-        var fallback = Supabase.instance.client
+        var fallback = SupabaseManager()
             .from('symptomclass')
             .select('id, symptomclassstring');
         if (crewTypeId != null) {
@@ -113,7 +113,7 @@ class LookupService {
     try {
       try {
         return List<Map<String, dynamic>>.from(
-          await Supabase.instance.client
+          await SupabaseManager()
               .from('symptom')
               .select('id, symptomstring')
               .eq('symptomclass', symptomClassId)
@@ -121,7 +121,7 @@ class LookupService {
         );
       } catch (_) {
         return List<Map<String, dynamic>>.from(
-          await Supabase.instance.client
+          await SupabaseManager()
               .from('symptom')
               .select('id, symptomstring')
               .eq('symptomclass', symptomClassId)
@@ -144,7 +144,7 @@ class LookupService {
     if (symptomId != null) {
       try {
         return List<Map<String, dynamic>>.from(
-          await Supabase.instance.client
+          await SupabaseManager()
               .from('action')
               .select('*')
               .eq('symptom', symptomId)
@@ -153,7 +153,7 @@ class LookupService {
       } catch (_) {
         try {
           return List<Map<String, dynamic>>.from(
-            await Supabase.instance.client
+            await SupabaseManager()
                 .from('action')
                 .select('*')
                 .eq('symptom', symptomId)
@@ -161,7 +161,7 @@ class LookupService {
           );
         } catch (_) {
           return List<Map<String, dynamic>>.from(
-            await Supabase.instance.client
+            await SupabaseManager()
                 .from('action')
                 .select('*')
                 .order('actionstring'),
@@ -170,7 +170,7 @@ class LookupService {
       }
     } else {
       return List<Map<String, dynamic>>.from(
-        await Supabase.instance.client
+        await SupabaseManager()
             .from('action')
             .select('*')
             .order('display_order', ascending: true),
@@ -182,7 +182,7 @@ class LookupService {
   static Future<({bool isPodBased, int stripCount})> getStripConfig(
     int eventId,
   ) async {
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('events')
         .select('stripnumbering, count')
         .eq('id', eventId)
@@ -195,7 +195,7 @@ class LookupService {
 
   /// Look up a crew type ID by name. Returns null if not found.
   static Future<int?> getCrewTypeIdByName(String crewTypeName) async {
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('crewtypes')
         .select('id')
         .eq('crewtype', crewTypeName)

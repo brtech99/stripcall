@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../models/event.dart';
 
 class EventDialog extends StatefulWidget {
   final Event? event;
 
-  const EventDialog({
-    super.key,
-    this.event,
-  });
+  const EventDialog({super.key, this.event});
 
   @override
   State<EventDialog> createState() => _EventDialogState();
@@ -65,13 +62,9 @@ class _EventDialogState extends State<EventDialog> {
             initialTime: TimeOfDay.fromDateTime(initialDate ?? DateTime.now()),
           );
           if (time != null && mounted) {
-            onChanged(DateTime(
-              date.year,
-              date.month,
-              date.day,
-              time.hour,
-              time.minute,
-            ));
+            onChanged(
+              DateTime(date.year, date.month, date.day, time.hour, time.minute),
+            );
           }
         }
       },
@@ -85,7 +78,7 @@ class _EventDialogState extends State<EventDialog> {
       );
       return;
     }
-    
+
     if (_endDate!.isBefore(_startDate!)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('End date must be after start date')),
@@ -109,17 +102,18 @@ class _EventDialogState extends State<EventDialog> {
 
       if (widget.event == null) {
         // Creating new event
-        final userId = Supabase.instance.client.auth.currentUser?.id;
+        final userId = SupabaseManager().auth.currentUser?.id;
         if (userId != null) {
           eventData['organizer'] = userId;
         }
-        await Supabase.instance.client.from('events').insert(eventData);
+        await SupabaseManager().dualInsert('events', eventData);
       } else {
         // Updating existing event
-        await Supabase.instance.client
-            .from('events')
-            .update(eventData)
-            .eq('id', widget.event!.id);
+        await SupabaseManager().dualUpdate(
+          'events',
+          eventData,
+          filters: {'id': widget.event!.id},
+        );
       }
 
       if (mounted) {
@@ -172,7 +166,8 @@ class _EventDialogState extends State<EventDialog> {
             _buildDateTimePicker(
               title: 'End Date',
               value: _endDate,
-              initialDate: _endDate ?? (_startDate?.add(const Duration(days: 1))),
+              initialDate:
+                  _endDate ?? (_startDate?.add(const Duration(days: 1))),
               onChanged: (date) => setState(() => _endDate = date),
             ),
           ],
@@ -196,4 +191,4 @@ class _EventDialogState extends State<EventDialog> {
       ],
     );
   }
-} 
+}

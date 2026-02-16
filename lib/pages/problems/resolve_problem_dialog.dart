@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
@@ -47,7 +47,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
   Future<void> _loadProblemAndActions() async {
     try {
       // First, get the problem details
-      final problemResponse = await Supabase.instance.client
+      final problemResponse = await SupabaseManager()
           .from('problem')
           .select('symptom')
           .eq('id', widget.problemId)
@@ -92,39 +92,40 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
     });
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
       // Get problem details for notification
-      final problemResponse = await Supabase.instance.client
+      final problemResponse = await SupabaseManager()
           .from('problem')
           .select('crew, strip, originator, symptom:symptom(symptomstring)')
           .eq('id', widget.problemId)
           .single();
 
       // Get action details
-      final actionResponse = await Supabase.instance.client
+      final actionResponse = await SupabaseManager()
           .from('action')
           .select('actionstring')
           .eq('id', int.parse(_selectedAction!))
           .single();
 
       // Get resolver name
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('firstname, lastname')
           .eq('supabase_id', userId)
           .single();
 
-      await Supabase.instance.client
-          .from('problem')
-          .update({
-            'action': int.parse(_selectedAction!),
-            'notes': _notesController.text.trim(),
-            'actionby': userId,
-            'enddatetime': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', widget.problemId);
+      await SupabaseManager().dualUpdate(
+        'problem',
+        {
+          'action': int.parse(_selectedAction!),
+          'notes': _notesController.text.trim(),
+          'actionby': userId,
+          'enddatetime': DateTime.now().toUtc().toIso8601String(),
+        },
+        filters: {'id': widget.problemId},
+      );
 
       // Capture values needed for notification before popping
       final resolverName =

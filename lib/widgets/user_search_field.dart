@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/supabase_manager.dart';
 import '../theme/theme.dart';
 import 'adaptive/adaptive.dart';
 
@@ -41,13 +41,13 @@ class _UserSearchFieldState extends State<UserSearchField> {
     if (searchTerms.length > 1) {
       final firstName = searchTerms.first;
       final lastName = searchTerms.skip(1).join(' ');
-      return await Supabase.instance.client
+      return await SupabaseManager()
           .from('users')
           .select()
           .eq('first_name', firstName)
           .eq('last_name', lastName);
     } else {
-      return await Supabase.instance.client
+      return await SupabaseManager()
           .from('users')
           .select()
           .ilike('last_name', '${searchTerm.trim()}%')

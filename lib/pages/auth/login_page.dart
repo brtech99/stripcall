@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../routes.dart';
 import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
@@ -29,11 +29,11 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _testSupabaseConnection() async {
     try {
       debugLog('Testing Supabase connection...');
-      final session = Supabase.instance.client.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       debugLog('Current session: ${session != null ? "exists" : "none"}');
 
       // Test a simple database query
-      await Supabase.instance.client.from('users').select('count').limit(1);
+      await SupabaseManager().from('users').select('count').limit(1);
       debugLog('Database connection test successful');
     } catch (e) {
       debugLogError('Supabase connection test failed', e);
@@ -56,7 +56,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       debugLog('Attempting login for $email');
 
-      final response = await Supabase.instance.client.auth.signInWithPassword(
+      final response = await SupabaseManager().auth.signInWithPassword(
         email: email,
         password: password,
       );

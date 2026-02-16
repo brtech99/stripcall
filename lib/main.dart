@@ -73,7 +73,7 @@ class _MyAppState extends State<MyApp> {
     _initializeApp();
 
     // Listen for auth state changes
-    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+    SupabaseManager().auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         _initializeFirebaseAfterAuth();
       } else if (event.event == AuthChangeEvent.signedOut) {
@@ -83,7 +83,7 @@ class _MyAppState extends State<MyApp> {
     });
 
     // If user is already logged in, initialize Firebase now
-    if (Supabase.instance.client.auth.currentSession != null) {
+    if (SupabaseManager().auth.currentSession != null) {
       _initializeFirebaseAfterAuth();
     }
   }

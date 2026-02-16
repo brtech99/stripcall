@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../models/user.dart' as app_models;
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
@@ -75,7 +75,7 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
           ? ''
           : '%${_lastNameController.text}%';
 
-      final response = await Supabase.instance.client.rpc(
+      final response = await SupabaseManager().rpc(
         'search_users',
         params: {
           'first_name_pattern': firstName,

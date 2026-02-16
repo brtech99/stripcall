@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import '../services/supabase_manager.dart';
 import '../routes.dart';
 import '../utils/debug_utils.dart';
 import '../theme/theme.dart';
@@ -16,8 +17,6 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
-  final _supabase = Supabase.instance.client;
-
   bool _isLoading = true;
   String? _error;
 
@@ -70,8 +69,8 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
 
   Future<void> _refreshUserEmail() async {
     try {
-      await _supabase.auth.refreshSession();
-      final user = _supabase.auth.currentUser;
+      await SupabaseManager().auth.refreshSession();
+      final user = SupabaseManager().auth.currentUser;
       if (user != null && mounted) {
         final newEmail = user.email ?? '';
         if (newEmail != _email && newEmail.isNotEmpty) {
@@ -98,7 +97,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     });
 
     try {
-      final user = _supabase.auth.currentUser;
+      final user = SupabaseManager().auth.currentUser;
       if (user == null) {
         setState(() {
           _error = 'Not logged in';
@@ -110,7 +109,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       _email = user.email ?? '';
       _emailController.text = _email;
 
-      final userData = await _supabase
+      final userData = await SupabaseManager()
           .from('users')
           .select('firstname, lastname, phonenbr, is_sms_mode')
           .eq('supabase_id', user.id)
@@ -149,16 +148,17 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final user = _supabase.auth.currentUser;
+      final user = SupabaseManager().auth.currentUser;
       if (user == null) return;
 
-      await _supabase
-          .from('users')
-          .update({
-            'firstname': _firstNameController.text.trim(),
-            'lastname': _lastNameController.text.trim(),
-          })
-          .eq('supabase_id', user.id);
+      await SupabaseManager().dualUpdate(
+        'users',
+        {
+          'firstname': _firstNameController.text.trim(),
+          'lastname': _lastNameController.text.trim(),
+        },
+        filters: {'supabase_id': user.id},
+      );
 
       if (!mounted) return;
       setState(() {
@@ -205,7 +205,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final session = _supabase.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       if (session == null) {
         throw Exception('No active session');
       }
@@ -264,7 +264,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final session = _supabase.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       if (session == null) {
         throw Exception('No active session');
       }
@@ -348,7 +348,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      await _supabase.auth.updateUser(
+      await SupabaseManager().auth.updateUser(
         UserAttributes(email: newEmail),
         emailRedirectTo: 'https://stripcall.us/app/email-changed.html',
       );
@@ -383,7 +383,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      await _supabase.auth.resetPasswordForEmail(
+      await SupabaseManager().auth.resetPasswordForEmail(
         _email,
         redirectTo: 'https://stripcall.us/auth/reset-password',
       );
@@ -419,13 +419,14 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final user = _supabase.auth.currentUser;
+      final user = SupabaseManager().auth.currentUser;
       if (user == null) return;
 
-      await _supabase
-          .from('users')
-          .update({'is_sms_mode': value})
-          .eq('supabase_id', user.id);
+      await SupabaseManager().dualUpdate(
+        'users',
+        {'is_sms_mode': value},
+        filters: {'supabase_id': user.id},
+      );
 
       if (!mounted) return;
       setState(() {
@@ -454,7 +455,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
 
   Future<void> _signOut() async {
     try {
-      await _supabase.auth.signOut();
+      await SupabaseManager().auth.signOut();
       if (mounted) {
         context.go(Routes.login);
       }

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'supabase_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../utils/debug_utils.dart';
@@ -21,7 +22,6 @@ class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final SupabaseClient _supabase = Supabase.instance.client;
 
   String? _fcmToken;
   bool _isInitialized = false;
@@ -177,7 +177,7 @@ class NotificationService {
       await _cleanupAndSaveToken();
 
       // Listen for auth state changes to save token when user logs in
-      _supabase.auth.onAuthStateChange.listen((event) {
+      SupabaseManager().auth.onAuthStateChange.listen((event) {
         if (event.event == AuthChangeEvent.signedIn && _fcmToken != null) {
           debugLog('User signed in, saving FCM token to database...');
           _saveTokenToDatabase(_fcmToken!);
@@ -185,7 +185,7 @@ class NotificationService {
       });
 
       // Also save token immediately if user is already logged in
-      final currentUser = _supabase.auth.currentUser;
+      final currentUser = SupabaseManager().auth.currentUser;
       if (currentUser != null && _fcmToken != null) {
         debugLog('User already logged in, saving FCM token to database...');
         _saveTokenToDatabase(_fcmToken!);
@@ -272,7 +272,7 @@ class NotificationService {
       debugLog('Token length: ${token.length}');
       debugLog('Token preview: ${token.substring(0, 20)}...');
 
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) {
         debugLogError('No current user found, cannot save FCM token');
         return;
@@ -286,7 +286,7 @@ class NotificationService {
       // First, let's check if the device_tokens table exists by trying to query it
       try {
         debugLog('Checking if device_tokens table exists...');
-        final tableCheck = await _supabase
+        final tableCheck = await SupabaseManager()
             .from('device_tokens')
             .select('count')
             .limit(1);
@@ -304,7 +304,7 @@ class NotificationService {
 
       // Check if token already exists
       debugLog('Checking if token already exists...');
-      final existingToken = await _supabase
+      final existingToken = await SupabaseManager()
           .from('device_tokens')
           .select('id, device_token, platform')
           .eq('user_id', userId)
@@ -320,7 +320,7 @@ class NotificationService {
         );
 
         // Insert new token
-        final result = await _supabase.from('device_tokens').insert({
+        final result = await SupabaseManager().dualInsert('device_tokens', {
           'user_id': userId,
           'device_token': token,
           'platform': platformName,
@@ -364,14 +364,14 @@ class NotificationService {
       );
 
       // Use the Edge Function (FCM) for all platforms
-      final session = _supabase.auth.currentSession;
+      final session = SupabaseManager().auth.currentSession;
       if (session == null) {
         debugLogError('No active session found');
         return false;
       }
 
-      final response = await _supabase.functions
-          .invoke(
+      final response = await SupabaseManager()
+          .functionInvoke(
             'send-fcm-notification',
             body: {
               'title': title,
@@ -409,7 +409,7 @@ class NotificationService {
   }) async {
     try {
       // Get crew members
-      final crewMembers = await _supabase
+      final crewMembers = await SupabaseManager()
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId);
@@ -445,7 +445,7 @@ class NotificationService {
   }) async {
     try {
       // Get crew members
-      final crewMembers = await _supabase
+      final crewMembers = await SupabaseManager()
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId);
@@ -485,7 +485,7 @@ class NotificationService {
   }) async {
     try {
       // Get crew members (excluding the sender)
-      final crewMembers = await _supabase
+      final crewMembers = await SupabaseManager()
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewId)
@@ -531,7 +531,7 @@ class NotificationService {
         return false;
       }
 
-      final crewMembers = await _supabase
+      final crewMembers = await SupabaseManager()
           .from('crewmembers')
           .select('crewmember')
           .eq('crew', crewIdInt);
@@ -625,9 +625,12 @@ class NotificationService {
   Future<void> dispose() async {
     try {
       // Remove all FCM tokens for current user from database
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId != null) {
-        await _supabase.from('device_tokens').delete().eq('user_id', userId);
+        await SupabaseManager().dualDelete(
+          'device_tokens',
+          filters: {'user_id': userId},
+        );
       }
     } catch (e) {
       // Error cleaning up device tokens

@@ -208,6 +208,35 @@ class SupabaseManager {
     }
   }
 
+  /// Delete from both instances using inFilter (for batch deletes by ID list).
+  Future<void> dualDeleteIn(
+    String table, {
+    required String column,
+    required List<dynamic> values,
+  }) async {
+    if (values.isEmpty) return;
+
+    final data = {'_inFilter_column': column, '_inFilter_values': values};
+
+    await _writeTo(
+      target: 'primary',
+      client: _primary,
+      table: table,
+      operation: 'delete_in',
+      data: data,
+    );
+
+    if (_secondary != null) {
+      await _writeTo(
+        target: 'secondary',
+        client: _secondary!,
+        table: table,
+        operation: 'delete_in',
+        data: data,
+      );
+    }
+  }
+
   /// Upsert on both instances.
   Future<void> dualUpsert(
     String table,
@@ -298,6 +327,11 @@ class SupabaseManager {
             }
           }
           await query;
+          return null;
+        case 'delete_in':
+          final col = data['_inFilter_column'] as String;
+          final vals = data['_inFilter_values'] as List<dynamic>;
+          await client.from(table).delete().inFilter(col, vals);
           return null;
         case 'upsert':
           final onConflict = data.remove('_onConflict') as String?;
@@ -497,6 +531,11 @@ class SupabaseManager {
           }
         }
         await query;
+        break;
+      case 'delete_in':
+        final col = txn.data['_inFilter_column'] as String;
+        final vals = txn.data['_inFilter_values'] as List<dynamic>;
+        await client.from(txn.table).delete().inFilter(col, vals);
         break;
       case 'upsert':
         final data = Map<String, dynamic>.from(txn.data);

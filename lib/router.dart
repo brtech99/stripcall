@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'utils/debug_utils.dart';
+import 'services/supabase_manager.dart';
 import 'pages/auth/login_page.dart';
 import 'pages/events/manage_event_page.dart';
 import 'pages/events/manage_events_page.dart';
@@ -34,7 +34,7 @@ final router = GoRouter(
       // Return a simple page that redirects
       Future.microtask(() {
         if (context.mounted) {
-          final session = Supabase.instance.client.auth.currentSession;
+          final session = SupabaseManager().auth.currentSession;
           if (session != null) {
             GoRouter.of(context).go(Routes.selectEvent);
           } else {
@@ -49,7 +49,7 @@ final router = GoRouter(
   },
   redirect: (context, state) async {
     debugLog('=== ROUTER REDIRECT: ${state.matchedLocation} ===');
-    final session = Supabase.instance.client.auth.currentSession;
+    final session = SupabaseManager().auth.currentSession;
     final isAuthRoute =
         state.matchedLocation == Routes.login ||
         state.matchedLocation == Routes.register ||
@@ -64,7 +64,7 @@ final router = GoRouter(
       debugLog('Handling email confirmation route...');
       try {
         // Get the current user from auth (even without session)
-        final user = Supabase.instance.client.auth.currentUser;
+        final user = SupabaseManager().auth.currentUser;
         debugLog('Current user from auth: ${user?.email}');
         debugLog('Email confirmed at: ${user?.emailConfirmedAt}');
 
@@ -75,7 +75,7 @@ final router = GoRouter(
 
           // Check if user exists in users table
           try {
-            await Supabase.instance.client
+            await SupabaseManager()
                 .from('users')
                 .select('supabase_id')
                 .eq('supabase_id', user!.id)
@@ -88,14 +88,14 @@ final router = GoRouter(
 
             // Copy user data from pending_users to users table
             try {
-              final pendingUser = await Supabase.instance.client
+              final pendingUser = await SupabaseManager()
                   .from('pending_users')
                   .select('firstname, lastname, phone_number')
                   .eq('email', user!.email ?? '')
                   .single();
 
               debugLog('Found pending user data, copying to users table...');
-              await Supabase.instance.client.from('users').insert({
+              await SupabaseManager().dualInsert('users', {
                 'supabase_id': user.id,
                 'firstname': pendingUser['firstname'],
                 'lastname': pendingUser['lastname'],
@@ -107,10 +107,10 @@ final router = GoRouter(
               );
 
               // Delete the record from pending_users to prevent data leakage
-              await Supabase.instance.client
-                  .from('pending_users')
-                  .delete()
-                  .eq('email', user.email ?? '');
+              await SupabaseManager().dualDelete(
+                'pending_users',
+                filters: {'email': user.email ?? ''},
+              );
 
               debugLog(
                 'Pending user data cleaned up successfully, redirecting to login',
@@ -150,7 +150,7 @@ final router = GoRouter(
           debugLog(
             '=== ROUTER DEBUG: Checking if user exists in users table... ===',
           );
-          final userRecord = await Supabase.instance.client
+          final userRecord = await SupabaseManager()
               .from('users')
               .select('supabase_id, firstname, lastname')
               .eq('supabase_id', user.id)
@@ -171,7 +171,7 @@ final router = GoRouter(
 
           // Try to copy from pending_users but DON'T delete the pending record
           try {
-            final pendingUser = await Supabase.instance.client
+            final pendingUser = await SupabaseManager()
                 .from('pending_users')
                 .select('firstname, lastname, phone_number')
                 .eq('email', user.email ?? '')
@@ -180,7 +180,7 @@ final router = GoRouter(
             debugLog(
               '=== ROUTER DEBUG: Found pending user, copying to users table ===',
             );
-            await Supabase.instance.client.from('users').insert({
+            await SupabaseManager().dualInsert('users', {
               'supabase_id': user.id,
               'firstname': pendingUser['firstname'],
               'lastname': pendingUser['lastname'],
@@ -223,7 +223,7 @@ final router = GoRouter(
       if (user.emailConfirmedAt != null) {
         try {
           // Check if user exists in the users table
-          await Supabase.instance.client
+          await SupabaseManager()
               .from('users')
               .select('supabase_id')
               .eq('supabase_id', user.id)
@@ -236,14 +236,14 @@ final router = GoRouter(
 
           // Copy user data from pending_users to users table
           try {
-            final pendingUser = await Supabase.instance.client
+            final pendingUser = await SupabaseManager()
                 .from('pending_users')
                 .select('firstname, lastname, phone_number')
                 .eq('email', user.email ?? '')
                 .single();
 
             debugLog('Found pending user data, copying to users table...');
-            await Supabase.instance.client.from('users').insert({
+            await SupabaseManager().dualInsert('users', {
               'supabase_id': user.id,
               'firstname': pendingUser['firstname'],
               'lastname': pendingUser['lastname'],
@@ -255,10 +255,10 @@ final router = GoRouter(
             );
 
             // Delete the record from pending_users to prevent data leakage
-            await Supabase.instance.client
-                .from('pending_users')
-                .delete()
-                .eq('email', user.email ?? '');
+            await SupabaseManager().dualDelete(
+              'pending_users',
+              filters: {'email': user.email ?? ''},
+            );
 
             debugLog(
               'Pending user data cleaned up successfully, allowing access',
@@ -284,7 +284,7 @@ final router = GoRouter(
     GoRoute(
       path: '/',
       redirect: (context, state) {
-        final session = Supabase.instance.client.auth.currentSession;
+        final session = SupabaseManager().auth.currentSession;
         return session != null ? Routes.selectEvent : Routes.login;
       },
     ),

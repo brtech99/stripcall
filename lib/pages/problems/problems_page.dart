@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
+import '../../services/supabase_manager.dart';
 import '../../widgets/settings_menu.dart';
 import '../../widgets/user_name_display.dart';
 import '../../widgets/crew_message_window.dart';
@@ -71,7 +71,7 @@ class DefaultProblemsRepository implements ProblemsRepository {
   final ProblemService _service = ProblemService();
 
   @override
-  String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+  String? get currentUserId => SupabaseManager().auth.currentUser?.id;
 
   @override
   Future<bool> checkSuperUserStatus() => _service.checkSuperUserStatus();

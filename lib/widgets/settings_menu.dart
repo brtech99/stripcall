@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/supabase_manager.dart';
 import '../utils/auth_helpers.dart';
 import '../routes.dart';
 import '../pages/database_page.dart';
@@ -81,7 +81,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
               context.push(Routes.smsSimulator);
               break;
             case 'logout':
-              Supabase.instance.client.auth.signOut();
+              SupabaseManager().auth.signOut();
               context.go(Routes.login);
               break;
             case 'request_permission':
