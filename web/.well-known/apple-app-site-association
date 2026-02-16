@@ -1,0 +1,16 @@
+{
+  "webcredentials": {
+    "apps": [
+      "SKXLMGYJZ7.com.brianrosen.stripcall"
+    ]
+  },
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "SKXLMGYJZ7.com.brianrosen.stripcall",
+        "paths": ["*"]
+      }
+    ]
+  }
+}

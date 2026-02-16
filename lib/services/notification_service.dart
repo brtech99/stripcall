@@ -70,6 +70,13 @@ class NotificationService {
             }
           }
 
+          // Tell iOS to show alerts/badges/sound even when app is in foreground
+          await _firebaseMessaging.setForegroundNotificationPresentationOptions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+
           NotificationSettings settings = await _firebaseMessaging
               .requestPermission(
                 alert: true,
@@ -302,33 +309,21 @@ class NotificationService {
         return;
       }
 
-      // Check if token already exists
-      debugLog('Checking if token already exists...');
-      final existingToken = await _supabase
+      // Delete existing tokens for this user/platform and re-insert
+      // This ensures stale tokens (e.g. from service worker changes) get replaced
+      debugLog('Removing old tokens for user on $platformName...');
+      await _supabase
           .from('device_tokens')
-          .select('id, device_token, platform')
+          .delete()
           .eq('user_id', userId)
-          .eq('device_token', token)
-          .maybeSingle();
+          .eq('platform', platformName);
 
-      debugLog('Existing token check result: $existingToken');
-
-      if (existingToken == null) {
-        debugLog('Token does not exist, inserting new token...');
-        debugLog(
-          'Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platformName"}',
-        );
-
-        // Insert new token
-        final result = await _supabase.from('device_tokens').insert({
-          'user_id': userId,
-          'device_token': token,
-          'platform': platformName,
-        });
-        debugLog('Insert result: $result');
-      } else {
-        debugLog('Token already exists, skipping insert');
-      }
+      debugLog('Inserting fresh token...');
+      await _supabase.from('device_tokens').insert({
+        'user_id': userId,
+        'device_token': token,
+        'platform': platformName,
+      });
 
       debugLog('FCM token saved to database successfully');
     } catch (e) {
@@ -392,6 +387,7 @@ class NotificationService {
           );
 
       debugLog('Notification response: ${response.status}');
+      debugLog('Notification response data: ${response.data}');
       return response.status == 200;
     } catch (e) {
       debugLogError('Error sending notification', e);

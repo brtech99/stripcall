@@ -1,9 +1,15 @@
+// Force immediate activation on update
+self.addEventListener("install", (event) => self.skipWaiting());
+self.addEventListener("activate", (event) =>
+  event.waitUntil(self.clients.claim()),
+);
+
 // Firebase messaging service worker
 importScripts(
-  "https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js",
+  "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js",
 );
 importScripts(
-  "https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js",
+  "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js",
 );
 
 const firebaseConfig = {
@@ -25,11 +31,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("Received background message:", payload);
 
-  const notificationTitle = payload.notification?.title || "New Message";
+  const notificationTitle =
+    payload.data?.title || payload.notification?.title || "New Message";
   const notificationOptions = {
-    body: payload.notification?.body || "",
-    icon: "/icons/Icon-192.png",
-    badge: "/icons/Icon-192.png",
+    body: payload.data?.body || payload.notification?.body || "",
+    icon: "/app/icons/Icon-192.png",
+    badge: "/app/icons/Icon-192.png",
     tag: "stripcall-notification",
     requireInteraction: true,
     actions: [
@@ -56,8 +63,16 @@ self.addEventListener("notificationclick", (event) => {
 
   event.notification.close();
 
-  if (event.action === "open") {
-    // Open the app
-    event.waitUntil(clients.openWindow("/"));
-  }
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.includes("/app") && "focus" in client) {
+            return client.focus();
+          }
+        }
+        return clients.openWindow("/app/");
+      }),
+  );
 });

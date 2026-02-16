@@ -43,16 +43,13 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 // Register service worker
+let firebaseSWRegistration = null;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker
     .register("/firebase-messaging-sw.js")
     .then(function (registration) {
       console.log("Service Worker registered with scope:", registration.scope);
-      return navigator.serviceWorker.ready;
-    })
-    .then(function (registration) {
-      console.log("Service Worker is ready");
-      // Don't automatically request permission - wait for user action
+      firebaseSWRegistration = registration;
     })
     .catch(function (err) {
       console.log("Service Worker registration failed:", err);
@@ -110,11 +107,12 @@ messaging.onMessage((payload) => {
 });
 
 function showNotification(payload) {
-  const notificationTitle = payload.notification?.title || "New Message";
+  const notificationTitle =
+    payload.data?.title || payload.notification?.title || "New Message";
   const notificationOptions = {
-    body: payload.notification?.body || "",
-    icon: "/icons/Icon-192.png",
-    badge: "/icons/Icon-192.png",
+    body: payload.data?.body || payload.notification?.body || "",
+    icon: "/app/icons/Icon-192.png",
+    badge: "/app/icons/Icon-192.png",
     tag: "stripcall-notification",
     requireInteraction: true,
     actions: [
@@ -129,7 +127,12 @@ function showNotification(payload) {
     ],
   };
 
-  if ("serviceWorker" in navigator && "Notification" in window) {
+  if (firebaseSWRegistration && "Notification" in window) {
+    firebaseSWRegistration.showNotification(
+      notificationTitle,
+      notificationOptions,
+    );
+  } else if ("serviceWorker" in navigator && "Notification" in window) {
     navigator.serviceWorker.ready.then(function (registration) {
       registration.showNotification(notificationTitle, notificationOptions);
     });

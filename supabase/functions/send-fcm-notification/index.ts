@@ -282,11 +282,25 @@ async function sendFCMNotification(
           },
         },
         apns: {
+          headers: {
+            "apns-priority": "10",
+            "apns-push-type": "alert",
+          },
           payload: {
             aps: {
+              alert: {
+                title: title,
+                body: body,
+              },
               sound: "default",
               badge: 1,
             },
+          },
+        },
+        webpush: {
+          notification: {
+            icon: "https://stripcall.us/app/icons/Icon-192.png",
+            badge: "https://stripcall.us/app/icons/Icon-192.png",
           },
         },
       },

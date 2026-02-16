@@ -129,133 +129,145 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       body: Padding(
         padding: AppSpacing.screenPadding,
         child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                if (_error != null)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: AppSpacing.md),
-                    child: Container(
-                      padding: AppSpacing.paddingSm,
-                      decoration: BoxDecoration(
-                        color: AppColors.errorContainer(context),
-                        borderRadius: AppSpacing.borderRadiusMd,
-                      ),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: AppColors.onErrorContainer(context),
+          child: AutofillGroup(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  if (_error != null)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Container(
+                        padding: AppSpacing.paddingSm,
+                        decoration: BoxDecoration(
+                          color: AppColors.errorContainer(context),
+                          borderRadius: AppSpacing.borderRadiusMd,
+                        ),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: AppColors.onErrorContainer(context),
+                          ),
                         ),
                       ),
                     ),
+                  TextFormField(
+                    key: const ValueKey('register_firstname_field'),
+                    controller: _firstNameController,
+                    decoration: const InputDecoration(labelText: 'First Name'),
+                    autofillHints: const [AutofillHints.givenName],
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your first name';
+                      }
+                      return null;
+                    },
                   ),
-                TextFormField(
-                  key: const ValueKey('register_firstname_field'),
-                  controller: _firstNameController,
-                  decoration: const InputDecoration(labelText: 'First Name'),
-                  textCapitalization: TextCapitalization.words,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your first name';
-                    }
-                    return null;
-                  },
-                ),
-                AppSpacing.verticalMd,
-                TextFormField(
-                  key: const ValueKey('register_lastname_field'),
-                  controller: _lastNameController,
-                  decoration: const InputDecoration(labelText: 'Last Name'),
-                  textCapitalization: TextCapitalization.words,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your last name';
-                    }
-                    return null;
-                  },
-                ),
-                AppSpacing.verticalMd,
-                TextFormField(
-                  key: const ValueKey('register_phone_field'),
-                  controller: _phoneController,
-                  decoration: const InputDecoration(labelText: 'Phone Number'),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    if (value.trim().length < 10) {
-                      return 'Please enter a valid phone number';
-                    }
-                    return null;
-                  },
-                ),
-                AppSpacing.verticalMd,
-                TextFormField(
-                  key: const ValueKey('register_email_field'),
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                  textCapitalization: TextCapitalization.none,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    final emailRegex = RegExp(
-                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                    );
-                    final trimmedValue = value.trim();
-                    if (!emailRegex.hasMatch(trimmedValue)) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                AppSpacing.verticalMd,
-                TextFormField(
-                  key: const ValueKey('register_password_field'),
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  textCapitalization: TextCapitalization.none,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                AppSpacing.verticalLg,
-                AppButton(
-                  buttonKey: const ValueKey('register_submit_button'),
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          if (_formKey.currentState?.validate() ?? false) {
-                            _signUp();
-                          }
-                        },
-                  isLoading: _isLoading,
-                  expand: true,
-                  child: const Text('Create Account'),
-                ),
-                AppSpacing.verticalMd,
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Already have an account?'),
-                    AppButton.secondary(
-                      buttonKey: const ValueKey('register_signin_button'),
-                      onPressed: () => context.go(Routes.login),
-                      child: const Text('Sign In'),
+                  AppSpacing.verticalMd,
+                  TextFormField(
+                    key: const ValueKey('register_lastname_field'),
+                    controller: _lastNameController,
+                    decoration: const InputDecoration(labelText: 'Last Name'),
+                    autofillHints: const [AutofillHints.familyName],
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your last name';
+                      }
+                      return null;
+                    },
+                  ),
+                  AppSpacing.verticalMd,
+                  TextFormField(
+                    key: const ValueKey('register_phone_field'),
+                    controller: _phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
                     ),
-                  ],
-                ),
-              ],
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      if (value.trim().length < 10) {
+                        return 'Please enter a valid phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                  AppSpacing.verticalMd,
+                  TextFormField(
+                    key: const ValueKey('register_email_field'),
+                    controller: _emailController,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                    autofillHints: const [
+                      AutofillHints.email,
+                      AutofillHints.username,
+                    ],
+                    keyboardType: TextInputType.emailAddress,
+                    textCapitalization: TextCapitalization.none,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      final emailRegex = RegExp(
+                        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                      );
+                      final trimmedValue = value.trim();
+                      if (!emailRegex.hasMatch(trimmedValue)) {
+                        return 'Please enter a valid email address';
+                      }
+                      return null;
+                    },
+                  ),
+                  AppSpacing.verticalMd,
+                  TextFormField(
+                    key: const ValueKey('register_password_field'),
+                    controller: _passwordController,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    textCapitalization: TextCapitalization.none,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  AppSpacing.verticalLg,
+                  AppButton(
+                    buttonKey: const ValueKey('register_submit_button'),
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            if (_formKey.currentState?.validate() ?? false) {
+                              _signUp();
+                            }
+                          },
+                    isLoading: _isLoading,
+                    expand: true,
+                    child: const Text('Create Account'),
+                  ),
+                  AppSpacing.verticalMd,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Already have an account?'),
+                      AppButton.secondary(
+                        buttonKey: const ValueKey('register_signin_button'),
+                        onPressed: () => context.go(Routes.login),
+                        child: const Text('Sign In'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

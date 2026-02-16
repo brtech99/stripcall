@@ -129,8 +129,36 @@ class ChatService {
     String? reporterId,
   }) async {
     try {
+      // Look up strip number and sender name for notification title
+      String title = 'New Message';
+      try {
+        final results = await Future.wait([
+          Supabase.instance.client
+              .from('problem')
+              .select('strip')
+              .eq('id', problemId)
+              .maybeSingle(),
+          Supabase.instance.client
+              .from('users')
+              .select('firstname, lastname')
+              .eq('supabase_id', senderId)
+              .maybeSingle(),
+        ]);
+        final problem = results[0] as Map<String, dynamic>?;
+        final user = results[1] as Map<String, dynamic>?;
+        final strip = problem?['strip'];
+        final name = user != null
+            ? '${user['firstname'] ?? ''} ${user['lastname'] ?? ''}'.trim()
+            : null;
+        if (strip != null && name != null && name.isNotEmpty) {
+          title = 'Message re:$strip from:$name';
+        } else if (name != null && name.isNotEmpty) {
+          title = 'Message from:$name';
+        }
+      } catch (_) {}
+
       await NotificationService().sendCrewNotification(
-        title: 'New Message',
+        title: title,
         body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
         crewId: crewId.toString(),
         senderId: senderId,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
@@ -63,6 +64,7 @@ class _LoginPageState extends State<LoginPage> {
 
       if (response.user != null) {
         debugLog('Login successful for ${response.user!.email}');
+        TextInput.finishAutofillContext();
 
         if (!mounted) return;
 
@@ -85,96 +87,103 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(title: const Text('Login')),
       body: Padding(
         padding: AppSpacing.screenPadding,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: Container(
-                    padding: AppSpacing.paddingSm,
-                    decoration: BoxDecoration(
-                      color: AppColors.errorContainer(context),
-                      borderRadius: AppSpacing.borderRadiusMd,
-                    ),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: AppColors.onErrorContainer(context),
+        child: AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: Container(
+                      padding: AppSpacing.paddingSm,
+                      decoration: BoxDecoration(
+                        color: AppColors.errorContainer(context),
+                        borderRadius: AppSpacing.borderRadiusMd,
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: AppColors.onErrorContainer(context),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              Semantics(
-                identifier: 'login_email_field',
-                child: TextFormField(
-                  key: const ValueKey('login_email_field'),
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  textCapitalization: TextCapitalization.none,
-                  enabled: !_isLoading,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              AppSpacing.verticalMd,
-              Semantics(
-                identifier: 'login_password_field',
-                child: TextFormField(
-                  key: const ValueKey('login_password_field'),
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  enabled: !_isLoading,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              AppSpacing.verticalLg,
-              AppButton(
-                buttonKey: const ValueKey('login_submit_button'),
-                onPressed: _isLoading ? null : _handleLogin,
-                isLoading: _isLoading,
-                expand: true,
-                child: const Text('Login'),
-              ),
-              AppSpacing.verticalMd,
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AppButton.secondary(
-                    buttonKey: const ValueKey('login_forgot_password_button'),
-                    onPressed: _isLoading
-                        ? null
-                        : () => context.go(Routes.forgotPassword),
-                    child: const Text('Forgot Password'),
+                Semantics(
+                  identifier: 'login_email_field',
+                  child: TextFormField(
+                    key: const ValueKey('login_email_field'),
+                    controller: _emailController,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [
+                      AutofillHints.email,
+                      AutofillHints.username,
+                    ],
+                    autocorrect: false,
+                    textCapitalization: TextCapitalization.none,
+                    enabled: !_isLoading,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Please enter a valid email address';
+                      }
+                      return null;
+                    },
                   ),
-                  AppSpacing.horizontalMd,
-                  AppButton.secondary(
-                    buttonKey: const ValueKey('login_create_account_button'),
-                    onPressed: _isLoading
-                        ? null
-                        : () => context.go(Routes.register),
-                    child: const Text('Create Account'),
+                ),
+                AppSpacing.verticalMd,
+                Semantics(
+                  identifier: 'login_password_field',
+                  child: TextFormField(
+                    key: const ValueKey('login_password_field'),
+                    controller: _passwordController,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    enabled: !_isLoading,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
                   ),
-                ],
-              ),
-            ],
+                ),
+                AppSpacing.verticalLg,
+                AppButton(
+                  buttonKey: const ValueKey('login_submit_button'),
+                  onPressed: _isLoading ? null : _handleLogin,
+                  isLoading: _isLoading,
+                  expand: true,
+                  child: const Text('Login'),
+                ),
+                AppSpacing.verticalMd,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppButton.secondary(
+                      buttonKey: const ValueKey('login_forgot_password_button'),
+                      onPressed: _isLoading
+                          ? null
+                          : () => context.go(Routes.forgotPassword),
+                      child: const Text('Forgot Password'),
+                    ),
+                    AppSpacing.horizontalMd,
+                    AppButton.secondary(
+                      buttonKey: const ValueKey('login_create_account_button'),
+                      onPressed: _isLoading
+                          ? null
+                          : () => context.go(Routes.register),
+                      child: const Text('Create Account'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

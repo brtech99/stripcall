@@ -231,21 +231,6 @@ class ProblemService {
       final crewId = problemResponse['crew'] as int;
       final reporterId = problemResponse['originator'] as String?;
 
-      // Send crew message (fire and forget - don't block UI)
-      Supabase.instance.client
-          .from('crew_messages')
-          .insert({
-            'crew': crewId,
-            'author': userId,
-            'message': '$responderName is on the way',
-          })
-          .catchError((e) {
-            debugLogError(
-              'Failed to send crew message (responder was recorded successfully)',
-              e,
-            );
-          });
-
       // Send notification using Edge Function (fire and forget - don't block UI)
       NotificationService()
           .sendCrewNotification(
@@ -715,7 +700,7 @@ class ProblemService {
 
       final crewMemberResponse = await Supabase.instance.client
           .from('crewmembers')
-          .select('crew:crew(id, crewtype:crewtypes(crewtype))')
+          .select('crew:crews!inner(id, crewtype:crewtypes(crewtype))')
           .eq('crew', crewId)
           .eq('crewmember', userId)
           .maybeSingle();
@@ -737,7 +722,7 @@ class ProblemService {
       final crewMember = await Supabase.instance.client
           .from('crewmembers')
           .select('''
-            crew:crew(
+            crew:crews!inner(
               id,
               event,
               crewtype:crewtypes(crewtype)
@@ -745,6 +730,7 @@ class ProblemService {
           ''')
           .eq('crewmember', userId)
           .eq('crew.event', eventId)
+          .limit(1)
           .maybeSingle();
 
       if (crewMember != null && crewMember['crew'] != null) {

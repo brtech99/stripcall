@@ -159,6 +159,16 @@ set ssl:verify-certificate no
 set ftp:ssl-allow no
 open -u $HOSTINGER_FTP_USER,$HOSTINGER_FTP_PASS -p 21 $HOSTINGER_FTP_HOST
 cd $HOSTINGER_FTP_PATH
+# Upload firebase SW, config, and icons to site root (needed for SW scope)
+put $DEPLOY_DIR/firebase-messaging-sw.js
+put $DEPLOY_DIR/firebase-config.js
+mkdir -p icons
+cd icons
+put $DEPLOY_DIR/icons/Icon-192.png
+put $DEPLOY_DIR/icons/Icon-512.png
+put $DEPLOY_DIR/icons/Icon-maskable-192.png
+put $DEPLOY_DIR/icons/Icon-maskable-512.png
+cd ..
 mkdir -p ${HOSTINGER_APP_PATH#/}
 cd ${HOSTINGER_APP_PATH#/}
 mirror --reverse --delete --verbose $DEPLOY_DIR .
