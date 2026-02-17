@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/supabase_manager.dart';
 
 /// Displays the current user's name in the app bar (web only).
 /// On non-web platforms, renders an empty container.
@@ -24,10 +24,10 @@ class _UserNameDisplayState extends State<UserNameDisplay> {
 
   Future<void> _loadUserName() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) return;
 
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('users')
           .select('firstname, lastname')
           .eq('supabase_id', userId)

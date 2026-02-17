@@ -80,8 +80,9 @@ node_modules/
 *.tmp
 *.temp
 
-# === Single secrets file — the ONLY gitignored script ===
+# === Secrets and generated config — never commit ===
 scripts/config/secrets.sh
+scripts/config/.twilio_saved_urls
 
 # Compiled web builds and coverage
 deploy/

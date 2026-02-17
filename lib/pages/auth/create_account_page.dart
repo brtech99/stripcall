@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
@@ -51,7 +51,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       final lastName = _lastNameController.text.trim();
 
       debugLog('Attempting to sign up with email: $email');
-      final response = await Supabase.instance.client.auth.signUp(
+      final response = await SupabaseManager().auth.signUp(
         email: email,
         password: password,
         data: {'firstname': firstName, 'lastname': lastName},
@@ -69,7 +69,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
         try {
           debugLog('Inserting user data into pending_users table...');
-          await Supabase.instance.client.from('pending_users').insert({
+          await SupabaseManager().dualInsert('pending_users', {
             'email': email,
             'firstname': firstName,
             'lastname': lastName,

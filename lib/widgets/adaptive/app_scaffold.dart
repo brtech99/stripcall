@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
+import '../health_indicator.dart';
 
 /// Adaptive scaffold that uses Material Scaffold on Android/web
 /// and CupertinoPageScaffold on iOS.
@@ -72,9 +73,10 @@ class AppScaffold extends StatelessWidget {
                     child: const Icon(CupertinoIcons.back),
                   )
                 : null),
-        trailing: actions != null && actions!.isNotEmpty
-            ? Row(mainAxisSize: MainAxisSize.min, children: actions!)
-            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [const HealthIndicator(), if (actions != null) ...actions!],
+        ),
       ),
       child: SafeArea(
         child: Stack(
@@ -110,7 +112,7 @@ class AppScaffold extends StatelessWidget {
                   )
                 : null),
         automaticallyImplyLeading: showBackButton,
-        actions: actions,
+        actions: [const HealthIndicator(), if (actions != null) ...actions!],
       ),
       body: body,
       floatingActionButton: floatingActionButton,

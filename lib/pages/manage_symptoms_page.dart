@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../utils/debug_utils.dart';
 import '../routes.dart';
+import '../services/supabase_manager.dart';
 
 class ManageSymptomsPage extends StatefulWidget {
   const ManageSymptomsPage({super.key});
@@ -30,7 +30,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
   Future<void> _checkSuperUserAndLoad() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) {
         if (mounted) {
           context.go(Routes.login);
@@ -38,7 +38,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         return;
       }
 
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('superuser')
           .eq('supabase_id', userId)
@@ -76,7 +76,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
     try {
       // Load crew types
-      final crewTypesResponse = await Supabase.instance.client
+      final crewTypesResponse = await SupabaseManager()
           .from('crewtypes')
           .select()
           .order('crewtype');
@@ -96,9 +96,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
     } catch (e) {
       debugLogError('Error loading data', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading data: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading data: $e')));
       }
     } finally {
       if (mounted) {
@@ -112,16 +112,20 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   Future<void> _loadSymptomClassesForCrewType(int crewTypeId) async {
     try {
       // Try to order by display_order, fall back to alphabetical if column doesn't exist
-      var query = Supabase.instance.client
+      var query = SupabaseManager()
           .from('symptomclass')
           .select()
           .eq('crewType', crewTypeId);
 
       try {
         final response = await query.order('display_order', ascending: true);
-        debugLog('Loaded ${response.length} symptom classes ordered by display_order:');
+        debugLog(
+          'Loaded ${response.length} symptom classes ordered by display_order:',
+        );
         for (var item in response) {
-          debugLog('  classId=${item['id']} display_order=${item['display_order']} name=${item['symptomclassstring']}');
+          debugLog(
+            '  classId=${item['id']} display_order=${item['display_order']} name=${item['symptomclassstring']}',
+          );
         }
         if (mounted) {
           setState(() {
@@ -130,7 +134,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         }
       } catch (orderError) {
         // display_order column doesn't exist yet, use alphabetical
-        debugLog('display_order column not found, falling back to alphabetical');
+        debugLog(
+          'display_order column not found, falling back to alphabetical',
+        );
         final response = await query.order('symptomclassstring');
         if (mounted) {
           setState(() {
@@ -145,7 +151,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
   Future<void> _loadSymptomsForClass(int classId) async {
     try {
-      var query = Supabase.instance.client
+      var query = SupabaseManager()
           .from('symptom')
           .select()
           .eq('symptomclass', classId);
@@ -154,7 +160,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         final response = await query.order('display_order', ascending: true);
         if (mounted) {
           setState(() {
-            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(response);
+            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(
+              response,
+            );
           });
         }
       } catch (orderError) {
@@ -162,7 +170,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         final response = await query.order('symptomstring');
         if (mounted) {
           setState(() {
-            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(response);
+            _symptomsByClass[classId] = List<Map<String, dynamic>>.from(
+              response,
+            );
           });
         }
       }
@@ -173,7 +183,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
   Future<void> _loadActionsForSymptom(int symptomId) async {
     try {
-      var query = Supabase.instance.client
+      var query = SupabaseManager()
           .from('action')
           .select()
           .eq('symptom', symptomId);
@@ -182,7 +192,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         final response = await query.order('display_order', ascending: true);
         if (mounted) {
           setState(() {
-            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(response);
+            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(
+              response,
+            );
           });
         }
       } catch (orderError) {
@@ -190,7 +202,9 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         final response = await query.order('actionstring');
         if (mounted) {
           setState(() {
-            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(response);
+            _actionsBySymptom[symptomId] = List<Map<String, dynamic>>.from(
+              response,
+            );
           });
         }
       }
@@ -205,7 +219,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
     try {
       // Try to use display_order if column exists
       try {
-        final maxOrderResponse = await Supabase.instance.client
+        final maxOrderResponse = await SupabaseManager()
             .from('symptomclass')
             .select('display_order')
             .eq('crewType', _selectedCrewTypeId!)
@@ -215,14 +229,14 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
         final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
 
-        await Supabase.instance.client.from('symptomclass').insert({
+        await SupabaseManager().dualInsert('symptomclass', {
           'symptomclassstring': name,
           'crewType': _selectedCrewTypeId,
           'display_order': newOrder,
         });
       } catch (orderError) {
         // display_order column doesn't exist yet, insert without it
-        await Supabase.instance.client.from('symptomclass').insert({
+        await SupabaseManager().dualInsert('symptomclass', {
           'symptomclassstring': name,
           'crewType': _selectedCrewTypeId,
         });
@@ -231,40 +245,41 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom class added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom class added')));
       }
     } catch (e) {
       debugLogError('Error adding symptom class', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _updateSymptomClass(int id, String name) async {
     try {
-      await Supabase.instance.client
-          .from('symptomclass')
-          .update({'symptomclassstring': name})
-          .eq('id', id);
+      await SupabaseManager().dualUpdate(
+        'symptomclass',
+        {'symptomclassstring': name},
+        filters: {'id': id},
+      );
 
       await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom class updated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom class updated')));
       }
     } catch (e) {
       debugLogError('Error updating symptom class', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -294,20 +309,20 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
     if (confirmed != true) return;
 
     try {
-      await Supabase.instance.client.from('symptomclass').delete().eq('id', id);
+      await SupabaseManager().dualDelete('symptomclass', filters: {'id': id});
       await _loadSymptomClassesForCrewType(_selectedCrewTypeId!);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom class deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom class deleted')));
       }
     } catch (e) {
       debugLogError('Error deleting symptom class', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -315,7 +330,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   Future<void> _addSymptom(int classId, String name) async {
     try {
       try {
-        final maxOrderResponse = await Supabase.instance.client
+        final maxOrderResponse = await SupabaseManager()
             .from('symptom')
             .select('display_order')
             .eq('symptomclass', classId)
@@ -325,13 +340,13 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
         final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
 
-        await Supabase.instance.client.from('symptom').insert({
+        await SupabaseManager().dualInsert('symptom', {
           'symptomstring': name,
           'symptomclass': classId,
           'display_order': newOrder,
         });
       } catch (orderError) {
-        await Supabase.instance.client.from('symptom').insert({
+        await SupabaseManager().dualInsert('symptom', {
           'symptomstring': name,
           'symptomclass': classId,
         });
@@ -340,40 +355,41 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       await _loadSymptomsForClass(classId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom added')));
       }
     } catch (e) {
       debugLogError('Error adding symptom', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _updateSymptom(int id, int classId, String name) async {
     try {
-      await Supabase.instance.client
-          .from('symptom')
-          .update({'symptomstring': name})
-          .eq('id', id);
+      await SupabaseManager().dualUpdate(
+        'symptom',
+        {'symptomstring': name},
+        filters: {'id': id},
+      );
 
       await _loadSymptomsForClass(classId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom updated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom updated')));
       }
     } catch (e) {
       debugLogError('Error updating symptom', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -403,20 +419,20 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
     if (confirmed != true) return;
 
     try {
-      await Supabase.instance.client.from('symptom').delete().eq('id', id);
+      await SupabaseManager().dualDelete('symptom', filters: {'id': id});
       await _loadSymptomsForClass(classId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Symptom deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Symptom deleted')));
       }
     } catch (e) {
       debugLogError('Error deleting symptom', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -424,7 +440,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
   Future<void> _addAction(int symptomId, String name) async {
     try {
       try {
-        final maxOrderResponse = await Supabase.instance.client
+        final maxOrderResponse = await SupabaseManager()
             .from('action')
             .select('display_order')
             .eq('symptom', symptomId)
@@ -434,13 +450,13 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
         final newOrder = (maxOrderResponse?['display_order'] as int? ?? -1) + 1;
 
-        await Supabase.instance.client.from('action').insert({
+        await SupabaseManager().dualInsert('action', {
           'actionstring': name,
           'symptom': symptomId,
           'display_order': newOrder,
         });
       } catch (orderError) {
-        await Supabase.instance.client.from('action').insert({
+        await SupabaseManager().dualInsert('action', {
           'actionstring': name,
           'symptom': symptomId,
         });
@@ -449,40 +465,41 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       await _loadActionsForSymptom(symptomId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Action added')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Action added')));
       }
     } catch (e) {
       debugLogError('Error adding action', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _updateAction(int id, int symptomId, String name) async {
     try {
-      await Supabase.instance.client
-          .from('action')
-          .update({'actionstring': name})
-          .eq('id', id);
+      await SupabaseManager().dualUpdate(
+        'action',
+        {'actionstring': name},
+        filters: {'id': id},
+      );
 
       await _loadActionsForSymptom(symptomId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Action updated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Action updated')));
       }
     } catch (e) {
       debugLogError('Error updating action', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -510,20 +527,20 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
     if (confirmed != true) return;
 
     try {
-      await Supabase.instance.client.from('action').delete().eq('id', id);
+      await SupabaseManager().dualDelete('action', filters: {'id': id});
       await _loadActionsForSymptom(symptomId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Action deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Action deleted')));
       }
     } catch (e) {
       debugLogError('Error deleting action', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -566,29 +583,35 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
 
     // Update display_order in database
     try {
-      debugLog('Reordering symptom classes: updating ${_symptomClasses.length} items');
+      debugLog(
+        'Reordering symptom classes: updating ${_symptomClasses.length} items',
+      );
       for (int i = 0; i < _symptomClasses.length; i++) {
         final classId = _symptomClasses[i]['id'] as int;
         final className = _symptomClasses[i]['symptomclassstring'] as String;
         debugLog('Setting display_order=$i for classId=$classId ($className)');
-        await Supabase.instance.client
-            .from('symptomclass')
-            .update({'display_order': i})
-            .eq('id', classId);
+        await SupabaseManager().dualUpdate(
+          'symptomclass',
+          {'display_order': i},
+          filters: {'id': classId},
+        );
       }
       debugLog('Successfully reordered symptom classes');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order saved'), duration: Duration(seconds: 1)),
+          const SnackBar(
+            content: Text('Order saved'),
+            duration: Duration(seconds: 1),
+          ),
         );
       }
     } catch (e) {
       debugLogError('Error reordering symptom classes', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error reordering: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error reordering: $e')));
       }
       // Reload to restore correct order
       if (_selectedCrewTypeId != null) {
@@ -613,24 +636,29 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       final symptoms = _symptomsByClass[classId]!;
       for (int i = 0; i < symptoms.length; i++) {
         final symptomId = symptoms[i]['id'] as int;
-        await Supabase.instance.client
-            .from('symptom')
-            .update({'display_order': i})
-            .eq('id', symptomId);
+        await SupabaseManager().dualUpdate(
+          'symptom',
+          {'display_order': i},
+          filters: {'id': symptomId},
+        );
       }
     } catch (e) {
       debugLogError('Error reordering symptoms', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error reordering: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error reordering: $e')));
       }
       // Reload to restore correct order
       await _loadSymptomsForClass(classId);
     }
   }
 
-  Future<void> _reorderActions(int symptomId, int oldIndex, int newIndex) async {
+  Future<void> _reorderActions(
+    int symptomId,
+    int oldIndex,
+    int newIndex,
+  ) async {
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
@@ -646,17 +674,18 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
       final actions = _actionsBySymptom[symptomId]!;
       for (int i = 0; i < actions.length; i++) {
         final actionId = actions[i]['id'] as int;
-        await Supabase.instance.client
-            .from('action')
-            .update({'display_order': i})
-            .eq('id', actionId);
+        await SupabaseManager().dualUpdate(
+          'action',
+          {'display_order': i},
+          filters: {'id': actionId},
+        );
       }
     } catch (e) {
       debugLogError('Error reordering actions', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error reordering: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error reordering: $e')));
       }
       // Reload to restore correct order
       await _loadActionsForSymptom(symptomId);
@@ -886,11 +915,17 @@ class _SymptomClassCardState extends State<_SymptomClassCard> {
               children: [
                 ReorderableDragStartListener(
                   index: widget.index,
-                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 24),
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: Colors.grey,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: Icon(widget.isExpanded ? Icons.expand_less : Icons.expand_more),
+                  icon: Icon(
+                    widget.isExpanded ? Icons.expand_less : Icons.expand_more,
+                  ),
                   onPressed: widget.onToggleExpansion,
                 ),
               ],
@@ -925,7 +960,11 @@ class _SymptomClassCardState extends State<_SymptomClassCard> {
           if (widget.isExpanded) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.only(left: 56.0, right: 16.0, bottom: 16.0),
+              padding: const EdgeInsets.only(
+                left: 56.0,
+                right: 16.0,
+                bottom: 16.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -935,7 +974,8 @@ class _SymptomClassCardState extends State<_SymptomClassCard> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: widget.symptoms.length,
-                      onReorder: (oldIndex, newIndex) => widget.onReorderSymptoms(classId, oldIndex, newIndex),
+                      onReorder: (oldIndex, newIndex) =>
+                          widget.onReorderSymptoms(classId, oldIndex, newIndex),
                       buildDefaultDragHandles: false,
                       itemBuilder: (context, index) {
                         final symptom = widget.symptoms[index];
@@ -945,9 +985,12 @@ class _SymptomClassCardState extends State<_SymptomClassCard> {
                           index: index,
                           symptom: symptom,
                           classId: classId,
-                          isExpanded: widget.expandedSymptoms.contains(symptomId),
+                          isExpanded: widget.expandedSymptoms.contains(
+                            symptomId,
+                          ),
                           actions: widget.actionsBySymptom[symptomId] ?? [],
-                          onToggleExpansion: () => widget.onToggleSymptomExpansion(symptomId),
+                          onToggleExpansion: () =>
+                              widget.onToggleSymptomExpansion(symptomId),
                           onUpdate: widget.onUpdateSymptom,
                           onDelete: widget.onDeleteSymptom,
                           onAddAction: widget.onAddAction,
@@ -1085,11 +1128,18 @@ class _SymptomCardState extends State<_SymptomCard> {
               children: [
                 ReorderableDragStartListener(
                   index: widget.index,
-                  child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  icon: Icon(widget.isExpanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                  icon: Icon(
+                    widget.isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                  ),
                   onPressed: widget.onToggleExpansion,
                 ),
               ],
@@ -1107,7 +1157,11 @@ class _SymptomCardState extends State<_SymptomCard> {
               children: [
                 ElevatedButton(
                   onPressed: _hasChanges && _controller.text.trim().isNotEmpty
-                      ? () => widget.onUpdate(symptomId, widget.classId, _controller.text.trim())
+                      ? () => widget.onUpdate(
+                          symptomId,
+                          widget.classId,
+                          _controller.text.trim(),
+                        )
                       : null,
                   child: const Text('SAVE'),
                 ),
@@ -1123,7 +1177,11 @@ class _SymptomCardState extends State<_SymptomCard> {
           if (widget.isExpanded) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.only(left: 56.0, right: 16.0, bottom: 16.0),
+              padding: const EdgeInsets.only(
+                left: 56.0,
+                right: 16.0,
+                bottom: 16.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1133,7 +1191,8 @@ class _SymptomCardState extends State<_SymptomCard> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: widget.actions.length,
-                      onReorder: (oldIndex, newIndex) => widget.onReorderActions(symptomId, oldIndex, newIndex),
+                      onReorder: (oldIndex, newIndex) => widget
+                          .onReorderActions(symptomId, oldIndex, newIndex),
                       buildDefaultDragHandles: false,
                       itemBuilder: (context, index) {
                         final action = widget.actions[index];
@@ -1272,7 +1331,11 @@ class _ActionCardState extends State<_ActionCard> {
           children: [
             ElevatedButton(
               onPressed: _hasChanges && _controller.text.trim().isNotEmpty
-                  ? () => widget.onUpdate(actionId, widget.symptomId, _controller.text.trim())
+                  ? () => widget.onUpdate(
+                      actionId,
+                      widget.symptomId,
+                      _controller.text.trim(),
+                    )
                   : null,
               child: const Text('SAVE'),
             ),

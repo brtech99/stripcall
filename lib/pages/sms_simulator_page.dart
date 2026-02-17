@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import '../services/supabase_manager.dart';
 
 /// SMS Simulator page for testing SMS functionality without real phones.
 /// Simulates 5 phones with numbers 2025551001-2025551005.
@@ -69,7 +70,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
 
   Future<void> _loadMessages() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('sms_simulator')
           .select('*')
           .order('created_at', ascending: true);
@@ -103,7 +104,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
     try {
       // Use the database function to get names for each simulated phone
       for (final phone in _simulatedPhones) {
-        final response = await Supabase.instance.client.rpc(
+        final response = await SupabaseManager().rpc(
           'get_reporter_name',
           params: {'reporter_phone': phone},
         );
@@ -130,7 +131,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
   }
 
   void _subscribeToMessages() {
-    final channel = Supabase.instance.client
+    final channel = SupabaseManager().client
         .channel('sms_simulator_changes')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -177,7 +178,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
 
     try {
       // Call the simulator-send-sms edge function which will invoke receive-sms
-      final response = await Supabase.instance.client.functions.invoke(
+      final response = await SupabaseManager().functionInvoke(
         'simulator-send-sms',
         body: {'from': phone, 'to': crewPhone, 'body': message},
       );
@@ -219,7 +220,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
 
     if (confirmed == true) {
       try {
-        await Supabase.instance.client
+        await SupabaseManager()
             .from('sms_simulator')
             .delete()
             .neq('id', 0); // Delete all

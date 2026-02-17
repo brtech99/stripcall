@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/supabase_manager.dart';
 import '../models/crew_message.dart';
 import '../services/notification_service.dart';
 import '../utils/debug_utils.dart';
@@ -80,7 +80,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
 
   Future<void> _loadMessages() async {
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crew_messages')
           .select('''
             *,
@@ -113,7 +113,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
 
     try {
       final latestMessageTime = _messages.first.createdAt;
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('crew_messages')
           .select('''
             *,
@@ -172,7 +172,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
       };
 
       try {
-        await Supabase.instance.client.from('crew_messages').insert(insertData);
+        await SupabaseManager().dualInsert('crew_messages', insertData);
       } catch (insertError) {
         debugLogError('Error inserting crew message', insertError);
         rethrow;

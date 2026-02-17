@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/supabase_manager.dart';
 import '../../routes.dart';
 import '../../widgets/settings_menu.dart';
 import '../../models/event.dart';
@@ -41,14 +41,14 @@ abstract class SelectEventRepository {
 /// Default implementation using Supabase.
 class DefaultSelectEventRepository implements SelectEventRepository {
   @override
-  String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+  String? get currentUserId => SupabaseManager().auth.currentUser?.id;
 
   @override
   Future<List<Event>> fetchCurrentEvents() async {
     final now = DateTime.now();
     final twoDaysFromNow = now.add(const Duration(days: 2));
 
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('events')
         .select()
         .lte('startdatetime', twoDaysFromNow.toIso8601String())
@@ -63,7 +63,7 @@ class DefaultSelectEventRepository implements SelectEventRepository {
     String userId,
     int eventId,
   ) async {
-    return await Supabase.instance.client
+    return await SupabaseManager()
         .from('crewmembers')
         .select('crew:crews!inner(id, crewtype:crewtypes(crewtype))')
         .eq('crewmember', userId)
@@ -74,7 +74,7 @@ class DefaultSelectEventRepository implements SelectEventRepository {
 
   @override
   Future<bool> checkIsSuperUser(String userId) async {
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('users')
         .select('superuser')
         .eq('supabase_id', userId)
@@ -89,7 +89,7 @@ class DefaultSelectEventRepository implements SelectEventRepository {
     // Run both queries in parallel
     final results = await Future.wait([
       // Query 1: Crews where user is crew chief
-      Supabase.instance.client
+      SupabaseManager()
           .from('crews')
           .select(
             'id, event, events!inner(name, startdatetime, enddatetime), crewtype:crewtypes(crewtype)',
@@ -97,7 +97,7 @@ class DefaultSelectEventRepository implements SelectEventRepository {
           .eq('crew_chief', userId)
           .gte('events.enddatetime', now.toIso8601String()),
       // Query 2: All crew memberships for user (with event + type data)
-      Supabase.instance.client
+      SupabaseManager()
           .from('crewmembers')
           .select(
             'crew:crews(id, event, crew_chief, events!inner(name, startdatetime, enddatetime), crewtype:crewtypes(crewtype))',

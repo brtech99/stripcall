@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
@@ -30,7 +30,7 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
         '=== EMAIL CONFIRMATION PAGE: Processing email confirmation ===',
       );
 
-      final user = Supabase.instance.client.auth.currentUser;
+      final user = SupabaseManager().auth.currentUser;
       debugLog('Current user: ${user?.email}');
       debugLog('Email confirmed at: ${user?.emailConfirmedAt}');
 
@@ -52,7 +52,7 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
       }
 
       try {
-        await Supabase.instance.client
+        await SupabaseManager()
             .from('users')
             .select('supabase_id')
             .eq('supabase_id', user.id)
@@ -75,7 +75,7 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
       }
 
       try {
-        final pendingUser = await Supabase.instance.client
+        final pendingUser = await SupabaseManager()
             .from('pending_users')
             .select('firstname, lastname, phone_number')
             .eq('email', user.email ?? '')
@@ -83,7 +83,7 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
 
         if (pendingUser != null) {
           debugLog('Found pending user data, copying to users table...');
-          await Supabase.instance.client.from('users').insert({
+          await SupabaseManager().dualInsert('users', {
             'supabase_id': user.id,
             'firstname': pendingUser['firstname'],
             'lastname': pendingUser['lastname'],
@@ -94,10 +94,10 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
             'User data copied successfully, cleaning up pending_users...',
           );
 
-          await Supabase.instance.client
-              .from('pending_users')
-              .delete()
-              .eq('email', user.email ?? '');
+          await SupabaseManager().dualDelete(
+            'pending_users',
+            filters: {'email': user.email ?? ''},
+          );
 
           debugLog('Pending user data cleaned up successfully');
           setState(() {

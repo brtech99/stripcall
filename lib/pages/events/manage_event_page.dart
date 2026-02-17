@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../crews/name_finder_dialog.dart';
+import '../../services/supabase_manager.dart';
 import '../../models/event.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew.dart';
@@ -35,14 +36,14 @@ abstract class ManageEventRepository {
 /// Default implementation using Supabase.
 class DefaultManageEventRepository implements ManageEventRepository {
   @override
-  String? get currentUserId => Supabase.instance.client.auth.currentUser?.id;
+  String? get currentUserId => SupabaseManager().auth.currentUser?.id;
 
   @override
   Future<bool> checkSuperUser() => auth.isSuperUser();
 
   @override
   Future<List<Crew>> loadCrews(int eventId) async {
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('crews')
         .select('*, crew_chief:users(firstname, lastname)')
         .eq('event', eventId)
@@ -52,7 +53,7 @@ class DefaultManageEventRepository implements ManageEventRepository {
 
   @override
   Future<List<CrewType>> loadCrewTypes() async {
-    final response = await Supabase.instance.client
+    final response = await SupabaseManager()
         .from('crewtypes')
         .select()
         .order('crewtype');
@@ -62,12 +63,13 @@ class DefaultManageEventRepository implements ManageEventRepository {
   @override
   Future<void> saveEvent(Map<String, dynamic> data, {int? eventId}) async {
     if (eventId == null) {
-      await Supabase.instance.client.from('events').insert(data);
+      await SupabaseManager().dualInsert('events', data);
     } else {
-      await Supabase.instance.client
-          .from('events')
-          .update(data)
-          .eq('id', eventId);
+      await SupabaseManager().dualUpdate(
+        'events',
+        data,
+        filters: {'id': eventId},
+      );
     }
   }
 
@@ -77,7 +79,7 @@ class DefaultManageEventRepository implements ManageEventRepository {
     DateTime end,
     int? excludeEventId,
   ) async {
-    var query = Supabase.instance.client
+    var query = SupabaseManager()
         .from('events')
         .select('id, name')
         .eq('use_sms', true)
@@ -93,17 +95,13 @@ class DefaultManageEventRepository implements ManageEventRepository {
 
   @override
   Future<void> addCrew(int eventId, String crewChiefId, int crewTypeId) async {
-    final crewResponse = await Supabase.instance.client
-        .from('crews')
-        .insert({
-          'event': eventId,
-          'crew_chief': crewChiefId,
-          'crew_type': crewTypeId,
-        })
-        .select('id')
-        .single();
+    final crewResponse = (await SupabaseManager().dualInsert('crews', {
+      'event': eventId,
+      'crew_chief': crewChiefId,
+      'crew_type': crewTypeId,
+    })).first;
 
-    await Supabase.instance.client.from('crewmembers').insert({
+    await SupabaseManager().dualInsert('crewmembers', {
       'crew': crewResponse['id'],
       'crewmember': crewChiefId,
     });
@@ -111,56 +109,59 @@ class DefaultManageEventRepository implements ManageEventRepository {
 
   @override
   Future<void> updateCrewChief(int crewId, String crewChiefId) async {
-    await Supabase.instance.client
-        .from('crews')
-        .update({'crew_chief': crewChiefId})
-        .eq('id', crewId);
+    await SupabaseManager().dualUpdate(
+      'crews',
+      {'crew_chief': crewChiefId},
+      filters: {'id': crewId},
+    );
   }
 
   @override
   Future<void> deleteCrew(int crewId) async {
     // Delete related data first
-    final problemIds = await Supabase.instance.client
+    final problemIds = await SupabaseManager()
         .from('problem')
         .select('id')
         .eq('crew', crewId);
 
     if (problemIds.isNotEmpty) {
       final ids = problemIds.map((p) => p['id'] as int).toList();
-      await Supabase.instance.client
-          .from('responders')
-          .delete()
-          .inFilter('problem', ids);
-      await Supabase.instance.client
-          .from('oldproblemsymptom')
-          .delete()
-          .inFilter('problem', ids);
+      await SupabaseManager().dualDeleteIn(
+        'responders',
+        column: 'problem',
+        values: ids,
+      );
+      await SupabaseManager().dualDeleteIn(
+        'oldproblemsymptom',
+        column: 'problem',
+        values: ids,
+      );
     }
 
-    await Supabase.instance.client.from('messages').delete().eq('crew', crewId);
-    await Supabase.instance.client.from('problem').delete().eq('crew', crewId);
-    await Supabase.instance.client
-        .from('crew_messages')
-        .delete()
-        .eq('crew', crewId);
-    await Supabase.instance.client
-        .from('sms_reply_slots')
-        .delete()
-        .eq('crew_id', crewId);
-    await Supabase.instance.client
-        .from('sms_crew_slot_counter')
-        .delete()
-        .eq('crew_id', crewId);
-    await Supabase.instance.client
-        .from('crewmembers')
-        .delete()
-        .eq('crew', crewId);
-    await Supabase.instance.client.from('crews').delete().eq('id', crewId);
+    await SupabaseManager().dualDelete('messages', filters: {'crew': crewId});
+    await SupabaseManager().dualDelete('problem', filters: {'crew': crewId});
+    await SupabaseManager().dualDelete(
+      'crew_messages',
+      filters: {'crew': crewId},
+    );
+    await SupabaseManager().dualDelete(
+      'sms_reply_slots',
+      filters: {'crew_id': crewId},
+    );
+    await SupabaseManager().dualDelete(
+      'sms_crew_slot_counter',
+      filters: {'crew_id': crewId},
+    );
+    await SupabaseManager().dualDelete(
+      'crewmembers',
+      filters: {'crew': crewId},
+    );
+    await SupabaseManager().dualDelete('crews', filters: {'id': crewId});
   }
 
   @override
   Future<int> getCrewProblemCount(int crewId) async {
-    final result = await Supabase.instance.client
+    final result = await SupabaseManager()
         .from('problem')
         .select('id')
         .eq('crew', crewId)
@@ -170,7 +171,7 @@ class DefaultManageEventRepository implements ManageEventRepository {
 
   @override
   Future<int> getCrewMessageCount(int crewId) async {
-    final result = await Supabase.instance.client
+    final result = await SupabaseManager()
         .from('messages')
         .select('id')
         .eq('crew', crewId)
@@ -180,7 +181,7 @@ class DefaultManageEventRepository implements ManageEventRepository {
 
   @override
   Future<int> getCrewCrewMessageCount(int crewId) async {
-    final result = await Supabase.instance.client
+    final result = await SupabaseManager()
         .from('crew_messages')
         .select('id')
         .eq('crew', crewId)

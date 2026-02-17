@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
+import '../services/supabase_manager.dart';
 import '../utils/debug_utils.dart';
 import '../theme/theme.dart';
 import 'adaptive/adaptive.dart';
@@ -36,7 +36,7 @@ class _UserSearchFieldState extends State<UserSearchField> {
     if (widget.initialValue == null) return;
 
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('users')
           .select('supabase_id, firstname, lastname')
           .eq('supabase_id', widget.initialValue!)
@@ -71,7 +71,7 @@ class _UserSearchFieldState extends State<UserSearchField> {
     });
 
     try {
-      final response = await Supabase.instance.client
+      final response = await SupabaseManager()
           .from('users')
           .select('supabase_id, firstname, lastname')
           .or('firstname.ilike.%$query%,lastname.ilike.%$query%')
@@ -79,7 +79,9 @@ class _UserSearchFieldState extends State<UserSearchField> {
 
       if (mounted) {
         setState(() {
-          _filteredUsers = response.map<app_models.User>((json) => app_models.User.fromJson(json)).toList();
+          _filteredUsers = response
+              .map<app_models.User>((json) => app_models.User.fromJson(json))
+              .toList();
           _isLoading = false;
         });
       }

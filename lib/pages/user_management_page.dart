@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/debug_utils.dart';
+import '../services/supabase_manager.dart';
 
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
@@ -47,7 +47,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       );
 
       // Load public and pending users using working Edge Function
-      final publicResponse = await Supabase.instance.client.functions.invoke(
+      final publicResponse = await SupabaseManager().functionInvoke(
         'get-users-data-working',
       );
 
@@ -59,7 +59,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       }
 
       // Load auth users using working auth function
-      final authResponse = await Supabase.instance.client.functions.invoke(
+      final authResponse = await SupabaseManager().functionInvoke(
         'get-auth-users-working',
       );
 
@@ -104,12 +104,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Future<void> _checkCurrentUserStatus() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
+      final user = SupabaseManager().auth.currentUser;
       if (user != null) {
         debugLog('=== CURRENT USER CHECK: User ID: ${user.id} ===');
         debugLog('=== CURRENT USER CHECK: User Email: ${user.email} ===');
 
-        final userData = await Supabase.instance.client
+        final userData = await SupabaseManager()
             .from('users')
             .select('supabase_id, firstname, lastname, superuser, organizer')
             .eq('supabase_id', user.id)
@@ -230,7 +230,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             },
           };
 
-          final response = await Supabase.instance.client.functions.invoke(
+          final response = await SupabaseManager().functionInvoke(
             'update-user',
             body: updateData,
           );
@@ -243,27 +243,29 @@ class _UserManagementPageState extends State<UserManagementPage> {
           }
           break;
         case 'public_users':
-          await Supabase.instance.client
-              .from('users')
-              .update({
-                'firstname': _selectedUser!['firstname'],
-                'lastname': _selectedUser!['lastname'],
-                'phonenbr': _selectedUser!['phonenbr'],
-                'superuser': _selectedUser!['superuser'],
-                'organizer': _selectedUser!['organizer'],
-                'is_sms_mode': _selectedUser!['is_sms_mode'],
-              })
-              .eq('supabase_id', _selectedUser!['supabase_id']);
+          await SupabaseManager().dualUpdate(
+            'users',
+            {
+              'firstname': _selectedUser!['firstname'],
+              'lastname': _selectedUser!['lastname'],
+              'phonenbr': _selectedUser!['phonenbr'],
+              'superuser': _selectedUser!['superuser'],
+              'organizer': _selectedUser!['organizer'],
+              'is_sms_mode': _selectedUser!['is_sms_mode'],
+            },
+            filters: {'supabase_id': _selectedUser!['supabase_id']},
+          );
           break;
         case 'pending_users':
-          await Supabase.instance.client
-              .from('pending_users')
-              .update({
-                'firstname': _selectedUser!['firstname'],
-                'lastname': _selectedUser!['lastname'],
-                'phone_number': _selectedUser!['phone_number'],
-              })
-              .eq('email', _selectedUser!['email']);
+          await SupabaseManager().dualUpdate(
+            'pending_users',
+            {
+              'firstname': _selectedUser!['firstname'],
+              'lastname': _selectedUser!['lastname'],
+              'phone_number': _selectedUser!['phone_number'],
+            },
+            filters: {'email': _selectedUser!['email']},
+          );
           break;
       }
 
@@ -324,7 +326,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             '=== DELETE USER: Attempting to delete auth user with ID: ${_selectedUser!['id']} ===',
           );
 
-          final response = await Supabase.instance.client.functions.invoke(
+          final response = await SupabaseManager().functionInvoke(
             'delete-user',
             body: {'user_id': _selectedUser!['id']},
           );
@@ -341,16 +343,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
           debugLog('=== DELETE USER: Auth user deletion successful ===');
           break;
         case 'public_users':
-          await Supabase.instance.client
-              .from('users')
-              .delete()
-              .eq('supabase_id', _selectedUser!['supabase_id']);
+          await SupabaseManager().dualDelete(
+            'users',
+            filters: {'supabase_id': _selectedUser!['supabase_id']},
+          );
           break;
         case 'pending_users':
-          await Supabase.instance.client
-              .from('pending_users')
-              .delete()
-              .eq('email', _selectedUser!['email']);
+          await SupabaseManager().dualDelete(
+            'pending_users',
+            filters: {'email': _selectedUser!['email']},
+          );
           break;
       }
 
@@ -394,10 +396,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
             }
             return;
           case 'public_users':
-            await Supabase.instance.client.from('users').insert(result);
+            await SupabaseManager().dualInsert('users', result);
             break;
           case 'pending_users':
-            await Supabase.instance.client.from('pending_users').insert(result);
+            await SupabaseManager().dualInsert('pending_users', result);
             break;
         }
 
@@ -983,7 +985,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
     });
 
     try {
-      final response = await Supabase.instance.client.functions.invoke(
+      final response = await SupabaseManager().functionInvoke(
         'create-user',
         body: {
           'email': _emailController.text.trim(),

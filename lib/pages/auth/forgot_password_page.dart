@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes.dart';
+import '../../services/supabase_manager.dart';
 import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
@@ -53,7 +54,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       debugLog('Attempting to send password reset email to: $email');
 
-      await Supabase.instance.client.auth.resetPasswordForEmail(
+      await SupabaseManager().auth.resetPasswordForEmail(
         email,
         redirectTo: 'https://stripcall.us/auth/reset-password',
       );

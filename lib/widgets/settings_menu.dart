@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/supabase_manager.dart';
 import '../utils/auth_helpers.dart';
 import '../routes.dart';
 import '../pages/database_page.dart';
@@ -83,11 +81,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
               context.push(Routes.smsSimulator);
               break;
             case 'logout':
-              Supabase.instance.client.auth.signOut();
+              SupabaseManager().auth.signOut();
               context.go(Routes.login);
-              break;
-            case 'about':
-              _showAboutDialog();
               break;
             case 'request_permission':
               await _requestNotificationPermission();
@@ -168,18 +163,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
             );
           }
 
-          // Add About option for all users
-          items.add(
-            const PopupMenuItem<String>(
-              key: ValueKey('settings_menu_about'),
-              value: 'about',
-              child: ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('About'),
-              ),
-            ),
-          );
-
           // Always add logout option
           items.add(
             const PopupMenuItem<String>(
@@ -222,46 +205,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  Future<void> _showAboutDialog() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    final version = '${packageInfo.version}+${packageInfo.buildNumber}';
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('StripCall'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Version $version'),
-            const SizedBox(height: 16),
-            const Text('Copyright (c) 2026 Brian Rosen'),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () => launchUrl(Uri.parse('mailto:brian.rosen@gmail.com')),
-              child: const Text(
-                'Support: brian.rosen@gmail.com',
-                style: TextStyle(
-                  color: Colors.blue,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _testNotification() async {
     try {
       debugLog('Testing notification...');
@@ -274,7 +217,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           web_notifications.showTestNotification(
             'Test Notification',
             'This is a test notification from StripCall!',
-            '/app/icons/Icon-192.png',
+            '/icons/Icon-192.png',
           );
           debugLog('Test notification sent');
 

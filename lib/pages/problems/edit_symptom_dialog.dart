@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_manager.dart';
 import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
@@ -110,7 +110,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
 
   Future<void> _preselectCurrentSymptom() async {
     try {
-      final symptomResponse = await Supabase.instance.client
+      final symptomResponse = await SupabaseManager()
           .from('symptom')
           .select('symptomclass')
           .eq('id', widget.currentSymptomId)
@@ -352,10 +352,10 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
     });
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = SupabaseManager().auth.currentUser?.id;
       if (userId == null) throw Exception('User not logged in');
 
-      final problemResponse = await Supabase.instance.client
+      final problemResponse = await SupabaseManager()
           .from('problem')
           .select('crew, strip, originator')
           .eq('id', widget.problemId)
@@ -373,14 +373,14 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         newSymptomName = widget.currentSymptomString ?? 'Unknown';
       }
 
-      final userResponse = await Supabase.instance.client
+      final userResponse = await SupabaseManager()
           .from('users')
           .select('firstname, lastname')
           .eq('supabase_id', userId)
           .single();
 
       if (symptomChanged) {
-        await Supabase.instance.client.from('oldproblemsymptom').insert({
+        await SupabaseManager().dualInsert('oldproblemsymptom', {
           'problem': widget.problemId,
           'oldsymptom': widget.currentSymptomId,
           'changedby': userId,
@@ -396,10 +396,11 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
         updateData['strip'] = newStrip;
       }
 
-      await Supabase.instance.client
-          .from('problem')
-          .update(updateData)
-          .eq('id', widget.problemId);
+      await SupabaseManager().dualUpdate(
+        'problem',
+        updateData,
+        filters: {'id': widget.problemId},
+      );
 
       // Capture values needed for notification before popping
       final changerName =
