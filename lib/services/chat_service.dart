@@ -132,13 +132,13 @@ class ChatService {
       // Look up strip number and sender name for notification title
       String title = 'New Message';
       try {
-        final results = await Future.wait([
-          Supabase.instance.client
+        final results = await Future.wait<Map<String, dynamic>?>([
+          SupabaseManager()
               .from('problem')
               .select('strip')
               .eq('id', problemId)
               .maybeSingle(),
-          Supabase.instance.client
+          SupabaseManager()
               .from('users')
               .select('firstname, lastname')
               .eq('supabase_id', senderId)
