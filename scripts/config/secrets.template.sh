@@ -6,6 +6,17 @@
 export SUPABASE_URL="your-supabase-url-here"
 export SUPABASE_ANON_KEY="your-supabase-anon-key-here"
 
+# --- Supabase Postgres (direct connection for backups) ---
+export SUPABASE_DB_HOST="db.your-project-ref.supabase.co"
+export SUPABASE_DB_PORT="5432"
+export SUPABASE_DB_NAME="postgres"
+export SUPABASE_DB_USER="postgres"
+export SUPABASE_DB_PASS="your-database-password-here"
+
+# --- Twilio ---
+export TWILIO_ACCOUNT_SID="your-twilio-account-sid-here"
+export TWILIO_AUTH_TOKEN="your-twilio-auth-token-here"
+
 # --- Hostinger FTP ---
 export HOSTINGER_FTP_HOST="your-ftp-host-here"
 export HOSTINGER_FTP_USER="your-ftp-username-here"
