@@ -109,7 +109,7 @@ class AppButton extends StatelessWidget {
     // Check buttonKey first, then fall back to the widget's own key
     final effectiveKey = buttonKey ?? key;
     final keyId = effectiveKey is ValueKey<String>
-        ? (effectiveKey as ValueKey<String>).value
+        ? effectiveKey.value
         : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: button);
@@ -233,7 +233,7 @@ class AppIconButton extends StatelessWidget {
     // Check buttonKey first, then fall back to the widget's own key
     final effectiveKey = buttonKey ?? key;
     final keyId = effectiveKey is ValueKey<String>
-        ? (effectiveKey as ValueKey<String>).value
+        ? effectiveKey.value
         : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: button);

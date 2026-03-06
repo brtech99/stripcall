@@ -362,7 +362,6 @@ void main() {
     });
 
     testWidgets('retry button reloads events after error', (tester) async {
-      int fetchCount = 0;
       final repo = MockEventsRepository(mockError: 'Network error');
 
       // Use a custom mock that tracks calls

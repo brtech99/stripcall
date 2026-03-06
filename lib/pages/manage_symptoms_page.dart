@@ -715,7 +715,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: DropdownButtonFormField<int>(
-              value: _selectedCrewTypeId,
+              initialValue: _selectedCrewTypeId,
               decoration: const InputDecoration(
                 labelText: 'Crew Type',
                 border: OutlineInputBorder(),

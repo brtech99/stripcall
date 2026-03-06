@@ -144,8 +144,8 @@ class ChatService {
               .eq('supabase_id', senderId)
               .maybeSingle(),
         ]);
-        final problem = results[0] as Map<String, dynamic>?;
-        final user = results[1] as Map<String, dynamic>?;
+        final problem = results[0];
+        final user = results[1];
         final strip = problem?['strip'];
         final name = user != null
             ? '${user['firstname'] ?? ''} ${user['lastname'] ?? ''}'.trim()

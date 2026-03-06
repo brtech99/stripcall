@@ -12,7 +12,7 @@
 /// AppSpacing.md
 /// AppTypography.titleMedium(context)
 /// ```
-library theme;
+library;
 
 export 'app_colors.dart';
 export 'app_spacing.dart';

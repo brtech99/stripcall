@@ -169,7 +169,6 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
   late final SelectEventRepository _repo;
   List<Event> _events = [];
   List<EventCrewRole> _crewRoles = [];
-  bool _isSuperUser = false;
   bool _isLoading = false;
   String? _error;
 
@@ -243,7 +242,7 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
       setState(() {
         _events = events;
         _crewRoles = crewRoles;
-        _isSuperUser = superUser;
+
         _isLoading = false;
       });
     } catch (e) {
@@ -410,9 +409,6 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
               ),
             ),
             ...upcoming.map((role) {
-              final label = role.isCrewChief
-                  ? 'Crew Chief - ${role.crewTypeName}'
-                  : role.crewTypeName;
               return AppListTile(
                 key: ValueKey(
                   'upcoming_crew_${role.eventId}_${role.crewTypeName}',

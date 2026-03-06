@@ -9,7 +9,7 @@
 /// AppTextField(controller: ctrl, label: 'Email')
 /// AppScaffold(title: 'Page', body: content)
 /// ```
-library adaptive;
+library;
 
 export 'app_button.dart';
 export 'app_card.dart';

@@ -127,7 +127,7 @@ class AppCard extends StatelessWidget {
     // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
     final effectiveKey = cardKey ?? key;
     final keyId = effectiveKey is ValueKey<String>
-        ? (effectiveKey as ValueKey<String>).value
+        ? effectiveKey.value
         : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: card);

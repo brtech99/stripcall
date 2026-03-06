@@ -84,7 +84,7 @@ class AppTextField extends StatelessWidget {
     // Check fieldKey first, then fall back to the widget's own key
     final effectiveKey = fieldKey ?? key;
     final keyId = effectiveKey is ValueKey<String>
-        ? (effectiveKey as ValueKey<String>).value
+        ? effectiveKey.value
         : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: field);

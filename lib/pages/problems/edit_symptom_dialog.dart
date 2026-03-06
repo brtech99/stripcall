@@ -512,7 +512,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
                             key: const ValueKey('edit_symptom_class_dropdown'),
-                            value: _selectedSymptomClass,
+                            initialValue: _selectedSymptomClass,
                             decoration: const InputDecoration(
                               labelText: 'Problem Area',
                             ),
@@ -553,7 +553,7 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                           width: double.infinity,
                           child: DropdownButtonFormField<String>(
                             key: const ValueKey('edit_symptom_dropdown'),
-                            value: _selectedSymptom,
+                            initialValue: _selectedSymptom,
                             decoration: const InputDecoration(
                               labelText: 'Symptom',
                             ),

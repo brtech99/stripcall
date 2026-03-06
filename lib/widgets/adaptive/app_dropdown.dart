@@ -176,7 +176,7 @@ class AppDropdown<T> extends StatelessWidget {
   Widget _buildMaterialDropdown(BuildContext context) {
     return DropdownButtonFormField<T>(
       key: dropdownKey,
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

@@ -416,47 +416,49 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
                 AppSpacing.verticalSm,
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: _crews.map((crew) {
-                    final crewType = crew['crewtype']?['crewtype'] ?? '';
-                    final crewId = crew['id'] as int;
-                    return Semantics(
-                      identifier: 'new_problem_crew_radio_$crewId',
-                      child: IntrinsicWidth(
-                        child: RadioListTile<int>(
-                          key: ValueKey('new_problem_crew_radio_$crewId'),
-                          title: Text(
-                            crewType.isNotEmpty ? crewType : 'Unknown Crew',
+                RadioGroup<int>(
+                  groupValue: _selectedCrewId,
+                  onChanged: (value) async {
+                    setState(() {
+                      _selectedCrewId = value;
+                      _selectedSymptomClass = null;
+                      _selectedSymptom = null;
+                    });
+                    if (value != null) {
+                      // Get the crew type for the selected crew and load symptom classes
+                      final selectedCrew = _crews.firstWhere(
+                        (c) => c['id'] == value,
+                      );
+                      final crewTypeName =
+                          selectedCrew['crewtype']?['crewtype']
+                              as String?;
+                      await _loadSymptomClassesForCrewType(
+                        crewTypeName,
+                      );
+                    }
+                  },
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _crews.map((crew) {
+                      final crewType = crew['crewtype']?['crewtype'] ?? '';
+                      final crewId = crew['id'] as int;
+                      return Semantics(
+                        identifier: 'new_problem_crew_radio_$crewId',
+                        child: IntrinsicWidth(
+                          child: RadioListTile<int>(
+                            key: ValueKey('new_problem_crew_radio_$crewId'),
+                            title: Text(
+                              crewType.isNotEmpty ? crewType : 'Unknown Crew',
+                            ),
+                            value: crewId,
+                            contentPadding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
                           ),
-                          value: crewId,
-                          groupValue: _selectedCrewId,
-                          onChanged: (value) async {
-                            setState(() {
-                              _selectedCrewId = value;
-                              _selectedSymptomClass = null;
-                              _selectedSymptom = null;
-                            });
-                            if (value != null) {
-                              // Get the crew type for the selected crew and load symptom classes
-                              final selectedCrew = _crews.firstWhere(
-                                (c) => c['id'] == value,
-                              );
-                              final crewTypeName =
-                                  selectedCrew['crewtype']?['crewtype']
-                                      as String?;
-                              await _loadSymptomClassesForCrewType(
-                                crewTypeName,
-                              );
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
                 AppSpacing.verticalMd,
                 _buildStripSelector(),
@@ -466,7 +468,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                         key: const ValueKey(
                           'new_problem_symptom_class_dropdown_disabled',
                         ),
-                        value: null,
+                        initialValue: null,
                         decoration: const InputDecoration(
                           labelText: 'Problem Area',
                         ),
@@ -487,7 +489,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                           key: const ValueKey(
                             'new_problem_symptom_class_dropdown',
                           ),
-                          value: _selectedSymptomClass,
+                          initialValue: _selectedSymptomClass,
                           decoration: const InputDecoration(
                             labelText: 'Problem Area',
                           ),
@@ -513,7 +515,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   identifier: 'new_problem_symptom_dropdown',
                   child: DropdownButtonFormField<String>(
                     key: const ValueKey('new_problem_symptom_dropdown'),
-                    value: _selectedSymptom,
+                    initialValue: _selectedSymptom,
                     decoration: const InputDecoration(labelText: 'Problem'),
                     items: _symptoms.map((symptom) {
                       return DropdownMenuItem(

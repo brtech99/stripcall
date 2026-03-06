@@ -646,7 +646,7 @@ class _ManageEventPageState extends State<ManageEventPage> {
             identifier: 'manage_event_strip_numbering_dropdown',
             child: DropdownButtonFormField<String>(
               key: const ValueKey('manage_event_strip_numbering_dropdown'),
-              value: _stripNumbering,
+              initialValue: _stripNumbering,
               decoration: const InputDecoration(labelText: 'Strip Numbering'),
               items: const [
                 DropdownMenuItem(value: 'Pods', child: Text('Pods')),

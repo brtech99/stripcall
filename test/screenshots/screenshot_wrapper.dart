@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:stripcall/theme/theme.dart';
 
 /// Wrapper for rendering screens in isolation for screenshots.
@@ -75,10 +74,10 @@ class ScreenshotWrapper extends StatelessWidget {
 /// Extension to easily capture both platform variants
 extension ScreenshotVariants on Widget {
   Widget wrapForMaterialScreenshot({bool isDarkMode = false}) {
-    return ScreenshotWrapper.material(child: this, isDarkMode: isDarkMode);
+    return ScreenshotWrapper.material(isDarkMode: isDarkMode, child: this);
   }
 
   Widget wrapForCupertinoScreenshot({bool isDarkMode = false}) {
-    return ScreenshotWrapper.cupertino(child: this, isDarkMode: isDarkMode);
+    return ScreenshotWrapper.cupertino(isDarkMode: isDarkMode, child: this);
   }
 }

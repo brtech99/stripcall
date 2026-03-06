@@ -36,7 +36,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
   final Map<String, ScrollController> _scrollControllers = {};
   final Map<String, String?> _phoneNames = {}; // Cache for phone owner names
 
-  List<RealtimeChannel> _subscriptions = [];
+  final List<RealtimeChannel> _subscriptions = [];
   bool _isLoading = true;
 
   @override
@@ -337,7 +337,7 @@ class _SmsSimulatorPageState extends State<SmsSimulatorPage> {
                 // Crew phone selector
                 DropdownButtonFormField<String>(
                   key: ValueKey('sms_simulator_crew_dropdown_$phoneIndex'),
-                  value: _selectedCrewPhone[phone],
+                  initialValue: _selectedCrewPhone[phone],
                   decoration: const InputDecoration(
                     labelText: 'Send to',
                     isDense: true,

@@ -225,7 +225,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                               key: const ValueKey(
                                 'resolve_problem_action_dropdown',
                               ),
-                              value: _selectedAction,
+                              initialValue: _selectedAction,
                               decoration: const InputDecoration(
                                 labelText: 'Resolution',
                               ),
