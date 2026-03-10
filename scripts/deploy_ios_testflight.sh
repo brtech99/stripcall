@@ -124,7 +124,7 @@ flutter build ios --release \
     --dart-define=SUPABASE_URL="$SUPABASE_URL" \
     --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
-# Archive
+# Archive (includes watchOS companion app via Embed Watch Content build phase)
 echo ""
 echo "Step 3/4: Creating Xcode archive..."
 rm -rf "$ARCHIVE_PATH"

@@ -11,6 +11,7 @@ import '../../services/problem_service.dart';
 import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../services/watch_service.dart';
 
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
@@ -215,6 +216,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
     await _loadCrewInfo();
     await _loadProblems();
 
+    // Initialize watch bridge and wire up "On my way" from watch
+    WatchService().initialize();
+    WatchService().onWatchGoOnMyWay = (problemId) => _goOnMyWay(problemId);
+    WatchService().syncCredentials();
+
     _updateTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _checkForUpdates(),
@@ -298,6 +304,9 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _loadResponders() async {
     final responders = await _repo.loadResponders(_state.problems);
     _updateState(_state.copyWith(responders: responders));
+    // Push updated problem state and credentials to Apple Watch
+    WatchService().updateProblems(_state.problems, _state.responders);
+    WatchService().syncCredentials();
   }
 
   Future<void> _checkForUpdates() async {

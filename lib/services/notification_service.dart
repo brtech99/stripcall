@@ -545,6 +545,22 @@ class NotificationService {
           .map((member) => member['crewmember'] as String)
           .toList();
 
+      // Add superusers so they get notifications for all crews
+      try {
+        final superusers = await SupabaseManager()
+            .from('users')
+            .select('supabase_id')
+            .eq('superuser', true);
+        for (final su in superusers) {
+          final suId = su['supabase_id'] as String;
+          if (!userIds.contains(suId)) {
+            userIds.add(suId);
+          }
+        }
+      } catch (e) {
+        debugLogError('Error fetching superusers for notifications', e);
+      }
+
       // Add reporter if includeReporter is true and reporter is not already in the list
       if (includeReporter &&
           reporterId != null &&
