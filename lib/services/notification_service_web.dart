@@ -3,10 +3,10 @@ import 'dart:js_interop';
 
 // JS interop declarations for web notifications
 @JS('initializeNotifications')
-external JSAny? _initializeNotifications();
+external JSPromise? _initializeNotifications();
 
 @JS('getFCMToken')
-external JSAny? _getFCMToken();
+external JSPromise? _getFCMToken();
 
 bool shouldRequestPermission() => true;
 
@@ -20,8 +20,7 @@ Future<void> initializeWebNotifications() async {
   try {
     final result = _initializeNotifications();
     if (result != null) {
-      // Wait for the promise to resolve
-      await Future.delayed(const Duration(milliseconds: 500));
+      await result.toDart;
     }
   } catch (e) {
     // Silently fail - JS function may not exist
@@ -30,23 +29,14 @@ Future<void> initializeWebNotifications() async {
 
 Future<String?> getFCMTokenFromJS() async {
   try {
-    final jsToken = _getFCMToken();
-    if (jsToken != null) {
-      // Try to convert to string
-      final tokenStr = jsToken.toString();
-      if (tokenStr.isNotEmpty && tokenStr != 'null' && tokenStr != 'undefined') {
-        return tokenStr;
-      }
-    }
-
-    // Wait and retry
-    await Future.delayed(const Duration(seconds: 2));
-
-    final retryToken = _getFCMToken();
-    if (retryToken != null) {
-      final retryStr = retryToken.toString();
-      if (retryStr.isNotEmpty && retryStr != 'null' && retryStr != 'undefined') {
-        return retryStr;
+    final jsPromise = _getFCMToken();
+    if (jsPromise != null) {
+      final result = await jsPromise.toDart;
+      if (result != null) {
+        final tokenStr = (result as JSString).toDart;
+        if (tokenStr.isNotEmpty && tokenStr != 'null' && tokenStr != 'undefined') {
+          return tokenStr;
+        }
       }
     }
   } catch (e) {

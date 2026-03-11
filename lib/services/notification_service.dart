@@ -552,8 +552,8 @@ class NotificationService {
             .select('supabase_id')
             .eq('superuser', true);
         for (final su in superusers) {
-          final suId = su['supabase_id'] as String;
-          if (!userIds.contains(suId)) {
+          final suId = su['supabase_id'] as String?;
+          if (suId != null && suId.isNotEmpty && !userIds.contains(suId)) {
             userIds.add(suId);
           }
         }
@@ -568,8 +568,8 @@ class NotificationService {
         userIds.add(reporterId);
       }
 
-      // Remove sender from notifications (they don't need to be notified of their own message)
-      userIds.removeWhere((id) => id == senderId);
+      // Remove sender and any empty/invalid IDs
+      userIds.removeWhere((id) => id == senderId || id.isEmpty);
 
       try {
         return await sendNotification(
@@ -653,18 +653,14 @@ class NotificationService {
     }
   }
 
-  /// Clean up device tokens and save current user's token
+  /// Save current user's token (upsert - the unique constraint handles duplicates)
   Future<void> _cleanupAndSaveToken() async {
     try {
-      // Clean up device tokens
-      await dispose();
-
-      // Save current user's token
       if (_fcmToken != null) {
         await _saveTokenToDatabase(_fcmToken!);
       }
     } catch (e) {
-      // Error in cleanup and save token
+      // Error saving token
     }
   }
 }

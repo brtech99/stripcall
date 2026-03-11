@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/problem_with_details.dart';
 import '../services/supabase_manager.dart';
@@ -21,7 +21,7 @@ class WatchService {
 
   /// Start listening for watch actions. Safe to call multiple times.
   void initialize() {
-    if (_isListening || !Platform.isIOS) return;
+    if (_isListening || kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
     _isListening = true;
 
     _channel.setMethodCallHandler((call) async {
@@ -43,7 +43,7 @@ class WatchService {
   /// Push auth credentials to native iOS code so it can call the
   /// go-on-my-way edge function directly (even when Flutter is suspended).
   Future<void> syncCredentials() async {
-    if (!Platform.isIOS) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
 
     final session = SupabaseManager().auth.currentSession;
     final userId = SupabaseManager().auth.currentUser?.id;
@@ -70,7 +70,7 @@ class WatchService {
     List<ProblemWithDetails> problems,
     Map<int, List<Map<String, dynamic>>> responders,
   ) async {
-    if (!Platform.isIOS) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
 
     try {
       final watchProblems = problems.map((p) {
