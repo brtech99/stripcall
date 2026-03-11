@@ -50,6 +50,7 @@ void main() {
       // ========================================================================
       // PRE-STEP: Ensure we're logged out (in case previous run left session)
       // ========================================================================
+      print('TEST: PRE-STEP: Ensuring clean state (logout if needed)');
       debugPrint('=== PRE-STEP: Ensuring clean state (logout if needed) ===');
 
       // Check if we're already logged in by looking for a settings/menu button
@@ -83,12 +84,14 @@ void main() {
       // ========================================================================
       // STEP 1: Log in as superuser
       // ========================================================================
+      print('TEST: STEP 1: Logging in as superuser');
       debugPrint('=== STEP 1: Logging in as superuser ===');
       await _login(tester, TestConfig.testUsers.superuser);
 
       // ========================================================================
       // STEPS 2-5: Create Event2 with Medical and Armorer crews
       // ========================================================================
+      print('TEST: STEPS 2-5: Creating Event2 with crews');
       debugPrint('=== STEPS 2-5: Creating Event2 with crews ===');
 
       // Navigate to Manage Events
@@ -253,6 +256,7 @@ void main() {
       // ========================================================================
       // STEPS 6-10: Add crew members
       // ========================================================================
+      print('TEST: STEPS 6-10: Adding crew members');
       debugPrint('=== STEPS 6-10: Adding crew members ===');
 
       // After adding crews, we need to navigate to Manage Crews
@@ -312,6 +316,7 @@ void main() {
       // ========================================================================
       // STEPS 17-19: Select Event2 and Medical crew
       // ========================================================================
+      print('TEST: STEPS 17-19: Selecting Event2 and Medical crew');
       debugPrint('=== STEPS 17-19: Selecting Event2 and Medical crew ===');
 
       // Navigate to home/event selection - go back from crew management
@@ -359,6 +364,7 @@ void main() {
       // ========================================================================
       // STEPS 20-25: Set up SMS Simulator
       // ========================================================================
+      print('TEST: STEPS 20-25: Setting up SMS Simulator');
       debugPrint('=== STEPS 20-25: Setting up SMS Simulator ===');
 
       await tester.tap(find.byKey(const ValueKey('settings_menu_button')));
@@ -402,6 +408,7 @@ void main() {
       // ========================================================================
       // STEPS 28-29: Navigate to Problems and expand
       // ========================================================================
+      print('TEST: STEPS 28-29: Navigating to Problems page');
       debugPrint('=== STEPS 28-29: Navigating to Problems page ===');
 
       // Navigate back to problem list
@@ -463,8 +470,8 @@ void main() {
 
       // Check if we're on the problems page - look for the Report Problem button as indicator
       final reportButton = find.byKey(const ValueKey('problems_report_button'));
-      debugPrint(
-        'Report Problem button found: ${reportButton.evaluate().length} widgets',
+      print(
+        'TEST: Report Problem button found: ${reportButton.evaluate().length} widgets',
       );
       expect(
         reportButton,
@@ -475,18 +482,18 @@ void main() {
       // Check if any problems exist (SMS might not have created any if edge runtime is not running)
       final problemsList = find.byKey(const ValueKey('problems_list'));
       final noProblemsText = find.text('No problems reported yet');
-      debugPrint(
-        'Problems list found: ${problemsList.evaluate().length} widgets',
+      print(
+        'TEST: Problems list found: ${problemsList.evaluate().length} widgets',
       );
-      debugPrint(
-        'No problems text found: ${noProblemsText.evaluate().length} widgets',
+      print(
+        'TEST: No problems text found: ${noProblemsText.evaluate().length} widgets',
       );
 
       // If no problems exist, create one via Report Problem button
       if (problemsList.evaluate().isEmpty &&
           noProblemsText.evaluate().isNotEmpty) {
-        debugPrint(
-          '=== No problems from SMS (edge runtime likely not running) - creating via Report Problem ===',
+        print(
+          'TEST: No problems from SMS - creating via Report Problem',
         );
 
         // Create a problem using the Report Problem dialog
@@ -497,40 +504,34 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
         await _pumpForDuration(tester, const Duration(seconds: 1));
 
-        // First, select Medical crew using the radio button key (crew ID 3 for Medical in Event2)
-        // Try crew ID 3 first, then fall back to finding by text
-        var medicalCrewRadio = find.byKey(
-          const ValueKey('new_problem_crew_radio_3'),
-        );
-        debugPrint(
-          'Medical crew radio (id=3): ${medicalCrewRadio.evaluate().length} widgets',
-        );
-
-        if (medicalCrewRadio.evaluate().isEmpty) {
-          // Try crew ID 4 (in case order is different)
-          medicalCrewRadio = find.byKey(
-            const ValueKey('new_problem_crew_radio_4'),
+        // Try to find crew radio buttons dynamically
+        // Crew IDs depend on seed data + what was created during the test
+        Finder? foundCrewRadio;
+        for (int id = 1; id <= 10; id++) {
+          final radio = find.byKey(
+            ValueKey('new_problem_crew_radio_$id'),
           );
-          debugPrint(
-            'Trying crew radio (id=4): ${medicalCrewRadio.evaluate().length} widgets',
-          );
+          if (radio.evaluate().isNotEmpty) {
+            print('TEST: Found crew radio id=$id');
+            foundCrewRadio ??= radio; // Use the first one found
+          }
         }
 
-        if (medicalCrewRadio.evaluate().isNotEmpty) {
-          await _scrollUntilVisible(tester, medicalCrewRadio);
-          await tester.tap(medicalCrewRadio);
+        if (foundCrewRadio != null) {
+          await _scrollUntilVisible(tester, foundCrewRadio);
+          await tester.tap(foundCrewRadio);
           await _pumpForDuration(tester, const Duration(seconds: 1));
-          debugPrint('Selected crew via radio button');
+          print('TEST: Selected crew via radio button');
         } else {
           // Fall back to tapping on RadioListTile by finding it in the widget tree
           final radioListTiles = find.byType(RadioListTile<int>);
-          debugPrint(
-            'RadioListTiles found: ${radioListTiles.evaluate().length}',
+          print(
+            'TEST: No crew radio keys found. RadioListTiles: ${radioListTiles.evaluate().length}',
           );
           if (radioListTiles.evaluate().isNotEmpty) {
             await tester.tap(radioListTiles.first);
             await _pumpForDuration(tester, const Duration(seconds: 1));
-            debugPrint('Selected first crew via RadioListTile');
+            print('TEST: Selected first crew via RadioListTile');
           }
         }
 
@@ -540,24 +541,24 @@ void main() {
 
         // Select strip A1 (tap A pod, tap 1) - use ChoiceChip
         final choiceChips = find.byType(ChoiceChip);
-        debugPrint(
-          'ChoiceChips in dialog: ${choiceChips.evaluate().length} widgets',
+        print(
+          'TEST: ChoiceChips in dialog: ${choiceChips.evaluate().length}',
         );
 
         final podA = find.text('A');
-        debugPrint('Pod A in dialog: ${podA.evaluate().length} widgets');
+        print('TEST: Pod A: ${podA.evaluate().length}');
         if (podA.evaluate().isNotEmpty) {
           await _scrollUntilVisible(tester, podA);
           await tester.tap(podA.first);
           await _pumpForDuration(tester, const Duration(seconds: 1));
-          debugPrint('Selected pod A');
+          print('TEST: Selected pod A');
 
           final strip1 = find.text('1');
-          debugPrint('Strip 1 in dialog: ${strip1.evaluate().length} widgets');
+          print('TEST: Strip 1: ${strip1.evaluate().length}');
           if (strip1.evaluate().isNotEmpty) {
             await tester.tap(strip1.first);
             await _pumpForDuration(tester, const Duration(seconds: 1));
-            debugPrint('Selected strip 1 - now A1');
+            print('TEST: Selected strip 1 - now A1');
           }
         }
 
@@ -565,22 +566,24 @@ void main() {
         final symptomClassDropdownCreate = find.byKey(
           const ValueKey('new_problem_symptom_class_dropdown'),
         );
-        debugPrint(
-          'Symptom class dropdown: ${symptomClassDropdownCreate.evaluate().length} widgets',
+        print(
+          'TEST: Symptom class dropdown: ${symptomClassDropdownCreate.evaluate().length}',
         );
         if (symptomClassDropdownCreate.evaluate().isNotEmpty) {
           await _scrollUntilVisible(tester, symptomClassDropdownCreate);
           await tester.tap(symptomClassDropdownCreate);
           await _pumpForDuration(tester, const Duration(seconds: 1));
           final headOptionCreate = find.text('Head');
-          debugPrint(
-            'Head option: ${headOptionCreate.evaluate().length} widgets',
+          print(
+            'TEST: Head option: ${headOptionCreate.evaluate().length}',
           );
           if (headOptionCreate.evaluate().isNotEmpty) {
             await tester.tap(headOptionCreate.last);
             await _pumpForDuration(tester, const Duration(seconds: 1));
-            debugPrint('Selected Head');
+            print('TEST: Selected Head');
           }
+        } else {
+          print('TEST: WARNING - symptom class dropdown NOT found (crew not selected?)');
         }
 
         // Wait for symptoms to load
@@ -591,21 +594,23 @@ void main() {
         final symptomDropdownCreate = find.byKey(
           const ValueKey('new_problem_symptom_dropdown'),
         );
-        debugPrint(
-          'Symptom dropdown: ${symptomDropdownCreate.evaluate().length} widgets',
+        print(
+          'TEST: Symptom dropdown: ${symptomDropdownCreate.evaluate().length}',
         );
         if (symptomDropdownCreate.evaluate().isNotEmpty) {
           await _scrollUntilVisible(tester, symptomDropdownCreate);
           await tester.tap(symptomDropdownCreate);
           await _pumpForDuration(tester, const Duration(seconds: 1));
           final concussionCreate = find.text('Concussion');
-          debugPrint(
-            'Concussion option: ${concussionCreate.evaluate().length} widgets',
+          print(
+            'TEST: Concussion option: ${concussionCreate.evaluate().length}',
           );
           if (concussionCreate.evaluate().isNotEmpty) {
             await tester.tap(concussionCreate.last);
             await _pumpForDuration(tester, const Duration(seconds: 1));
-            debugPrint('Selected Concussion');
+            print('TEST: Selected Concussion');
+          } else {
+            print('TEST: WARNING - Concussion option NOT found');
           }
         }
 
@@ -613,15 +618,19 @@ void main() {
         final submitCreate = find.byKey(
           const ValueKey('new_problem_submit_button'),
         );
-        debugPrint('Submit button: ${submitCreate.evaluate().length} widgets');
+        print('TEST: Submit button: ${submitCreate.evaluate().length}');
         if (submitCreate.evaluate().isNotEmpty) {
           await _scrollUntilVisible(tester, submitCreate);
           await tester.tap(submitCreate);
           await _pumpForDuration(tester, const Duration(seconds: 3));
-          debugPrint('Submitted problem');
+          print('TEST: Submitted problem');
+        } else {
+          print('TEST: WARNING - Submit button NOT found');
         }
 
-        debugPrint('=== Problem creation dialog completed ===');
+        print('TEST: Problem creation dialog completed');
+      } else {
+        print('TEST: Problems already exist or no "No problems" text found - skipping creation');
       }
 
       // Now verify we have problems
@@ -631,8 +640,8 @@ void main() {
       final problemsListAfterCreate = find.byKey(
         const ValueKey('problems_list'),
       );
-      debugPrint(
-        'Problems list after creation: ${problemsListAfterCreate.evaluate().length} widgets',
+      print(
+        'TEST: Problems list after creation: ${problemsListAfterCreate.evaluate().length}',
       );
       expect(
         problemsListAfterCreate,

@@ -294,7 +294,9 @@ async function sendFCMNotification(
               },
               sound: "default",
               badge: 1,
+              ...(data?.problemId ? { "category": "PROBLEM_CATEGORY" } : {}),
             },
+            ...(data || {}),
           },
         },
         webpush: {

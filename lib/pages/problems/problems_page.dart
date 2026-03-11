@@ -12,6 +12,7 @@ import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../services/watch_service.dart';
+import '../../services/notification_service.dart';
 
 import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
@@ -207,6 +208,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   @override
   void dispose() {
     _updateTimer?.cancel();
+    NotificationService().onForegroundMessage = null;
     super.dispose();
   }
 
@@ -220,6 +222,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
     WatchService().initialize();
     WatchService().onWatchGoOnMyWay = (problemId) => _goOnMyWay(problemId);
     WatchService().syncCredentials();
+
+    // Trigger immediate reload when FCM notification arrives (keeps watch in sync)
+    NotificationService().onForegroundMessage = () {
+      if (mounted) _checkForUpdates();
+    };
 
     _updateTimer = Timer.periodic(
       const Duration(seconds: 10),

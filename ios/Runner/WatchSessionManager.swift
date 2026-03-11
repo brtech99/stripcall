@@ -195,6 +195,27 @@ class WatchSessionManager: NSObject, WCSessionDelegate {
         }.resume()
     }
 
+    /// Handle "On my way" from a notification action tap (on iPhone)
+    func handleOnMyWay(problemId: Int) {
+        loadPersistedCredentials()
+
+        if let url = supabaseUrl, let anonKey = supabaseAnonKey,
+           let token = accessToken, let uid = userId {
+            callGoOnMyWayEdgeFunction(
+                problemId: problemId,
+                userId: uid,
+                supabaseUrl: url,
+                anonKey: anonKey,
+                accessToken: token,
+                replyHandler: { result in
+                    print("WatchSession: handleOnMyWay result: \(result)")
+                }
+            )
+        } else {
+            forwardToFlutter(problemId: problemId, replyHandler: { _ in })
+        }
+    }
+
     /// Fallback: forward to Flutter MethodChannel (only works when Flutter is active)
     private func forwardToFlutter(problemId: Int, replyHandler: @escaping ([String: Any]) -> Void) {
         DispatchQueue.main.async { [weak self] in

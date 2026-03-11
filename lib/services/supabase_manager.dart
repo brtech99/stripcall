@@ -16,6 +16,10 @@ class SupabaseManager {
   factory SupabaseManager() => _instance;
   SupabaseManager._internal();
 
+  /// Test-only constructor that bypasses the singleton.
+  @visibleForTesting
+  SupabaseManager.forTesting();
+
   late SupabaseClient _primary;
   SupabaseClient? _secondary;
   late TransactionLog _transactionLog;
@@ -36,6 +40,18 @@ class SupabaseManager {
 
   bool get primaryHealthy => _primaryHealthy;
   bool get secondaryHealthy => _secondaryHealthy;
+
+  @visibleForTesting
+  set primaryHealthyForTest(bool value) {
+    _primaryHealthy = value;
+    _updateHealthStatus();
+  }
+
+  @visibleForTesting
+  set secondaryHealthyForTest(bool value) {
+    _secondaryHealthy = value;
+    _updateHealthStatus();
+  }
 
   /// The primary client — use for auth and for reads when healthy.
   SupabaseClient get client => _primary;
@@ -60,6 +76,21 @@ class SupabaseManager {
     }
 
     debugLog('SupabaseManager initialized (secondary: ${_secondary != null})');
+  }
+
+  /// Test-only initializer that accepts a pre-built TransactionLog.
+  @visibleForTesting
+  void initializeForTest({
+    required SupabaseClient primary,
+    SupabaseClient? secondary,
+    required TransactionLog transactionLog,
+  }) {
+    _primary = primary;
+    _secondary = secondary;
+    _transactionLog = transactionLog;
+    _initialized = true;
+    _primaryHealthy = true;
+    _secondaryHealthy = true;
   }
 
   /// Get a [SupabaseQueryBuilder] for reads. Prefers primary; falls back to
@@ -107,7 +138,10 @@ class SupabaseManager {
         'SupabaseManager: primary function "$functionName" failed',
         e,
       );
-      _markPrimaryUnhealthy();
+      // Don't mark primary unhealthy for edge function failures.
+      // Edge functions run on a separate service and their availability
+      // does not indicate the database is down.
+      rethrow;
     }
 
     if (_secondary != null && _secondaryHealthy) {

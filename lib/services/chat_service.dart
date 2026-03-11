@@ -1,6 +1,5 @@
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'notification_service.dart';
+import 'edge_function_client.dart';
 import 'supabase_manager.dart';
 import '../utils/debug_utils.dart';
 
@@ -147,19 +146,22 @@ class ChatService {
         final problem = results[0];
         final user = results[1];
         final strip = problem?['strip'];
-        final name = user != null
-            ? '${user['firstname'] ?? ''} ${user['lastname'] ?? ''}'.trim()
-            : null;
-        if (strip != null && name != null && name.isNotEmpty) {
-          title = 'Message re:$strip from:$name';
-        } else if (name != null && name.isNotEmpty) {
-          title = 'Message from:$name';
+        final firstName = (user?['firstname'] ?? '') as String;
+        final lastName = (user?['lastname'] ?? '') as String;
+        // Compact name: first initial + last name, e.g. "JDoe"
+        final shortName = firstName.isNotEmpty && lastName.isNotEmpty
+            ? '${firstName[0]}${lastName}'
+            : firstName.isNotEmpty ? firstName : 'Unknown';
+        if (strip != null) {
+          title = '$shortName ($strip) $message';
+        } else {
+          title = '$shortName: $message';
         }
       } catch (_) {}
 
       await NotificationService().sendCrewNotification(
         title: title,
-        body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
+        body: message,
         crewId: crewId.toString(),
         senderId: senderId,
         data: {
@@ -182,31 +184,14 @@ class ChatService {
     required bool includeReporter,
   }) async {
     try {
-      final session = SupabaseManager().auth.currentSession;
-      if (session == null) return;
-
-      // Get sender's name
       final senderName = await getUserName(senderId) ?? 'Crew';
-
-      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-      final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
-
-      await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${session.accessToken}',
-          'apikey': supabaseAnonKey,
-        },
-        body: jsonEncode({
-          'problemId': problemId,
-          'message': message,
-          'type': 'message',
-          'senderName': senderName,
-          'includeReporter': includeReporter,
-        }),
-      );
+      await EdgeFunctionClient().post('send-sms', {
+        'problemId': problemId,
+        'message': message,
+        'type': 'message',
+        'senderName': senderName,
+        'includeReporter': includeReporter,
+      });
     } catch (e) {
       debugLogError('Error sending SMS notification', e);
     }

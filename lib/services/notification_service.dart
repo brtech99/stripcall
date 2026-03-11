@@ -19,12 +19,16 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
+  late final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  late final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
   String? _fcmToken;
   bool _isInitialized = false;
+
+  /// Callback triggered when a foreground FCM message arrives.
+  /// Used by problems_page to trigger immediate reload + watch sync.
+  VoidCallback? onForegroundMessage;
 
   /// Initialize Firebase, request permissions, and set up local notifications
   Future<void> initialize() async {
@@ -148,6 +152,8 @@ class NotificationService {
               message.data,
             );
           }
+          // Notify listeners (e.g. problems page) to refresh immediately
+          onForegroundMessage?.call();
         });
       } catch (e) {
         debugLogError('Error setting up foreground message handler', e);
@@ -268,79 +274,30 @@ class NotificationService {
   /// Save FCM token to Supabase database
   Future<void> _saveTokenToDatabase(String token) async {
     try {
-      debugLog('=== Starting _saveTokenToDatabase ===');
-      debugLog('Token length: ${token.length}');
-      debugLog('Token preview: ${token.substring(0, 20)}...');
-
       final userId = SupabaseManager().auth.currentUser?.id;
-      if (userId == null) {
-        debugLogError('No current user found, cannot save FCM token');
-        return;
-      }
-
-      debugLog('Current user ID: $userId');
+      if (userId == null) return;
 
       final platformName = platform.getPlatformName();
-      debugLog('Platform: $platformName');
-
-      // First, let's check if the device_tokens table exists by trying to query it
-      try {
-        debugLog('Checking if device_tokens table exists...');
-        final tableCheck = await SupabaseManager()
-            .from('device_tokens')
-            .select('count')
-            .limit(1);
-        debugLog('device_tokens table exists, check result: $tableCheck');
-      } catch (e) {
-        debugLogError(
-          'device_tokens table does not exist or is not accessible',
-          e,
-        );
-        debugLogError(
-          'You need to create the device_tokens table in your Supabase database',
-        );
-        return;
-      }
 
       // Check if token already exists
-      debugLog('Checking if token already exists...');
       final existingToken = await SupabaseManager()
           .from('device_tokens')
-          .select('id, device_token, platform')
+          .select('id')
           .eq('user_id', userId)
           .eq('device_token', token)
           .maybeSingle();
 
-      debugLog('Existing token check result: $existingToken');
-
       if (existingToken == null) {
-        debugLog('Token does not exist, inserting new token...');
-        debugLog(
-          'Insert data: {"user_id": "$userId", "device_token": "${token.substring(0, 20)}...", "platform": "$platformName"}',
-        );
-
-        // Insert new token
-        final result = await SupabaseManager().dualInsert('device_tokens', {
+        await SupabaseManager().dualInsert('device_tokens', {
           'user_id': userId,
           'device_token': token,
           'platform': platformName,
         });
-        debugLog('Insert result: $result');
-      } else {
-        debugLog('Token already exists, skipping insert');
+        debugLog('FCM token saved to database');
       }
-
-      debugLog('FCM token saved to database successfully');
     } catch (e) {
       debugLogError('Error saving FCM token to database', e);
-      debugLogError('Error details: ${e.toString()}');
-      debugLogError('Error type: ${e.runtimeType}');
-      if (e is PostgrestException) {
-        debugLogError('PostgrestException message: ${e.message}');
-        debugLogError('PostgrestException details: ${e.details}');
-        debugLogError('PostgrestException hint: ${e.hint}');
-      }
-      rethrow; // Re-throw so the calling method can handle it
+      rethrow;
     }
   }
 
@@ -395,119 +352,6 @@ class NotificationService {
       return response.status == 200;
     } catch (e) {
       debugLogError('Error sending notification', e);
-      return false;
-    }
-  }
-
-  /// Send notification for a new problem
-  /// @deprecated Use sendCrewNotification instead
-  Future<bool> sendNewProblemNotification({
-    required String problemTitle,
-    required String crewId,
-    required String problemId,
-    required String reporterId,
-  }) async {
-    try {
-      // Get crew members
-      final crewMembers = await SupabaseManager()
-          .from('crewmembers')
-          .select('crewmember')
-          .eq('crew', crewId);
-
-      if (crewMembers.isEmpty) {
-        return true; // Not an error, just no one to notify
-      }
-
-      final userIds = crewMembers
-          .map((member) => member['crewmember'] as String)
-          .toList();
-
-      return await sendNotification(
-        title: 'New Problem Reported',
-        body: problemTitle,
-        userIds: userIds,
-        data: {'type': 'new_problem', 'problemId': problemId, 'crewId': crewId},
-        problemId: problemId,
-      );
-    } catch (e) {
-      debugLogError('Error sending new problem notification', e);
-      return false;
-    }
-  }
-
-  /// Send notification for problem resolution
-  /// @deprecated Use sendCrewNotification instead
-  Future<bool> sendProblemResolvedNotification({
-    required String problemTitle,
-    required String crewId,
-    required String problemId,
-    required String resolverId,
-  }) async {
-    try {
-      // Get crew members
-      final crewMembers = await SupabaseManager()
-          .from('crewmembers')
-          .select('crewmember')
-          .eq('crew', crewId);
-
-      if (crewMembers.isEmpty) {
-        return true; // Not an error, just no one to notify
-      }
-
-      final userIds = crewMembers
-          .map((member) => member['crewmember'] as String)
-          .toList();
-
-      return await sendNotification(
-        title: 'Problem Resolved',
-        body: '$problemTitle has been resolved',
-        userIds: userIds,
-        data: {
-          'type': 'problem_resolved',
-          'problemId': problemId,
-          'crewId': crewId,
-        },
-        problemId: problemId,
-      );
-    } catch (e) {
-      debugLogError('Error sending problem resolved notification', e);
-      return false;
-    }
-  }
-
-  /// Send notification for new message
-  /// @deprecated Use sendCrewNotification instead
-  Future<bool> sendNewMessageNotification({
-    required String message,
-    required String crewId,
-    required String problemId,
-    required String senderId,
-  }) async {
-    try {
-      // Get crew members (excluding the sender)
-      final crewMembers = await SupabaseManager()
-          .from('crewmembers')
-          .select('crewmember')
-          .eq('crew', crewId)
-          .neq('crewmember', senderId);
-
-      if (crewMembers.isEmpty) {
-        return true;
-      }
-
-      final userIds = crewMembers
-          .map((member) => member['crewmember'] as String)
-          .toList();
-
-      return await sendNotification(
-        title: 'New Message',
-        body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
-        userIds: userIds,
-        data: {'type': 'new_message', 'problemId': problemId, 'crewId': crewId},
-        problemId: problemId,
-      );
-    } catch (e) {
-      debugLogError('Error sending new message notification', e);
       return false;
     }
   }

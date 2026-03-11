@@ -24,11 +24,16 @@ tags:
       id: "new_problem_dialog"
     timeout: 5000
 
-# Step 1: Select the first crew radio button
+# Step 1: Select the Armorer crew radio button
 - tapOn:
-    id: "new_problem_crew_radio_.*"
+    text: "Armorer"
     index: 0
 - waitForAnimationToEnd
+# Wait for symptom classes to load from the database
+- extendedWaitUntil:
+    visible:
+      id: "new_problem_symptom_class_dropdown"
+    timeout: 10000
 
 # Step 2: Select strip 1
 - tapOn:

@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:http/http.dart' as http;
 import '../services/supabase_manager.dart';
+import '../services/edge_function_client.dart';
 import '../routes.dart';
 import '../utils/debug_utils.dart';
 import '../theme/theme.dart';
@@ -205,31 +204,16 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final session = SupabaseManager().auth.currentSession;
-      if (session == null) {
-        throw Exception('No active session');
-      }
+      final data = await EdgeFunctionClient().post('send-phone-otp', {
+        'phone': newPhone,
+      });
 
-      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+      if (data == null) throw Exception('Failed to send verification code');
 
-      final url = Uri.parse('$supabaseUrl/functions/v1/send-phone-otp');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${session.accessToken}',
-          'apikey': supabaseAnonKey,
-        },
-        body: jsonEncode({'phone': newPhone}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
+      if (data['success'] == true) {
         if (!mounted) return;
         setState(() {
-          _pendingPhone = data['phone'] ?? newPhone;
+          _pendingPhone = (data['phone'] as String?) ?? newPhone;
           _isVerifyingPhone = true;
           _isEditingPhone = false;
           _isSaving = false;
@@ -264,31 +248,17 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     setState(() => _isSaving = true);
 
     try {
-      final session = SupabaseManager().auth.currentSession;
-      if (session == null) {
-        throw Exception('No active session');
-      }
+      final data = await EdgeFunctionClient().post('verify-phone-otp', {
+        'phone': _pendingPhone,
+        'code': code,
+      });
 
-      const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-      const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+      if (data == null) throw Exception('Verification failed');
 
-      final url = Uri.parse('$supabaseUrl/functions/v1/verify-phone-otp');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${session.accessToken}',
-          'apikey': supabaseAnonKey,
-        },
-        body: jsonEncode({'phone': _pendingPhone, 'code': code}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
+      if (data['success'] == true) {
         if (!mounted) return;
         setState(() {
-          _phoneNumber = data['phone'] ?? _pendingPhone;
+          _phoneNumber = (data['phone'] as String?) ?? _pendingPhone;
           _phoneController.text = _phoneNumber;
           _isVerifyingPhone = false;
           _pendingPhone = '';

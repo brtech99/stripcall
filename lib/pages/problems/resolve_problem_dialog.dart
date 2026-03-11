@@ -102,13 +102,6 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
           .eq('id', widget.problemId)
           .single();
 
-      // Get action details
-      final actionResponse = await SupabaseManager()
-          .from('action')
-          .select('actionstring')
-          .eq('id', int.parse(_selectedAction!))
-          .single();
-
       // Get resolver name
       final userResponse = await SupabaseManager()
           .from('users')
@@ -130,8 +123,9 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       // Capture values needed for notification before popping
       final resolverName =
           '${userResponse['firstname']} ${userResponse['lastname']}';
-      final resolution = actionResponse['actionstring'] as String;
       final strip = problemResponse['strip'] as String;
+      final symptomData = problemResponse['symptom'] as Map<String, dynamic>?;
+      final symptomName = symptomData?['symptomstring'] as String? ?? 'Problem';
       final crewId = problemResponse['crew'].toString();
       final reporterId = problemResponse['originator'] as String?;
       final problemId = widget.problemId;
@@ -142,8 +136,8 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       // Send notification (fire and forget - don't block UI)
       NotificationService()
           .sendCrewNotification(
-            title: 'Problem Resolved',
-            body: 'Strip $strip resolved by $resolverName: $resolution',
+            title: '$resolverName resolved $symptomName on $strip',
+            body: '$resolverName resolved $symptomName on $strip',
             crewId: crewId,
             senderId: userId,
             data: {

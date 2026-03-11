@@ -221,8 +221,8 @@ async function sendFCMNotifications(
 
   const jwt = await getGoogleAccessToken(serviceAccount);
 
-  const title = "Crew Member En Route";
-  const body = `${responderName} is en route to Strip ${strip}`;
+  const title = `${responderName} responding to ${strip}`;
+  const body = `${responderName} responding to ${strip}`;
   const data = {
     type: "problem_response",
     problemId: problemId.toString(),

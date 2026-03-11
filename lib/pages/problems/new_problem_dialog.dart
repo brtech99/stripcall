@@ -192,8 +192,8 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       // Send notification using Edge Function (don't await)
       NotificationService()
           .sendCrewNotification(
-            title: 'New Problem Reported',
-            body: 'Strip $_selectedStrip: $symptomName',
+            title: 'New Problem on $_selectedStrip $symptomName',
+            body: '$symptomName on strip $_selectedStrip',
             crewId: _selectedCrewId.toString(),
             senderId: userId,
             data: {

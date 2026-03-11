@@ -1,7 +1,7 @@
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../models/problem_with_details.dart';
 import 'notification_service.dart';
+import 'edge_function_client.dart';
 import '../utils/debug_utils.dart';
 import 'supabase_manager.dart';
 
@@ -19,11 +19,18 @@ class ProblemService {
     messages_data:messages(*)
   ''';
 
+  static const _resolvedSelectFields = '''
+    id, enddatetime, action, actionby,
+    action_data:action(id, actionstring),
+    actionby_data:actionby(supabase_id, firstname, lastname)
+  ''';
+
   /// Parse raw JSON rows into [ProblemWithDetails], filtering out resolved
   /// problems older than 5 minutes. When [deduplicate] is true, duplicate
   /// problem IDs are skipped (used for the OR query that may return the same
   /// problem via both crew and originator match).
-  List<ProblemWithDetails> _parseAndFilterProblems(
+  @visibleForTesting
+  List<ProblemWithDetails> parseAndFilterProblems(
     List<dynamic> response, {
     bool deduplicate = false,
   }) {
@@ -87,7 +94,7 @@ class ProblemService {
           'Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = _parseAndFilterProblems(response);
+        final problems = parseAndFilterProblems(response);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(
@@ -130,7 +137,7 @@ class ProblemService {
           'Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = _parseAndFilterProblems(response);
+        final problems = parseAndFilterProblems(response);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(
@@ -156,7 +163,7 @@ class ProblemService {
           'Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = _parseAndFilterProblems(response, deduplicate: true);
+        final problems = parseAndFilterProblems(response, deduplicate: true);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(
@@ -249,8 +256,8 @@ class ProblemService {
       // Send notification using Edge Function (fire and forget - don't block UI)
       NotificationService()
           .sendCrewNotification(
-            title: 'Crew Member En Route',
-            body: '$responderName is en route to Strip $strip',
+            title: '$responderName responding to $strip',
+            body: '$responderName responding to $strip',
             crewId: crewId.toString(),
             senderId: userId,
             data: {
@@ -272,36 +279,12 @@ class ProblemService {
           });
 
       // Send SMS to reporter if problem was created via SMS (fire and forget - don't block UI)
-      // (The send-sms function will check if reporter_phone exists)
-      final session = SupabaseManager().auth.currentSession;
-      if (session != null) {
-        const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-        const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-        final url = Uri.parse('$supabaseUrl/functions/v1/send-sms');
-
-        http
-            .post(
-              url,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ${session.accessToken}',
-                'apikey': supabaseAnonKey,
-              },
-              body: jsonEncode({
-                'problemId': problemId,
-                'message': '',
-                'type': 'on_my_way',
-                'senderName': responderName,
-              }),
-            )
-            .catchError((e) {
-              debugLogError(
-                'Failed to send SMS to reporter (responder was recorded successfully)',
-                e,
-              );
-              return http.Response('', 500);
-            });
-      }
+      EdgeFunctionClient().postFireAndForget('send-sms', {
+        'problemId': problemId,
+        'message': '',
+        'type': 'on_my_way',
+        'senderName': responderName,
+      });
     } catch (e) {
       debugLogError('Error updating status (goOnMyWay)', e);
       if (e.toString().contains('duplicate key') ||
@@ -312,54 +295,52 @@ class ProblemService {
     }
   }
 
-  Future<Map<String, dynamic>?> loadMissingSymptomData(int symptomId) async {
+  /// Generic lookup for a single record by ID.
+  Future<Map<String, dynamic>?> _lookupById({
+    required String table,
+    required String selectFields,
+    required String idField,
+    required Object id,
+    required String errorContext,
+  }) async {
     try {
-      final symptomResponse = await SupabaseManager()
-          .from('symptom')
-          .select('id, symptomstring')
-          .eq('id', symptomId)
+      return await SupabaseManager()
+          .from(table)
+          .select(selectFields)
+          .eq(idField, id)
           .maybeSingle();
-
-      return symptomResponse;
     } catch (e) {
-      debugLogError('Error loading missing symptom data', e);
+      debugLogError(errorContext, e);
       return null;
     }
   }
 
-  Future<Map<String, dynamic>?> loadMissingOriginatorData(
-    String originatorId,
-  ) async {
-    try {
-      final userResponse = await SupabaseManager()
-          .from('users')
-          .select('supabase_id, firstname, lastname')
-          .eq('supabase_id', originatorId)
-          .maybeSingle();
+  Future<Map<String, dynamic>?> loadMissingSymptomData(int symptomId) =>
+      _lookupById(
+        table: 'symptom',
+        selectFields: 'id, symptomstring',
+        idField: 'id',
+        id: symptomId,
+        errorContext: 'Error loading missing symptom data',
+      );
 
-      return userResponse;
-    } catch (e) {
-      debugLogError('Error loading missing originator data', e);
-      return null;
-    }
-  }
+  Future<Map<String, dynamic>?> loadMissingOriginatorData(String originatorId) =>
+      _lookupById(
+        table: 'users',
+        selectFields: 'supabase_id, firstname, lastname',
+        idField: 'supabase_id',
+        id: originatorId,
+        errorContext: 'Error loading missing originator data',
+      );
 
-  Future<Map<String, dynamic>?> loadMissingResolverData(
-    String actionById,
-  ) async {
-    try {
-      final userResponse = await SupabaseManager()
-          .from('users')
-          .select('supabase_id, firstname, lastname')
-          .eq('supabase_id', actionById)
-          .maybeSingle();
-
-      return userResponse;
-    } catch (e) {
-      debugLogError('Error loading missing resolver data', e);
-      return null;
-    }
-  }
+  Future<Map<String, dynamic>?> loadMissingResolverData(String actionById) =>
+      _lookupById(
+        table: 'users',
+        selectFields: 'supabase_id, firstname, lastname',
+        idField: 'supabase_id',
+        id: actionById,
+        errorContext: 'Error loading missing resolver data',
+      );
 
   /// Load reporter names for problems that have reporter_phone set
   /// Uses the database function get_reporter_name which checks:
@@ -512,22 +493,11 @@ class ProblemService {
     try {
       if (problemIds.isEmpty) return [];
 
-      const updateSelectFields = '''
-        id,
-        enddatetime,
-        action,
-        actionby,
-        action_data:action(id, actionstring),
-        actionby_data:actionby(supabase_id, firstname, lastname)
-      ''';
-
-      // Query for problems that have been updated since the last check
-      // Build an OR condition for problem IDs since in_() is not available in older postgrest
       final idConditions = problemIds.map((id) => 'id.eq.$id').join(',');
 
       final response = await SupabaseManager()
           .from('problem')
-          .select(updateSelectFields)
+          .select(_resolvedSelectFields)
           .or(idConditions)
           .not('enddatetime', 'is', null) // Only get resolved problems
           .gte('enddatetime', since.toIso8601String());
@@ -563,19 +533,9 @@ class ProblemService {
     required DateTime since,
   }) async {
     try {
-      // Use direct query to get full resolution data including action_data and actionby_data
-      const resolvedSelectFields = '''
-        id,
-        enddatetime,
-        action,
-        actionby,
-        action_data:action(id, actionstring),
-        actionby_data:actionby(supabase_id, firstname, lastname)
-      ''';
-
       final response = await SupabaseManager()
           .from('problem')
-          .select(resolvedSelectFields)
+          .select(_resolvedSelectFields)
           .eq('event', eventId)
           .eq('crew', crewId)
           .not('enddatetime', 'is', null)
