@@ -167,10 +167,12 @@ class SelectEventPage extends StatefulWidget {
 
 class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
   late final SelectEventRepository _repo;
+  final _searchController = TextEditingController();
   List<Event> _events = [];
   List<EventCrewRole> _crewRoles = [];
   bool _isLoading = false;
   String? _error;
+  String _searchQuery = '';
 
   /// Crew roles grouped by event ID for events in the current select list.
   Map<int, List<EventCrewRole>> get _currentEventRoles {
@@ -190,10 +192,23 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
     return _crewRoles.where((r) => !eventIds.contains(r.eventId)).toList();
   }
 
+  List<Event> get _filteredEvents {
+    if (_searchQuery.isEmpty) return _events;
+    final query = _searchQuery.toLowerCase();
+    return _events.where((event) {
+      return event.name.toLowerCase().contains(query) ||
+          event.city.toLowerCase().contains(query) ||
+          event.state.toLowerCase().contains(query);
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _repo = widget.repository ?? DefaultSelectEventRepository();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.trim());
+    });
     debugLog('=== SELECT EVENT PAGE: initState called ===');
     _loadEvents();
   }
@@ -209,6 +224,7 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
 
   @override
   void dispose() {
+    _searchController.dispose();
     selectEventRouteObserver.unsubscribe(this);
     super.dispose();
   }
@@ -359,47 +375,44 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
 
     final upcoming = _upcomingRoles;
     final eventRoles = _currentEventRoles;
+    final filtered = _filteredEvents;
 
     return Semantics(
       identifier: 'select_event_list',
       child: ListView(
         key: const ValueKey('select_event_list'),
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         children: [
-          ..._events.map((event) {
-            final roles = eventRoles[event.id] ?? [];
-            return AppListTile(
-              key: ValueKey('select_event_item_${event.id}'),
-              title: Text(event.name),
-              subtitle: Text(_formatDate(event.startDateTime)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (roles.isNotEmpty) ...[
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: roles
-                          .map((role) => _buildCrewBadge(context, role))
-                          .toList(),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Icon(
-                    Icons.chevron_right,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
+          // Search field
+          Padding(
+            padding: EdgeInsets.only(
+              top: AppSpacing.md,
+              bottom: AppSpacing.sm,
+            ),
+            child: AppTextField(
+              key: const ValueKey('select_event_search_field'),
+              controller: _searchController,
+              hint: 'Search events...',
+              prefix: Icon(
+                Icons.search,
+                color: AppColors.textSecondary(context),
+                size: 20,
               ),
-              onTap: () => _navigateToProblems(event),
-            );
+            ),
+          ),
+
+          // Event cards
+          ...filtered.map((event) {
+            final roles = eventRoles[event.id] ?? [];
+            return _buildEventCard(context, event, roles);
           }),
+
+          // Upcoming crews section
           if (upcoming.isNotEmpty) ...[
             Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.sm,
+              padding: EdgeInsets.only(
+                top: AppSpacing.lg,
+                bottom: AppSpacing.sm,
               ),
               child: Text(
                 'Your Upcoming Crews',
@@ -409,40 +422,211 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
               ),
             ),
             ...upcoming.map((role) {
-              return AppListTile(
-                key: ValueKey(
-                  'upcoming_crew_${role.eventId}_${role.crewTypeName}',
-                ),
-                title: Text(role.eventName),
-                subtitle: Text(_formatDate(role.eventStartDate)),
-                trailing: _buildCrewBadge(context, role),
-              );
+              return _buildUpcomingCard(context, role);
             }),
           ],
+
+          // Footer
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(
+              child: Text(
+                'Showing ${filtered.length} current event${filtered.length == 1 ? '' : 's'}',
+                style: AppTypography.bodySmall(
+                  context,
+                ).copyWith(color: AppColors.textSecondary(context)),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCrewBadge(BuildContext context, EventCrewRole role) {
-    final isChief = role.isCrewChief;
-    final label = isChief
+  Widget _buildEventCard(
+    BuildContext context,
+    Event event,
+    List<EventCrewRole> roles,
+  ) {
+    final accentColor = AppColors.actionAccent(context);
+    final location = [event.city, event.state]
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+
+    // Build role label from roles
+    String? roleLabel;
+    if (roles.isNotEmpty) {
+      final roleNames = roles.map((r) {
+        return r.isCrewChief
+            ? 'Crew Chief - ${r.crewTypeName}'
+            : r.crewTypeName;
+      }).join(', ');
+      roleLabel = roleNames;
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.sm),
+      child: GestureDetector(
+        key: ValueKey('select_event_item_${event.id}'),
+        onTap: () => _navigateToProblems(event),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: AppSpacing.borderRadiusLg,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
+          padding: EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.name,
+                      style: AppTypography.titleMedium(context).copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (location.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: AppColors.textSecondary(context),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              location,
+                              style: AppTypography.bodyMedium(
+                                context,
+                              ).copyWith(
+                                color: AppColors.textSecondary(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (roleLabel != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 16,
+                            color: AppColors.textSecondary(context),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Your role: ',
+                            style: AppTypography.bodyMedium(
+                              context,
+                            ).copyWith(
+                              color: AppColors.textSecondary(context),
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(
+                              roleLabel,
+                              style: AppTypography.bodyMedium(
+                                context,
+                              ).copyWith(
+                                color: accentColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: AppColors.textSecondary(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpcomingCard(BuildContext context, EventCrewRole role) {
+    final accentColor = AppColors.actionAccent(context);
+    final roleLabel = role.isCrewChief
         ? 'Crew Chief - ${role.crewTypeName}'
         : role.crewTypeName;
-    final color = isChief
-        ? AppColors.primary(context)
-        : AppColors.secondary(context);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: AppSpacing.borderRadiusSm,
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.sm),
+      key: ValueKey(
+        'upcoming_crew_${role.eventId}_${role.crewTypeName}',
       ),
-      child: Text(
-        label,
-        style: AppTypography.badge(context).copyWith(color: color),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          borderRadius: AppSpacing.borderRadiusLg,
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+        padding: EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              role.eventName,
+              style: AppTypography.titleMedium(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 16,
+                  color: AppColors.textSecondary(context),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatDate(role.eventStartDate),
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.textSecondary(context),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  Icons.people_outline,
+                  size: 16,
+                  color: AppColors.textSecondary(context),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Your role: ',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.textSecondary(context),
+                  ),
+                ),
+                Text(
+                  roleLabel,
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: accentColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

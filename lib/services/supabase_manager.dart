@@ -336,6 +336,12 @@ class SupabaseManager {
     // If we already know this target is down, queue immediately.
     if (!isHealthy) {
       _queueTransaction(target, table, operation, data, filters: filters);
+      if (target == 'primary') {
+        throw Exception(
+          'Primary database is currently unavailable. '
+          'Operation queued for retry.',
+        );
+      }
       return null;
     }
 
@@ -386,11 +392,13 @@ class SupabaseManager {
       );
       if (target == 'primary') {
         _markPrimaryUnhealthy();
+        _queueTransaction(target, table, operation, data, filters: filters);
+        rethrow; // Primary errors must propagate to the caller
       } else {
         _markSecondaryUnhealthy();
+        _queueTransaction(target, table, operation, data, filters: filters);
+        return null; // Secondary errors are silent (failover design)
       }
-      _queueTransaction(target, table, operation, data, filters: filters);
-      return null;
     }
   }
 

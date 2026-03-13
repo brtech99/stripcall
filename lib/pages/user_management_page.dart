@@ -432,7 +432,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         final userKey = _getUserKey(user);
         return Card(
           key: ValueKey('user_management_user_$userKey'),
-          color: isSelected ? Colors.blue.shade50 : null,
+          color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
           child: ListTile(
             title: _buildUserTitle(user),
             subtitle: _buildUserSubtitle(user),

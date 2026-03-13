@@ -187,46 +187,78 @@ class _ProblemChatState extends State<ProblemChat> {
     );
   }
 
+  Widget _buildSendButton() {
+    final accentColor = AppColors.actionAccent(context);
+
+    if (_isSending) {
+      return SizedBox(
+        width: 36,
+        height: 36,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: accentColor,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: _sendMessage,
+      child: Container(
+        key: ValueKey('problem_chat_send_button_${widget.problemId}'),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: accentColor,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.send, size: 16, color: Colors.white),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canSeeAllMessages = widget.isCrewMember || widget.isSuperUser;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          constraints: const BoxConstraints(maxHeight: 200),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.outline(context), width: 1),
-            borderRadius: AppSpacing.borderRadiusSm,
+        // Message list
+        if (_messages.isEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Text(
+              'No messages yet',
+              style: AppTypography.bodyMedium(
+                context,
+              ).copyWith(color: AppColors.textSecondary(context)),
+            ),
+          )
+        else
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: ListView.builder(
+              controller: _scrollController,
+              shrinkWrap: true,
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              itemCount: _messages.length,
+              itemBuilder: (context, idx) =>
+                  _buildMessageBubble(_messages[idx]),
+            ),
           ),
-          child: _messages.isEmpty
-              ? Padding(
-                  padding: AppSpacing.paddingMd,
-                  child: Text(
-                    'No messages yet',
-                    style: AppTypography.bodyMedium(
-                      context,
-                    ).copyWith(color: AppColors.textSecondary(context)),
-                  ),
-                )
-              : ListView.builder(
-                  controller: _scrollController,
-                  shrinkWrap: true,
-                  padding: EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
-                    horizontal: AppSpacing.xs,
-                  ),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, idx) =>
-                      _buildMessageBubble(_messages[idx]),
-                ),
-        ),
         AppSpacing.verticalSm,
+
+        // Input row
         Row(
           children: [
             Expanded(
               child: AppTextField(
-                key: ValueKey('problem_chat_message_field_${widget.problemId}'),
+                key: ValueKey(
+                  'problem_chat_message_field_${widget.problemId}',
+                ),
                 controller: _messageController,
                 hint: 'Type a message...',
                 maxLines: 1,
@@ -234,20 +266,11 @@ class _ProblemChatState extends State<ProblemChat> {
               ),
             ),
             AppSpacing.horizontalSm,
-            IconButton(
-              key: ValueKey('problem_chat_send_button_${widget.problemId}'),
-              icon: _isSending
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send, size: 24),
-              onPressed: _isSending ? null : _sendMessage,
-            ),
+            _buildSendButton(),
           ],
         ),
-        // Only show checkbox for crew members and superusers
+
+        // Include reporter checkbox
         if (canSeeAllMessages)
           Row(
             children: [

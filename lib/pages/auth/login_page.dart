@@ -76,23 +76,68 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       setState(() {
         _error = 'Invalid email or password. Please try again.';
-        _isLoading = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
+  bool _obscurePassword = true;
+
   @override
   Widget build(BuildContext context) {
+    final accentColor = AppColors.actionAccent(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Padding(
+      appBar: AppBar(title: const Text('StripCall')),
+      body: SingleChildScrollView(
         padding: AppSpacing.screenPadding,
         child: AutofillGroup(
           child: Form(
             key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 40),
+
+                // Logo
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/icons/app_icon.png',
+                      width: 72,
+                      height: 72,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Welcome text
+                Center(
+                  child: Text(
+                    'Welcome Back',
+                    style: AppTypography.headlineSmall(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    'Sign in to continue',
+                    style: AppTypography.bodyMedium(context).copyWith(
+                      color: AppColors.textSecondary(context),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Error
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -110,12 +155,23 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
+
+                // Email label + field
+                Text(
+                  'Email',
+                  style: AppTypography.titleSmall(context).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Semantics(
                   identifier: 'login_email_field',
                   child: TextFormField(
                     key: const ValueKey('login_email_field'),
                     controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    decoration: const InputDecoration(
+                      hintText: 'your@email.com',
+                    ),
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [
                       AutofillHints.email,
@@ -136,13 +192,35 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 AppSpacing.verticalMd,
+
+                // Password label + field
+                Text(
+                  'Password',
+                  style: AppTypography.titleSmall(context).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Semantics(
                   identifier: 'login_password_field',
                   child: TextFormField(
                     key: const ValueKey('login_password_field'),
                     controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your password',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppColors.textSecondary(context),
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                    ),
+                    obscureText: _obscurePassword,
                     autofillHints: const [AutofillHints.password],
                     enabled: !_isLoading,
                     validator: (value) {
@@ -153,32 +231,53 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
                 ),
-                AppSpacing.verticalLg,
+
+                // Forgot password link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const ValueKey('login_forgot_password_button'),
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.push(Routes.forgotPassword),
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(color: accentColor),
+                    ),
+                  ),
+                ),
+
+                // Sign In button
+                const SizedBox(height: 8),
                 AppButton(
                   buttonKey: const ValueKey('login_submit_button'),
                   onPressed: _isLoading ? null : _handleLogin,
                   isLoading: _isLoading,
                   expand: true,
-                  child: const Text('Login'),
+                  child: const Text('Sign In'),
                 ),
-                AppSpacing.verticalMd,
+                const SizedBox(height: 16),
+
+                // Create account link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppButton.secondary(
-                      buttonKey: const ValueKey('login_forgot_password_button'),
-                      onPressed: _isLoading
-                          ? null
-                          : () => context.go(Routes.forgotPassword),
-                      child: const Text('Forgot Password'),
+                    Text(
+                      "Don't have an account? ",
+                      style: AppTypography.bodyMedium(context),
                     ),
-                    AppSpacing.horizontalMd,
-                    AppButton.secondary(
-                      buttonKey: const ValueKey('login_create_account_button'),
-                      onPressed: _isLoading
+                    GestureDetector(
+                      key: const ValueKey('login_create_account_button'),
+                      onTap: _isLoading
                           ? null
-                          : () => context.go(Routes.register),
-                      child: const Text('Create Account'),
+                          : () => context.push(Routes.register),
+                      child: Text(
+                        'Create Account',
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),

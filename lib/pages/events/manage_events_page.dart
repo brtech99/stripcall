@@ -9,19 +9,25 @@ import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 
 abstract class EventsRepository {
-  Future<List<Event>> fetchEvents(String userId);
+  Future<List<Event>> fetchEvents(String userId, {bool isSuperUser = false});
 }
 
 class SupabaseEventsRepository implements EventsRepository {
   @override
-  Future<List<Event>> fetchEvents(String userId) async {
+  Future<List<Event>> fetchEvents(String userId, {bool isSuperUser = false}) async {
     final now = DateTime.now();
     final cutoffDate = now.subtract(const Duration(days: 2));
 
-    final response = await SupabaseManager()
+    var query = SupabaseManager()
         .from('events')
-        .select('*, organizer:users(firstname, lastname)')
-        .eq('organizer', userId)
+        .select('*, organizer:users(firstname, lastname)');
+
+    // Superusers see all events; regular users see only their own
+    if (!isSuperUser) {
+      query = query.eq('organizer', userId);
+    }
+
+    final response = await query
         .gte('enddatetime', cutoffDate.toIso8601String())
         .order('startdatetime');
 
@@ -65,7 +71,19 @@ class _ManageEventsPageState extends State<ManageEventsPage> {
       if (userId == null) {
         throw Exception('User not logged in');
       }
-      final events = await _eventsRepository.fetchEvents(userId);
+
+      // Check if user is a superuser
+      bool isSuperUser = false;
+      try {
+        final userRow = await SupabaseManager()
+            .from('users')
+            .select('superuser')
+            .eq('supabase_id', userId)
+            .maybeSingle();
+        isSuperUser = userRow?['superuser'] == true;
+      } catch (_) {}
+
+      final events = await _eventsRepository.fetchEvents(userId, isSuperUser: isSuperUser);
       if (!mounted) return;
       setState(() {
         _events = events;

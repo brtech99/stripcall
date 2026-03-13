@@ -27,27 +27,40 @@ class AppTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.brandPrimary,
       brightness: Brightness.light,
+      primary: AppColors.brandPrimary,
+      onPrimary: Colors.white,
+      surface: AppColors.background,
+      onSurface: const Color(0xFF111827),
+      onSurfaceVariant: const Color(0xFF6B7280),
+      error: AppColors.statusError,
+      outline: AppColors.borderMedium,
+      outlineVariant: AppColors.borderLight,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       brightness: Brightness.light,
+      scaffoldBackgroundColor: AppColors.background,
 
       // AppBar Theme
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
-        scrolledUnderElevation: 1,
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
+        scrolledUnderElevation: 0,
+        backgroundColor: AppColors.background,
+        foregroundColor: const Color(0xFF111827),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
       ),
 
       // Card Theme
       cardTheme: CardThemeData(
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusMd),
+        elevation: 0,
+        color: AppColors.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppSpacing.borderRadiusLg,
+          side: BorderSide(color: AppColors.borderLight),
+        ),
         clipBehavior: Clip.antiAlias,
       ),
 
@@ -194,6 +207,9 @@ class AppTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.brandPrimary,
       brightness: Brightness.dark,
+      primary: AppColors.brandPrimary,
+      onPrimary: Colors.white,
+      error: AppColors.statusError,
     );
 
     return ThemeData(
@@ -205,7 +221,7 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
-        scrolledUnderElevation: 1,
+        scrolledUnderElevation: 0,
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
         systemOverlayStyle: SystemUiOverlayStyle.light,
@@ -213,8 +229,11 @@ class AppTheme {
 
       // Card Theme
       cardTheme: CardThemeData(
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusMd),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppSpacing.borderRadiusLg,
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
         clipBehavior: Clip.antiAlias,
       ),
 

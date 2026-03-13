@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'utils/debug_utils.dart';
 import 'services/supabase_manager.dart';
 import 'pages/auth/login_page.dart';
@@ -14,6 +15,86 @@ import 'pages/auth/create_account_page.dart';
 import 'pages/auth/forgot_password_page.dart';
 import 'models/event.dart';
 import 'pages/auth/email_confirmation_page.dart';
+
+/// Ensures a confirmed auth user has a row in public.users.
+/// Tries pending_users first, then falls back to auth user metadata.
+/// Returns true if user exists or was created, false if it couldn't be done.
+Future<bool> ensureUserRecord(User user) async {
+  // Check if already exists
+  try {
+    await SupabaseManager()
+        .from('users')
+        .select('supabase_id')
+        .eq('supabase_id', user.id)
+        .single();
+    debugLog('ensureUserRecord: User already in users table');
+    return true;
+  } catch (_) {
+    debugLog('ensureUserRecord: User not in users table, creating...');
+  }
+
+  // Try pending_users first
+  String? firstName;
+  String? lastName;
+  String? phone;
+
+  try {
+    final pendingUser = await SupabaseManager()
+        .from('pending_users')
+        .select('firstname, lastname, phone_number')
+        .eq('email', user.email ?? '')
+        .maybeSingle();
+
+    if (pendingUser != null) {
+      firstName = pendingUser['firstname'] as String?;
+      lastName = pendingUser['lastname'] as String?;
+      phone = pendingUser['phone_number'] as String?;
+      debugLog('ensureUserRecord: Found pending_users: $firstName $lastName');
+    }
+  } catch (e) {
+    debugLog('ensureUserRecord: pending_users lookup failed: $e');
+  }
+
+  // Fall back to auth user metadata (set during signUp)
+  if (firstName == null || lastName == null) {
+    final metadata = user.userMetadata;
+    firstName ??= metadata?['firstname'] as String?;
+    lastName ??= metadata?['lastname'] as String?;
+    debugLog('ensureUserRecord: From metadata: $firstName $lastName');
+  }
+
+  if (firstName == null || lastName == null) {
+    debugLog('ensureUserRecord: No name data available, cannot create record');
+    return false;
+  }
+
+  try {
+    final insertData = <String, dynamic>{
+      'supabase_id': user.id,
+      'firstname': firstName,
+      'lastname': lastName,
+    };
+    if (phone != null) {
+      insertData['phonenbr'] = phone;
+    }
+    debugLog('ensureUserRecord: Inserting into users: $insertData');
+    await SupabaseManager().dualInsert('users', insertData);
+    debugLog('ensureUserRecord: SUCCESS — user record created');
+
+    // Clean up pending_users (best effort)
+    try {
+      await SupabaseManager().dualDelete(
+        'pending_users',
+        filters: {'email': user.email ?? ''},
+      );
+    } catch (_) {}
+
+    return true;
+  } catch (e) {
+    debugLog('ensureUserRecord: INSERT FAILED: $e');
+    return false;
+  }
+}
 
 final router = GoRouter(
   initialLocation: '/',
@@ -62,148 +143,27 @@ final router = GoRouter(
     // Handle email confirmation route
     if (state.matchedLocation == '/confirm-email') {
       debugLog('Handling email confirmation route...');
-      try {
-        // Get the current user from auth (even without session)
-        final user = SupabaseManager().auth.currentUser;
-        debugLog('Current user from auth: ${user?.email}');
-        debugLog('Email confirmed at: ${user?.emailConfirmedAt}');
-
-        if (user?.emailConfirmedAt != null) {
-          debugLog(
-            'Email is confirmed, checking if user exists in users table...',
-          );
-
-          // Check if user exists in users table
-          try {
-            await SupabaseManager()
-                .from('users')
-                .select('supabase_id')
-                .eq('supabase_id', user!.id)
-                .single();
-
-            debugLog('User exists in users table, redirecting to login');
-            return Routes.login;
-          } catch (e) {
-            debugLog('User not in users table, copying from pending_users...');
-
-            // Copy user data from pending_users to users table
-            try {
-              final pendingUser = await SupabaseManager()
-                  .from('pending_users')
-                  .select('firstname, lastname, phone_number')
-                  .eq('email', user!.email ?? '')
-                  .single();
-
-              debugLog('Found pending user data, copying to users table...');
-              await SupabaseManager().dualInsert('users', {
-                'supabase_id': user.id,
-                'firstname': pendingUser['firstname'],
-                'lastname': pendingUser['lastname'],
-                'phonenbr': pendingUser['phone_number'],
-              });
-
-              debugLog(
-                'User data copied successfully, cleaning up pending_users...',
-              );
-
-              // Delete the record from pending_users to prevent data leakage
-              await SupabaseManager().dualDelete(
-                'pending_users',
-                filters: {'email': user.email ?? ''},
-              );
-
-              debugLog(
-                'Pending user data cleaned up successfully, redirecting to login',
-              );
-              return Routes.login;
-            } catch (copyError) {
-              debugLog('Error copying user data: $copyError');
-            }
-          }
-        } else {
-          debugLog('Email not confirmed yet');
-        }
-      } catch (e) {
-        debugLog('Error handling email confirmation: $e');
+      final user = SupabaseManager().auth.currentUser;
+      if (user != null && user.emailConfirmedAt != null) {
+        await ensureUserRecord(user);
       }
-
-      // If we get here, redirect to login
       return Routes.login;
     }
 
-    // If user has a session and is on an auth route, check if they should be redirected
+    // If user has a session and is on an auth route, redirect to app if possible
     if (session != null && isAuthRoute) {
       final user = session.user;
-      debugLog(
-        '=== ROUTER DEBUG: User with session on auth route: ${user.email} ===',
-      );
-      debugLog('=== ROUTER DEBUG: User ID: ${user.id} ===');
-      debugLog(
-        '=== ROUTER DEBUG: Email confirmed: ${user.emailConfirmedAt != null} ===',
-      );
-      debugLog(
-        '=== ROUTER DEBUG: Current location: ${state.matchedLocation} ===',
-      );
+      debugLog('=== ROUTER: Session on auth route for ${user.email} ===');
 
       if (user.emailConfirmedAt != null) {
-        try {
-          debugLog(
-            '=== ROUTER DEBUG: Checking if user exists in users table... ===',
-          );
-          final userRecord = await SupabaseManager()
-              .from('users')
-              .select('supabase_id, firstname, lastname')
-              .eq('supabase_id', user.id)
-              .single();
-
-          debugLog(
-            '=== ROUTER DEBUG: User found in users table: ${userRecord['firstname']} ${userRecord['lastname']} ===',
-          );
-          debugLog(
-            '=== ROUTER DEBUG: About to redirect to: ${Routes.selectEvent} ===',
-          );
-
+        final created = await ensureUserRecord(user);
+        if (created) {
           return Routes.selectEvent;
-        } catch (e) {
-          debugLog(
-            '=== ROUTER DEBUG: User not found in users table, error: $e ===',
-          );
-
-          // Try to copy from pending_users but DON'T delete the pending record
-          try {
-            final pendingUser = await SupabaseManager()
-                .from('pending_users')
-                .select('firstname, lastname, phone_number')
-                .eq('email', user.email ?? '')
-                .single();
-
-            debugLog(
-              '=== ROUTER DEBUG: Found pending user, copying to users table ===',
-            );
-            await SupabaseManager().dualInsert('users', {
-              'supabase_id': user.id,
-              'firstname': pendingUser['firstname'],
-              'lastname': pendingUser['lastname'],
-              'phonenbr': pendingUser['phone_number'],
-            });
-
-            debugLog(
-              '=== ROUTER DEBUG: User copied successfully, redirecting to select event ===',
-            );
-            return Routes.selectEvent;
-          } catch (copyError) {
-            debugLog(
-              '=== ROUTER DEBUG: Error copying from pending_users: $copyError ===',
-            );
-          }
-
-          // If we can't find or copy the user, stay on auth page
-          return null;
         }
+        // Can't create user record — stay on auth page
+        return null;
       } else {
-        debugLog(
-          '=== ROUTER DEBUG: Email not confirmed, staying on auth page ===',
-        );
+        debugLog('=== ROUTER: Email not confirmed, staying on auth page ===');
         return null;
       }
     }
@@ -214,66 +174,20 @@ final router = GoRouter(
       return Routes.login;
     }
 
-    // If user has a session and is not on an auth route, check if they exist in users table
+    // If user has a session and is not on an auth route, ensure they have a users record
     if (session != null && !isAuthRoute) {
       final user = session.user;
-      debugLog('User with session: ${user.email}');
-      debugLog('Email confirmed at: ${user.emailConfirmedAt}');
+      debugLog('=== ROUTER: Session on non-auth route for ${user.email} ===');
 
       if (user.emailConfirmedAt != null) {
-        try {
-          // Check if user exists in the users table
-          await SupabaseManager()
-              .from('users')
-              .select('supabase_id')
-              .eq('supabase_id', user.id)
-              .single();
-
-          debugLog('User exists in users table, allowing access');
-          return null; // Allow access to the requested route
-        } catch (e) {
-          debugLog('User not in users table, copying from pending_users...');
-
-          // Copy user data from pending_users to users table
-          try {
-            final pendingUser = await SupabaseManager()
-                .from('pending_users')
-                .select('firstname, lastname, phone_number')
-                .eq('email', user.email ?? '')
-                .single();
-
-            debugLog('Found pending user data, copying to users table...');
-            await SupabaseManager().dualInsert('users', {
-              'supabase_id': user.id,
-              'firstname': pendingUser['firstname'],
-              'lastname': pendingUser['lastname'],
-              'phonenbr': pendingUser['phone_number'],
-            });
-
-            debugLog(
-              'User data copied successfully, cleaning up pending_users...',
-            );
-
-            // Delete the record from pending_users to prevent data leakage
-            await SupabaseManager().dualDelete(
-              'pending_users',
-              filters: {'email': user.email ?? ''},
-            );
-
-            debugLog(
-              'Pending user data cleaned up successfully, allowing access',
-            );
-            return null; // Allow access to the requested route
-          } catch (copyError) {
-            debugLog('Error copying user data: $copyError');
-          }
-
-          // If copying fails, redirect to login
-          debugLog('Redirecting to login due to missing user data');
-          return Routes.login;
+        final created = await ensureUserRecord(user);
+        if (created) {
+          return null; // Allow access
         }
+        debugLog('=== ROUTER: Could not ensure user record, redirecting to login ===');
+        return Routes.login;
       } else {
-        debugLog('User not confirmed yet, redirecting to login');
+        debugLog('=== ROUTER: Email not confirmed, redirecting to login ===');
         return Routes.login;
       }
     }

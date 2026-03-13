@@ -187,7 +187,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Strip:'),
+          Text(
+            'Strip:',
+            style: AppTypography.titleSmall(context).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
@@ -209,14 +214,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.15),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                selectedColor: AppColors.actionAccent(context).withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedPod == podLetter
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade400,
+                      ? AppColors.actionAccent(context)
+                      : Theme.of(context).colorScheme.outline,
                 ),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(
@@ -249,14 +252,14 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
                   selectedColor: Theme.of(
                     context,
                   ).colorScheme.primary.withValues(alpha: 0.15),
                   side: BorderSide(
                     color: _selectedStripNumber == stripNum
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade400,
+                        ? AppColors.actionAccent(context)
+                        : Theme.of(context).colorScheme.outline,
                   ),
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(
@@ -283,7 +286,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Strip:'),
+          Text(
+            'Strip:',
+            style: AppTypography.titleSmall(context).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
@@ -301,14 +309,12 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                selectedColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.15),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                selectedColor: AppColors.actionAccent(context).withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedStrip == stripNumber
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade400,
+                      ? AppColors.actionAccent(context)
+                      : Theme.of(context).colorScheme.outline,
                 ),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(
@@ -473,9 +479,11 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Edit Problem',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: AppTypography.titleLarge(context).copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               AppSpacing.verticalMd,
               if (_isLoadingData)
@@ -499,11 +507,10 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                           ),
                         Text(
                           'Current: Strip ${widget.currentStrip ?? '?'} - ${widget.currentSymptomString ?? 'Unknown'}',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontStyle: FontStyle.italic,
-                                color: Colors.grey[600],
-                              ),
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.textSecondary(context),
+                          ),
                         ),
                         AppSpacing.verticalMd,
                         _buildStripSelector(),
@@ -591,16 +598,21 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                 ),
               AppSpacing.verticalMd,
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton(
                     key: const ValueKey('edit_symptom_cancel_button'),
                     onPressed: _isLoading
                         ? null
                         : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: AppColors.actionAccent(context),
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                  AppSpacing.horizontalSm,
                   TextButton(
                     key: const ValueKey('edit_symptom_submit_button'),
                     onPressed: _isLoading ? null : _submitChange,
@@ -610,7 +622,13 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                             height: 20,
                             child: AppLoadingIndicator(),
                           )
-                        : const Text('Save'),
+                        : Text(
+                            'Save',
+                            style: TextStyle(
+                              color: AppColors.textPrimary(context),
+                              fontSize: 16,
+                            ),
+                          ),
                   ),
                 ],
               ),

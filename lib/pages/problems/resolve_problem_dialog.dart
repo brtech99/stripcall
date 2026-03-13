@@ -181,9 +181,11 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Resolve Problem',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: AppTypography.titleLarge(context).copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 AppSpacing.verticalMd,
                 Flexible(
@@ -205,9 +207,9 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                         if (_problemSymptomId != null) ...[
                           Text(
                             'Available resolutions for this problem (${_actions.length} found)',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                            style: AppTypography.bodySmall(context).copyWith(
+                              color: AppColors.textSecondary(context),
+                            ),
                           ),
                           AppSpacing.verticalSm,
                         ],
@@ -251,11 +253,18 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                           ),
                         ),
                         AppSpacing.verticalMd,
+                        Text(
+                          'Notes (Optional)',
+                          style: AppTypography.titleSmall(context).copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        AppSpacing.verticalSm,
                         AppTextField(
                           key: const ValueKey('resolve_problem_notes_field'),
                           controller: _notesController,
-                          label: 'Notes (Optional)',
-                          maxLines: 3,
+                          hint: 'Add any notes...',
+                          maxLines: 4,
                         ),
                       ],
                     ),
@@ -263,16 +272,21 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                 ),
                 AppSpacing.verticalMd,
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
                       key: const ValueKey('resolve_problem_cancel_button'),
                       onPressed: _isLoading
                           ? null
                           : () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
-                    AppSpacing.horizontalSm,
                     Semantics(
                       identifier: 'resolve_problem_submit_button',
                       child: TextButton(
@@ -284,7 +298,14 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                                 height: 20,
                                 child: AppLoadingIndicator(),
                               )
-                            : const Text('Resolve'),
+                            : Text(
+                                'Resolve',
+                                style: TextStyle(
+                                  color: AppColors.actionAccent(context),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
                   ],

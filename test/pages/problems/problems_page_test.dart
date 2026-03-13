@@ -374,7 +374,7 @@ void main() {
       expect(find.textContaining('Loose wire'), findsOneWidget);
     });
 
-    testWidgets('shows Report Problem button', (tester) async {
+    testWidgets('shows Report Problem button (FAB on Android)', (tester) async {
       final repo = MockProblemsRepository(
         mockProblems: [],
         mockUserCrewId: 10,
@@ -383,37 +383,11 @@ void main() {
       await tester.pumpWidget(buildTestWidget(repository: repo));
       await pumpAndWaitForInit(tester);
 
-      expect(find.text('Report Problem'), findsOneWidget);
-    });
-
-    testWidgets('shows refresh button', (tester) async {
-      final repo = MockProblemsRepository(
-        mockProblems: [],
-        mockUserCrewId: 10,
-        mockUserCrewName: 'Armorer',
+      // On Android (default test platform), report button is a FAB with + icon
+      expect(
+        find.byKey(const ValueKey('problems_report_button')),
+        findsOneWidget,
       );
-      await tester.pumpWidget(buildTestWidget(repository: repo));
-      await pumpAndWaitForInit(tester);
-
-      expect(find.byIcon(Icons.refresh), findsOneWidget);
-    });
-
-    testWidgets('refresh button reloads problems', (tester) async {
-      final repo = MockProblemsRepository(
-        mockProblems: [],
-        mockUserCrewId: 10,
-        mockUserCrewName: 'Armorer',
-      );
-      await tester.pumpWidget(buildTestWidget(repository: repo));
-      await pumpAndWaitForInit(tester);
-
-      final initialCallCount = repo.loadProblemsCallCount;
-
-      await tester.tap(find.byIcon(Icons.refresh));
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pumpAndSettle();
-
-      expect(repo.loadProblemsCallCount, greaterThan(initialCallCount));
     });
 
     testWidgets('shows app bar title with crew name', (tester) async {

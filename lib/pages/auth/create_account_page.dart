@@ -54,6 +54,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       final response = await SupabaseManager().auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: 'https://stripcall.us/app',
         data: {'firstname': firstName, 'lastname': lastName},
       );
 
@@ -122,152 +123,226 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     }
   }
 
+  bool _obscurePassword = true;
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: AppTypography.titleSmall(context).copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final accentColor = AppColors.actionAccent(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: Padding(
+      appBar: AppBar(title: const Text('StripCall')),
+      body: SingleChildScrollView(
         padding: AppSpacing.screenPadding,
-        child: SingleChildScrollView(
-          child: AutofillGroup(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  if (_error != null)
-                    Padding(
-                      padding: EdgeInsets.only(bottom: AppSpacing.md),
-                      child: Container(
-                        padding: AppSpacing.paddingSm,
-                        decoration: BoxDecoration(
-                          color: AppColors.errorContainer(context),
-                          borderRadius: AppSpacing.borderRadiusMd,
-                        ),
-                        child: Text(
-                          _error!,
-                          style: TextStyle(
-                            color: AppColors.onErrorContainer(context),
-                          ),
+        child: AutofillGroup(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+
+                Center(
+                  child: Text(
+                    'Create Account',
+                    style: AppTypography.headlineSmall(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    'Sign up to get started',
+                    style: AppTypography.bodyMedium(context).copyWith(
+                      color: AppColors.textSecondary(context),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                if (_error != null)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.md),
+                    child: Container(
+                      padding: AppSpacing.paddingSm,
+                      decoration: BoxDecoration(
+                        color: AppColors.errorContainer(context),
+                        borderRadius: AppSpacing.borderRadiusMd,
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: AppColors.onErrorContainer(context),
                         ),
                       ),
                     ),
-                  TextFormField(
-                    key: const ValueKey('register_firstname_field'),
-                    controller: _firstNameController,
-                    decoration: const InputDecoration(labelText: 'First Name'),
-                    autofillHints: const [AutofillHints.givenName],
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your first name';
-                      }
-                      return null;
-                    },
                   ),
-                  AppSpacing.verticalMd,
-                  TextFormField(
-                    key: const ValueKey('register_lastname_field'),
-                    controller: _lastNameController,
-                    decoration: const InputDecoration(labelText: 'Last Name'),
-                    autofillHints: const [AutofillHints.familyName],
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your last name';
-                      }
-                      return null;
-                    },
+
+                _buildLabel('First Name'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_firstname_field'),
+                  controller: _firstNameController,
+                  decoration: const InputDecoration(hintText: 'John'),
+                  autofillHints: const [AutofillHints.givenName],
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your first name';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.verticalMd,
+
+                _buildLabel('Last Name'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_lastname_field'),
+                  controller: _lastNameController,
+                  decoration: const InputDecoration(hintText: 'Smith'),
+                  autofillHints: const [AutofillHints.familyName],
+                  textCapitalization: TextCapitalization.words,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your last name';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.verticalMd,
+
+                _buildLabel('Phone Number'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_phone_field'),
+                  controller: _phoneController,
+                  decoration: const InputDecoration(
+                    hintText: '(555) 123-4567',
                   ),
-                  AppSpacing.verticalMd,
-                  TextFormField(
-                    key: const ValueKey('register_phone_field'),
-                    controller: _phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number',
-                    ),
-                    autofillHints: const [AutofillHints.telephoneNumber],
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your phone number';
-                      }
-                      if (value.trim().length < 10) {
-                        return 'Please enter a valid phone number';
-                      }
-                      return null;
-                    },
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your phone number';
+                    }
+                    if (value.trim().length < 10) {
+                      return 'Please enter a valid phone number';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.verticalMd,
+
+                _buildLabel('Email'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_email_field'),
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    hintText: 'your@email.com',
                   ),
-                  AppSpacing.verticalMd,
-                  TextFormField(
-                    key: const ValueKey('register_email_field'),
-                    controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    autofillHints: const [
-                      AutofillHints.email,
-                      AutofillHints.username,
-                    ],
-                    keyboardType: TextInputType.emailAddress,
-                    textCapitalization: TextCapitalization.none,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter your email';
-                      }
-                      final emailRegex = RegExp(
-                        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                      );
-                      final trimmedValue = value.trim();
-                      if (!emailRegex.hasMatch(trimmedValue)) {
-                        return 'Please enter a valid email address';
-                      }
-                      return null;
-                    },
-                  ),
-                  AppSpacing.verticalMd,
-                  TextFormField(
-                    key: const ValueKey('register_password_field'),
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.newPassword],
-                    textCapitalization: TextCapitalization.none,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter a password';
-                      }
-                      if (value.length < 6) {
-                        return 'Password must be at least 6 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                  AppSpacing.verticalLg,
-                  AppButton(
-                    buttonKey: const ValueKey('register_submit_button'),
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            if (_formKey.currentState?.validate() ?? false) {
-                              _signUp();
-                            }
-                          },
-                    isLoading: _isLoading,
-                    expand: true,
-                    child: const Text('Create Account'),
-                  ),
-                  AppSpacing.verticalMd,
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Already have an account?'),
-                      AppButton.secondary(
-                        buttonKey: const ValueKey('register_signin_button'),
-                        onPressed: () => context.go(Routes.login),
-                        child: const Text('Sign In'),
+                  autofillHints: const [
+                    AutofillHints.email,
+                    AutofillHints.username,
+                  ],
+                  keyboardType: TextInputType.emailAddress,
+                  textCapitalization: TextCapitalization.none,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    final emailRegex = RegExp(
+                      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                    );
+                    final trimmedValue = value.trim();
+                    if (!emailRegex.hasMatch(trimmedValue)) {
+                      return 'Please enter a valid email address';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.verticalMd,
+
+                _buildLabel('Password'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_password_field'),
+                  controller: _passwordController,
+                  decoration: InputDecoration(
+                    hintText: 'At least 6 characters',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary(context),
                       ),
-                    ],
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
                   ),
-                ],
-              ),
+                  obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.newPassword],
+                  textCapitalization: TextCapitalization.none,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                AppButton(
+                  buttonKey: const ValueKey('register_submit_button'),
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          if (_formKey.currentState?.validate() ?? false) {
+                            _signUp();
+                          }
+                        },
+                  isLoading: _isLoading,
+                  expand: true,
+                  child: const Text('Create Account'),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Already have an account? ',
+                      style: AppTypography.bodyMedium(context),
+                    ),
+                    GestureDetector(
+                      key: const ValueKey('register_signin_button'),
+                      onTap: () => context.go(Routes.login),
+                      child: Text(
+                        'Sign In',
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

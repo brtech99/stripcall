@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_colors.dart';
 
 /// Typography styles for the app.
 ///
@@ -143,7 +144,7 @@ class AppTypography {
   /// Style for success messages
   static TextStyle successText(BuildContext context) =>
       bodySmall(context).copyWith(
-        color: const Color(0xFF4CAF50), // statusSuccess
+        color: AppColors.statusSuccess,
         fontWeight: FontWeight.w600,
       );
 

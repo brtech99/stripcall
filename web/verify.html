@@ -94,42 +94,49 @@
     </div>
 
     <script>
-        // Get URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get('error');
-        const errorDescription = urlParams.get('error_description');
-        const accessToken = urlParams.get('access_token');
-        const refreshToken = urlParams.get('refresh_token');
+        // Supabase returns tokens in the URL fragment (#), not query string (?)
+        // Parse both locations to handle either format
+        function getParams() {
+            // Try hash fragment first (Supabase default for email confirm)
+            const hash = window.location.hash.substring(1);
+            const hashParams = new URLSearchParams(hash);
+            // Also check query string as fallback
+            const queryParams = new URLSearchParams(window.location.search);
 
-        if (error) {
+            return {
+                error: hashParams.get('error') || queryParams.get('error'),
+                errorDescription: hashParams.get('error_description') || queryParams.get('error_description'),
+                accessToken: hashParams.get('access_token') || queryParams.get('access_token'),
+                refreshToken: hashParams.get('refresh_token') || queryParams.get('refresh_token'),
+                type: hashParams.get('type') || queryParams.get('type'),
+            };
+        }
+
+        const params = getParams();
+
+        if (params.error) {
             // Show error message
             document.getElementById('loading').style.display = 'none';
             document.getElementById('error').style.display = 'block';
-            if (errorDescription) {
-                document.getElementById('error-message').textContent = errorDescription;
+            if (params.errorDescription) {
+                document.getElementById('error-message').textContent = params.errorDescription;
             }
-        } else if (accessToken) {
+        } else if (params.accessToken) {
             // Success - user is confirmed
             document.getElementById('loading').style.display = 'none';
             document.getElementById('success').style.display = 'block';
-            
-            // Store tokens in localStorage for the Flutter app to use
-            localStorage.setItem('supabase.auth.token', accessToken);
-            if (refreshToken) {
-                localStorage.setItem('supabase.auth.refreshToken', refreshToken);
-            }
-            
-            // Redirect to the Flutter app after a short delay
+
+            // Redirect to the Flutter app with the tokens so Supabase client can pick them up
             setTimeout(() => {
-                // Try to redirect to the Flutter app
-                // You may need to adjust this URL based on where your Flutter app is hosted
-                window.location.href = '/app/';
+                window.location.href = '/app/#access_token=' + params.accessToken
+                    + (params.refreshToken ? '&refresh_token=' + params.refreshToken : '')
+                    + (params.type ? '&type=' + params.type : '');
             }, 2000);
         } else {
             // No tokens or error, show error
             document.getElementById('loading').style.display = 'none';
             document.getElementById('error').style.display = 'block';
-            document.getElementById('error-message').textContent = 'Invalid verification link.';
+            document.getElementById('error-message').textContent = 'Invalid verification link. Please try clicking the link from your email again.';
         }
     </script>
 </body>

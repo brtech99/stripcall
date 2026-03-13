@@ -1,9 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 import '../../services/supabase_manager.dart';
 import '../../widgets/settings_menu.dart';
-import '../../widgets/user_name_display.dart';
 import '../../widgets/crew_message_window.dart';
 import '../../widgets/problem_card.dart';
 import '../../models/problem_with_details.dart';
@@ -677,6 +677,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isApple = AppTheme.isApplePlatform(context);
+
     String appBarTitle;
     if (_state.isSuperUser) {
       final selectedCrew = _state.allCrews.firstWhere(
@@ -691,49 +693,119 @@ class _ProblemsPageState extends State<ProblemsPage> {
       appBarTitle = _state.userCrewName ?? 'My Problems';
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: _state.isSuperUser
-            ? DropdownButton<int>(
-                key: const ValueKey('problems_crew_dropdown'),
-                value: _state.selectedCrewId,
-                underline: Container(),
+    final titleWidget = _state.isSuperUser
+        ? DropdownButton<int>(
+            key: const ValueKey('problems_crew_dropdown'),
+            value: _state.selectedCrewId,
+            underline: Container(),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+            dropdownColor: Theme.of(context).colorScheme.surface,
+            items: _state.allCrews.map((crew) {
+              final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
+              return DropdownMenuItem(
+                key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
+                value: crew['id'] as int,
+                child: Text(
+                  crewType,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              );
+            }).toList(),
+            onChanged: _onCrewSelected,
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                appBarTitle,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
-                dropdownColor: Theme.of(context).colorScheme.surface,
-                items: _state.allCrews.map((crew) {
-                  final crewType = crew['crewtype']?['crewtype'] ?? 'Unknown';
-                  return DropdownMenuItem(
-                    key: ValueKey('problems_crew_dropdown_item_${crew['id']}'),
-                    value: crew['id'] as int,
-                    child: Text(
-                      crewType,
+              ),
+              Icon(
+                Icons.expand_more,
+                size: 20,
+                color: AppColors.textSecondary(context),
+              ),
+            ],
+          );
+
+    final body = Column(
+      children: [
+        if (_state.shouldShowCrewMessageWindow(widget.crewId))
+          CrewMessageWindow(
+            key: _crewMessageKey,
+            crewId: _state.getActiveCrewId(widget.crewId)!,
+            currentUserId: _repo.currentUserId,
+          ),
+        Expanded(child: _buildProblemsContent()),
+      ],
+    );
+
+    if (isApple) {
+      return _buildAppleLayout(titleWidget, body);
+    }
+    return _buildMaterialLayout(titleWidget, body);
+  }
+
+  Widget _buildAppleLayout(Widget titleWidget, Widget body) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.of(context).pop(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(CupertinoIcons.back, size: 20),
+                    Text(
+                      'Events',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: AppColors.primary(context),
+                        fontSize: 16,
                       ),
                     ),
-                  );
-                }).toList(),
-                onChanged: _onCrewSelected,
+                  ],
+                ),
               )
-            : Text(appBarTitle),
-        actions: [const UserNameDisplay(), const SettingsMenu()],
+            : null,
+        leadingWidth: 100,
+        title: titleWidget,
+        centerTitle: true,
+        actions: [const SettingsMenu()],
       ),
-      body: Column(
-        children: [
-          if (_state.shouldShowCrewMessageWindow(widget.crewId))
-            CrewMessageWindow(
-              key: _crewMessageKey,
-              crewId: _state.getActiveCrewId(widget.crewId)!,
-              currentUserId: _repo.currentUserId,
-            ),
-          Expanded(child: _buildProblemsContent()),
-        ],
+      body: body,
+      bottomNavigationBar: _buildAppleBottomBar(),
+    );
+  }
+
+  Widget _buildMaterialLayout(Widget titleWidget, Widget body) {
+    return Scaffold(
+      appBar: AppBar(
+        title: titleWidget,
+        centerTitle: true,
+        actions: [const SettingsMenu()],
       ),
-      bottomNavigationBar: _buildBottomBar(),
+      body: body,
+      floatingActionButton: Semantics(
+        identifier: 'problems_report_button',
+        child: FloatingActionButton(
+          key: const ValueKey('problems_report_button'),
+          onPressed: _showNewProblemDialog,
+          backgroundColor: AppColors.actionAccent(context),
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.add),
+        ),
+      ),
     );
   }
 
@@ -842,37 +914,62 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
   }
 
-  Widget _buildBottomBar() {
-    return BottomAppBar(
+  Widget _buildAppleBottomBar() {
+    final accentColor = AppColors.actionAccent(context);
+
+    return SafeArea(
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
             Expanded(
               child: Semantics(
                 identifier: 'problems_report_button',
-                child: ElevatedButton.icon(
+                child: GestureDetector(
                   key: const ValueKey('problems_report_button'),
-                  onPressed: _showNewProblemDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Report Problem'),
+                  onTap: _showNewProblemDialog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: accentColor, width: 1.5),
+                      borderRadius: AppSpacing.borderRadiusLg,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add, size: 20, color: accentColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Report Problem',
+                          style: TextStyle(
+                            color: accentColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-            AppSpacing.horizontalSm,
+            const SizedBox(width: 12),
             Semantics(
               identifier: 'problems_refresh_button',
-              child: IconButton(
+              child: GestureDetector(
                 key: const ValueKey('problems_refresh_button'),
-                onPressed: () {
+                onTap: () {
                   _updateState(_state.copyWith(isLoading: true));
                   _loadProblems();
                 },
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
+                child: Icon(
+                  CupertinoIcons.refresh,
+                  color: AppColors.textSecondary(context),
+                  size: 24,
+                ),
               ),
             ),
           ],

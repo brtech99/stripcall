@@ -3,6 +3,7 @@ import '../../services/supabase_manager.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
+import '../../router.dart' show ensureUserRecord;
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 
@@ -26,14 +27,9 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
 
   Future<void> _processEmailConfirmation() async {
     try {
-      debugLog(
-        '=== EMAIL CONFIRMATION PAGE: Processing email confirmation ===',
-      );
+      debugLog('=== EMAIL CONFIRMATION PAGE: Processing ===');
 
       final user = SupabaseManager().auth.currentUser;
-      debugLog('Current user: ${user?.email}');
-      debugLog('Email confirmed at: ${user?.emailConfirmedAt}');
-
       if (user == null) {
         setState(() {
           _isProcessing = false;
@@ -51,77 +47,20 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
         return;
       }
 
-      try {
-        await SupabaseManager()
-            .from('users')
-            .select('supabase_id')
-            .eq('supabase_id', user.id)
-            .single();
+      final success = await ensureUserRecord(user);
 
-        debugLog('User already exists in users table');
+      if (success) {
         setState(() {
           _isProcessing = false;
-          _message = 'Email confirmed successfully! You can now log in.';
+          _message = 'Account confirmed successfully! You can now log in.';
         });
-
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            context.go(Routes.login);
-          }
+          if (mounted) context.go(Routes.login);
         });
-        return;
-      } catch (e) {
-        debugLog('User not in users table, copying from pending_users...');
-      }
-
-      try {
-        final pendingUser = await SupabaseManager()
-            .from('pending_users')
-            .select('firstname, lastname, phone_number')
-            .eq('email', user.email ?? '')
-            .maybeSingle();
-
-        if (pendingUser != null) {
-          debugLog('Found pending user data, copying to users table...');
-          await SupabaseManager().dualInsert('users', {
-            'supabase_id': user.id,
-            'firstname': pendingUser['firstname'],
-            'lastname': pendingUser['lastname'],
-            'phonenbr': pendingUser['phone_number'],
-          });
-
-          debugLog(
-            'User data copied successfully, cleaning up pending_users...',
-          );
-
-          await SupabaseManager().dualDelete(
-            'pending_users',
-            filters: {'email': user.email ?? ''},
-          );
-
-          debugLog('Pending user data cleaned up successfully');
-          setState(() {
-            _isProcessing = false;
-            _message = 'Account confirmed successfully! You can now log in.';
-          });
-
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              context.go(Routes.login);
-            }
-          });
-        } else {
-          debugLog('No pending user data found');
-          setState(() {
-            _isProcessing = false;
-            _error = 'Account data not found. Please contact support.';
-          });
-        }
-      } catch (copyError) {
-        debugLogError('Error copying user data', copyError);
+      } else {
         setState(() {
           _isProcessing = false;
-          _error = 'Error setting up account: $copyError';
+          _error = 'Could not set up account. Please contact support.';
         });
       }
     } catch (e) {

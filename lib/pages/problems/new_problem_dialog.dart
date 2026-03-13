@@ -249,7 +249,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Select Pod and Strip:'),
+          Text(
+            'Select Pod and Strip:',
+            style: AppTypography.titleSmall(context).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
@@ -271,14 +276,14 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
                 selectedColor: Theme.of(
                   context,
                 ).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedPod == podLetter
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade400,
+                      ? AppColors.actionAccent(context)
+                      : Theme.of(context).colorScheme.outline,
                 ),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(
@@ -311,14 +316,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  selectedColor: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.15),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                  selectedColor: AppColors.actionAccent(context).withValues(alpha: 0.15),
                   side: BorderSide(
                     color: _selectedStripNumber == stripNum
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade400,
+                        ? AppColors.actionAccent(context)
+                        : Theme.of(context).colorScheme.outline,
                   ),
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(
@@ -345,7 +348,12 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Select Strip:'),
+          Text(
+            'Select Strip:',
+            style: AppTypography.titleSmall(context).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           AppSpacing.verticalSm,
           Wrap(
             spacing: 8,
@@ -363,14 +371,14 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                backgroundColor: Theme.of(context).colorScheme.surface,
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
                 selectedColor: Theme.of(
                   context,
                 ).colorScheme.primary.withValues(alpha: 0.15),
                 side: BorderSide(
                   color: _selectedStrip == stripNumber
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey.shade400,
+                      ? AppColors.actionAccent(context)
+                      : Theme.of(context).colorScheme.outline,
                 ),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(
@@ -394,6 +402,13 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
       child: AlertDialog(
         key: const ValueKey('new_problem_dialog'),
         insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+        title: Text(
+          'Report Problem',
+          style: AppTypography.titleLarge(context).copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
           child: SingleChildScrollView(
@@ -411,9 +426,11 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                       ),
                     ),
                   ),
-                const Text(
-                  'Select Crew:',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                Text(
+                  'Select Crew',
+                  style: AppTypography.titleSmall(context).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 AppSpacing.verticalSm,
                 RadioGroup<int>(
@@ -511,7 +528,27 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                         ),
                       ),
                 AppSpacing.verticalMd,
-                Semantics(
+                _selectedSymptomClass == null
+                    ? DropdownButtonFormField<String>(
+                        key: const ValueKey(
+                          'new_problem_symptom_dropdown_disabled',
+                        ),
+                        initialValue: null,
+                        decoration: const InputDecoration(
+                          labelText: 'Problem',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(
+                              'Select problem area first',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                        onChanged: null,
+                      )
+                    : Semantics(
                   identifier: 'new_problem_symptom_dropdown',
                   child: DropdownButtonFormField<String>(
                     key: const ValueKey('new_problem_symptom_dropdown'),
@@ -534,18 +571,23 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
             ),
           ),
         ),
-        actionsPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         actions: [
-          OverflowBar(
-            alignment: MainAxisAlignment.end,
-            spacing: 4,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton(
                 key: const ValueKey('new_problem_cancel_button'),
                 onPressed: _isLoading
                     ? null
                     : () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: AppColors.actionAccent(context),
+                    fontSize: 16,
+                  ),
+                ),
               ),
               Semantics(
                 identifier: 'new_problem_submit_button',
@@ -558,7 +600,15 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                           height: 16,
                           child: AppLoadingIndicator(),
                         )
-                      : const Text('Submit'),
+                      : Text(
+                          'Submit',
+                          style: TextStyle(
+                            color: _canSubmit
+                                ? AppColors.textPrimary(context)
+                                : AppColors.textPlaceholder(context),
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ],

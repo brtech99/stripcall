@@ -139,11 +139,23 @@ class AppButton extends StatelessWidget {
       );
     }
 
-    return CupertinoButton.filled(
+    final accentColor = isDestructive
+        ? AppColors.error(context)
+        : AppColors.actionAccent(context);
+    return CupertinoButton(
       key: buttonKey,
       onPressed: onPressed,
+      color: accentColor,
       padding: padding ?? AppSpacing.buttonPadding,
-      child: child,
+      borderRadius: AppSpacing.borderRadiusMd,
+      child: DefaultTextStyle(
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+        ),
+        child: child,
+      ),
     );
   }
 
@@ -171,8 +183,11 @@ class AppButton extends StatelessWidget {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         padding: effectivePadding,
-        backgroundColor: isDestructive ? AppColors.error(context) : null,
-        foregroundColor: isDestructive ? AppColors.onError(context) : null,
+        backgroundColor: isDestructive
+            ? AppColors.error(context)
+            : AppColors.actionAccent(context),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusMd),
       ),
       child: child,
     );

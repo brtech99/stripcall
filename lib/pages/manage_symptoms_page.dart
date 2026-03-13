@@ -706,7 +706,7 @@ class _ManageSymptomsPageState extends State<ManageSymptomsPage> {
         title: const Text('Manage Symptoms'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(Routes.home),
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: Column(
@@ -915,9 +915,9 @@ class _SymptomClassCardState extends State<_SymptomClassCard> {
               children: [
                 ReorderableDragStartListener(
                   index: widget.index,
-                  child: const Icon(
+                  child: Icon(
                     Icons.drag_handle,
-                    color: Colors.grey,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     size: 24,
                   ),
                 ),
@@ -1119,7 +1119,7 @@ class _SymptomCardState extends State<_SymptomCard> {
 
     return Card(
       margin: const EdgeInsets.only(top: 8.0),
-      color: Colors.grey[100],
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Column(
         children: [
           ListTile(
@@ -1128,9 +1128,9 @@ class _SymptomCardState extends State<_SymptomCard> {
               children: [
                 ReorderableDragStartListener(
                   index: widget.index,
-                  child: const Icon(
+                  child: Icon(
                     Icons.drag_handle,
-                    color: Colors.grey,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     size: 20,
                   ),
                 ),
@@ -1312,11 +1312,11 @@ class _ActionCardState extends State<_ActionCard> {
 
     return Card(
       margin: const EdgeInsets.only(top: 8.0),
-      color: Colors.grey[200],
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
       child: ListTile(
         leading: ReorderableDragStartListener(
           index: widget.index,
-          child: const Icon(Icons.drag_handle, color: Colors.grey, size: 18),
+          child: Icon(Icons.drag_handle, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
         ),
         title: TextField(
           controller: _controller,
