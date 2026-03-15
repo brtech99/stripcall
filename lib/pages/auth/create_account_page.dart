@@ -20,6 +20,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   String? _error;
 
@@ -30,6 +31,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -70,7 +72,10 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
         try {
           debugLog('Inserting user data into pending_users table...');
-          await SupabaseManager().dualInsert('pending_users', {
+          // Use plain insert (no .select()) because the user is not yet
+          // authenticated — signUp with email confirmation doesn't create a
+          // session, so .select() would fail the read RLS policy.
+          await SupabaseManager().client.from('pending_users').insert({
             'email': email,
             'firstname': firstName,
             'lastname': lastName,
@@ -124,6 +129,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   Widget _buildLabel(String text) {
     return Text(
@@ -301,6 +307,36 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                     }
                     if (value.length < 6) {
                       return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.verticalMd,
+
+                _buildLabel('Confirm Password'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  key: const ValueKey('register_confirm_password_field'),
+                  controller: _confirmPasswordController,
+                  decoration: InputDecoration(
+                    hintText: 'Re-enter your password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary(context),
+                      ),
+                      onPressed: () {
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                      },
+                    ),
+                  ),
+                  obscureText: _obscureConfirmPassword,
+                  textCapitalization: TextCapitalization.none,
+                  validator: (value) {
+                    if (value != _passwordController.text) {
+                      return 'Passwords do not match';
                     }
                     return null;
                   },

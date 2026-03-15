@@ -355,7 +355,7 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     try {
       await SupabaseManager().auth.resetPasswordForEmail(
         _email,
-        redirectTo: 'https://stripcall.us/auth/reset-password',
+        redirectTo: 'https://stripcall.us/app',
       );
 
       if (!mounted) return;

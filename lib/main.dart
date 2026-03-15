@@ -3,12 +3,17 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'router.dart';
+import 'routes.dart';
 import 'services/notification_service.dart';
 import 'services/secret_service.dart';
 import 'config/firebase_config.dart';
 import 'utils/debug_utils.dart';
 import 'theme/theme.dart';
 import 'services/supabase_manager.dart';
+
+/// Global flag: set when a password recovery auth event is detected.
+/// Checked by the router redirect to navigate to the reset password page.
+bool pendingPasswordRecovery = false;
 
 void main() async {
   debugLog('=== STRIPCALL BUILD 2026-01-21-TEST ===');
@@ -29,6 +34,15 @@ void main() async {
   debugLog('Supabase Anon Key: ${supabaseAnonKey.substring(0, 20)}...');
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
+  // Subscribe to auth events immediately after init to catch recovery events
+  // before the router redirect runs. This must happen before runApp().
+  Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+    if (event.event == AuthChangeEvent.passwordRecovery) {
+      debugLog('=== PASSWORD RECOVERY EVENT (early listener) ===');
+      pendingPasswordRecovery = true;
+    }
+  });
 
   debugLog('Supabase initialized successfully');
 
@@ -74,7 +88,11 @@ class _MyAppState extends State<MyApp> {
 
     // Listen for auth state changes
     SupabaseManager().auth.onAuthStateChange.listen((event) {
-      if (event.event == AuthChangeEvent.signedIn) {
+      if (event.event == AuthChangeEvent.passwordRecovery) {
+        debugLog('=== PASSWORD RECOVERY EVENT — redirecting to reset page ===');
+        pendingPasswordRecovery = true;
+        router.go(Routes.resetPassword);
+      } else if (event.event == AuthChangeEvent.signedIn) {
         _initializeFirebaseAfterAuth();
       } else if (event.event == AuthChangeEvent.signedOut) {
         // Clear cached secrets when user logs out

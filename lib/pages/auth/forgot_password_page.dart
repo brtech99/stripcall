@@ -56,7 +56,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       await SupabaseManager().auth.resetPasswordForEmail(
         email,
-        redirectTo: 'https://stripcall.us/auth/reset-password',
+        redirectTo: 'https://stripcall.us/app',
       );
 
       debugLog('Password reset email sent successfully');

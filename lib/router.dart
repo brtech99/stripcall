@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'utils/debug_utils.dart';
 import 'services/supabase_manager.dart';
+import 'main.dart' show pendingPasswordRecovery;
 import 'pages/auth/login_page.dart';
 import 'pages/events/manage_event_page.dart';
 import 'pages/events/manage_events_page.dart';
@@ -15,6 +16,7 @@ import 'pages/auth/create_account_page.dart';
 import 'pages/auth/forgot_password_page.dart';
 import 'models/event.dart';
 import 'pages/auth/email_confirmation_page.dart';
+import 'pages/auth/reset_password_page.dart';
 
 /// Ensures a confirmed auth user has a row in public.users.
 /// Tries pending_users first, then falls back to auth user metadata.
@@ -28,6 +30,13 @@ Future<bool> ensureUserRecord(User user) async {
         .eq('supabase_id', user.id)
         .single();
     debugLog('ensureUserRecord: User already in users table');
+    // Clean up any orphaned pending_users row (best effort)
+    try {
+      await SupabaseManager().dualDelete(
+        'pending_users',
+        filters: {'email': user.email ?? ''},
+      );
+    } catch (_) {}
     return true;
   } catch (_) {
     debugLog('ensureUserRecord: User not in users table, creating...');
@@ -110,16 +119,21 @@ final router = GoRouter(
     if (location.contains('access_token') ||
         location.contains('message=') ||
         location.contains('error=') ||
-        location.contains('type=email')) {
-      debugLog('=== ROUTER: Looks like auth callback, redirecting to home ===');
-      // Return a simple page that redirects
+        location.contains('type=email') ||
+        location.contains('type=recovery')) {
+      debugLog('=== ROUTER: Looks like auth callback, redirecting ===');
       Future.microtask(() {
         if (context.mounted) {
-          final session = SupabaseManager().auth.currentSession;
-          if (session != null) {
-            GoRouter.of(context).go(Routes.selectEvent);
+          // Recovery callbacks go to reset password page
+          if (location.contains('type=recovery')) {
+            GoRouter.of(context).go(Routes.resetPassword);
           } else {
-            GoRouter.of(context).go(Routes.login);
+            final session = SupabaseManager().auth.currentSession;
+            if (session != null) {
+              GoRouter.of(context).go(Routes.selectEvent);
+            } else {
+              GoRouter.of(context).go(Routes.login);
+            }
           }
         }
       });
@@ -135,10 +149,18 @@ final router = GoRouter(
         state.matchedLocation == Routes.login ||
         state.matchedLocation == Routes.register ||
         state.matchedLocation == Routes.forgotPassword ||
+        state.matchedLocation == Routes.resetPassword ||
         state.matchedLocation == '/confirm-email';
 
     debugLog('Session exists: ${session != null}');
     debugLog('Is auth route: $isAuthRoute');
+
+    // Handle password recovery redirect
+    if (pendingPasswordRecovery && session != null) {
+      debugLog('=== ROUTER: Password recovery pending, redirecting to reset page ===');
+      pendingPasswordRecovery = false;
+      return Routes.resetPassword;
+    }
 
     // Handle email confirmation route
     if (state.matchedLocation == '/confirm-email') {
@@ -214,6 +236,10 @@ final router = GoRouter(
     GoRoute(
       path: Routes.forgotPassword,
       builder: (context, state) => ForgotPasswordPage(),
+    ),
+    GoRoute(
+      path: Routes.resetPassword,
+      builder: (context, state) => const ResetPasswordPage(),
     ),
     GoRoute(
       path: Routes.selectEvent,

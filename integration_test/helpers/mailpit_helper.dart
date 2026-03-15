@@ -136,6 +136,45 @@ class MailpitHelper {
     return null;
   }
 
+  /// Extract password reset link from a Supabase password reset email
+  Future<String?> getPasswordResetLink(
+    String email, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final message = await waitForMessage(email, timeout: timeout);
+    if (message == null) return null;
+
+    final detail = await getMessageDetail(message.id);
+
+    // Look for reset link in HTML body
+    final htmlBody = detail.html;
+    if (htmlBody != null) {
+      final linkRegex = RegExp(
+        r'href="(https?://[^"]*(?:recover|reset)[^"]*)"',
+        caseSensitive: false,
+      );
+      final match = linkRegex.firstMatch(htmlBody);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+
+    // Fallback: look in text body
+    final textBody = detail.text;
+    if (textBody != null) {
+      final urlRegex = RegExp(
+        r'(https?://[^\s]*(?:recover|reset)[^\s]*)',
+        caseSensitive: false,
+      );
+      final match = urlRegex.firstMatch(textBody);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+
+    return null;
+  }
+
   /// Extract OTP code from a Supabase email (for OTP-based confirmation)
   Future<String?> getOtpCode(
     String email, {
