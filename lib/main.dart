@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'router.dart';
@@ -77,13 +77,14 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isInitialized = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeApp();
 
     // Listen for auth state changes
@@ -103,6 +104,20 @@ class _MyAppState extends State<MyApp> {
     // If user is already logged in, initialize Firebase now
     if (SupabaseManager().auth.currentSession != null) {
       _initializeFirebaseAfterAuth();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Clear badge count when app comes to foreground
+      NotificationService().clearBadge();
     }
   }
 
@@ -228,10 +243,14 @@ class _MyAppState extends State<MyApp> {
       );
     }
 
+    // Use iOS-specific color tokens on Apple platforms
+    final isApple = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
     return MaterialApp.router(
       title: 'StripCall',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: isApple ? AppTheme.iosLightTheme : AppTheme.lightTheme,
+      darkTheme: isApple ? AppTheme.iosDarkTheme : AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: router,
     );

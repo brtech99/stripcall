@@ -33,6 +33,7 @@ abstract class ProblemsRepository {
     required String userId,
     int? crewId,
     bool isSuperUser,
+    bool showResolved,
   });
   Future<Map<int, List<Map<String, dynamic>>>> loadResponders(
     List<ProblemWithDetails> problems,
@@ -96,11 +97,13 @@ class DefaultProblemsRepository implements ProblemsRepository {
     required String userId,
     int? crewId,
     bool isSuperUser = false,
+    bool showResolved = false,
   }) => _service.loadProblems(
     eventId: eventId,
     userId: userId,
     crewId: crewId,
     isSuperUser: isSuperUser,
+    showResolved: showResolved,
   );
 
   @override
@@ -294,6 +297,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         userId: userId,
         crewId: crewId,
         isSuperUser: _state.isSuperUser,
+        showResolved: _state.showResolved,
       );
 
       _updateState(
@@ -478,8 +482,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     final problemWithDetails = ProblemWithDetails.fromJson(problemJson);
 
-    // Filter out resolved problems that are older than 5 minutes
-    if (problemWithDetails.resolvedDateTimeParsed != null) {
+    // Filter out resolved problems that are older than 5 minutes (unless showing all)
+    if (!_state.showResolved && problemWithDetails.resolvedDateTimeParsed != null) {
       final resolvedTime = problemWithDetails.resolvedDateTimeParsed!;
       final minutesSinceResolved = DateTime.now()
           .difference(resolvedTime)
@@ -492,6 +496,25 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   void _handleNewMessage(Map<String, dynamic> message) {
     if (!mounted) return;
+
+    // Filter out messages not intended for the reporter.
+    // A user sees a message if they are:
+    //   - the author, OR
+    //   - a superuser, OR
+    //   - a crew member of the crew assigned to the problem, OR
+    //   - include_reporter is true (or null for backwards compat)
+    final includeReporter = message['include_reporter'];
+    if (includeReporter == false) {
+      final isAuthor = message['author'] == _repo.currentUserId;
+      if (!isAuthor && !_state.isSuperUser) {
+        final messageCrew = message['crew'];
+        final isCrewMemberOfAssignedCrew = _state.userCrewId != null &&
+            messageCrew != null &&
+            _state.userCrewId == messageCrew;
+        if (!isCrewMemberOfAssignedCrew) return;
+      }
+    }
+
     final problemId = message['problem'] as int;
     _updateState(_state.addMessageToProblem(problemId, message));
   }
@@ -520,7 +543,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   }
 
   void _cleanupResolvedProblems() {
-    if (!mounted) return;
+    if (!mounted || _state.showResolved) return;
 
     _updateState(
       _state.removeProblemsWhere((problem) {
@@ -675,6 +698,17 @@ class _ProblemsPageState extends State<ProblemsPage> {
     await _loadProblems();
   }
 
+  // ---------------------------------------------------------------------------
+  // Active problem count
+  // ---------------------------------------------------------------------------
+
+  int get _activeProblemCount =>
+      _state.problems.where((p) => !p.isResolved).length;
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     final isApple = AppTheme.isApplePlatform(context);
@@ -698,10 +732,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
             key: const ValueKey('problems_crew_dropdown'),
             value: _state.selectedCrewId,
             underline: Container(),
+            icon: Icon(
+              isApple ? CupertinoIcons.chevron_down : Icons.expand_more,
+              size: 18,
+              color: AppColors.textSecondary(context),
+            ),
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 18,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
             dropdownColor: Theme.of(context).colorScheme.surface,
             items: _state.allCrews.map((crew) {
@@ -719,23 +758,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
             }).toList(),
             onChanged: _onCrewSelected,
           )
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                appBarTitle,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              Icon(
-                Icons.expand_more,
-                size: 20,
-                color: AppColors.textSecondary(context),
-              ),
-            ],
+        : Text(
+            appBarTitle,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           );
 
     final body = Column(
@@ -796,16 +825,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         actions: [const SettingsMenu()],
       ),
       body: body,
-      floatingActionButton: Semantics(
-        identifier: 'problems_report_button',
-        child: FloatingActionButton(
-          key: const ValueKey('problems_report_button'),
-          onPressed: _showNewProblemDialog,
-          backgroundColor: AppColors.actionAccent(context),
-          foregroundColor: Colors.white,
-          child: const Icon(Icons.add),
-        ),
-      ),
+      bottomNavigationBar: _buildMaterialBottomBar(),
     );
   }
 
@@ -828,27 +848,175 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
 
     if (_state.problems.isEmpty) {
-      return AppEmptyState(
-        icon: Icons.check_circle_outline,
-        title: _state.isReferee
-            ? 'You haven\'t reported any problems yet'
-            : 'No problems reported yet',
+      final isApple = AppTheme.isApplePlatform(context);
+      return Column(
+        children: [
+          Expanded(
+            child: AppEmptyState(
+              icon: Icons.check_circle_outline,
+              title: _state.isReferee
+                  ? 'You haven\'t reported any problems yet'
+                  : 'No problems reported yet',
+            ),
+          ),
+          if (_state.userCrewId != null || _state.isSuperUser)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              child: _buildShowResolvedToggle(isApple),
+            ),
+        ],
       );
+    }
+
+    final isApple = AppTheme.isApplePlatform(context);
+    final accentColor = AppColors.actionAccent(context);
+
+    final activeProblems = _state.problems.where((p) => !p.isResolved).toList();
+    final resolvedProblems = _state.problems.where((p) => p.isResolved).toList();
+
+    // Build list items: header + active + toggle + (resolved header + resolved)
+    final items = <Widget>[];
+
+    // Active problems header
+    items.add(
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+        child: Text(
+          'ACTIVE PROBLEMS (${activeProblems.length})',
+          style: AppTypography.labelSmall(context).copyWith(
+            color: isApple
+                ? AppColors.textSecondary(context)
+                : accentColor,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
+
+    // Active problem cards
+    for (final problem in activeProblems) {
+      items.add(_buildProblemItem(problem));
+    }
+
+    // Show resolved toggle (crew members and superusers only)
+    if (_state.userCrewId != null || _state.isSuperUser) {
+      items.add(_buildShowResolvedToggle(isApple));
+    }
+
+    // Resolved section (when toggled on)
+    if (_state.showResolved && resolvedProblems.isNotEmpty) {
+      items.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+          child: Text(
+            'RESOLVED',
+            style: AppTypography.labelSmall(context).copyWith(
+              color: AppColors.textSecondary(context),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      );
+
+      for (final problem in resolvedProblems) {
+        items.add(_buildProblemItem(problem));
+      }
     }
 
     return Semantics(
       identifier: 'problems_list',
-      child: ListView.builder(
+      child: ListView(
         key: const ValueKey('problems_list'),
         padding: EdgeInsets.only(
           left: AppSpacing.sm,
           right: AppSpacing.sm,
-          top: AppSpacing.sm,
+          top: 0,
           bottom: 80,
         ),
-        itemCount: _state.problems.length,
-        itemBuilder: (context, index) =>
-            _buildProblemItem(_state.problems[index]),
+        children: items,
+      ),
+    );
+  }
+
+  Future<void> _unresolveProblem(int problemId) async {
+    try {
+      final userId = _repo.currentUserId;
+      if (userId == null) return;
+
+      // Load current resolution data before clearing
+      final problem = _state.problems.firstWhere((p) => p.id == problemId);
+
+      // Record the old resolution in oldresolved table
+      await SupabaseManager().dualInsert('oldresolved', {
+        'problem': problemId,
+        'oldaction': problem.problem.actionId,
+        'oldactionby': problem.actionById,
+        'oldenddatetime': problem.resolvedDateTime,
+        'unresolvedby': userId,
+      });
+
+      // Clear the resolution fields
+      await SupabaseManager().dualUpdate(
+        'problem',
+        {
+          'enddatetime': null,
+          'action': null,
+          'actionby': null,
+        },
+        filters: {'id': problemId},
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Problem unresolved')),
+        );
+        _loadProblems();
+      }
+    } catch (e) {
+      debugLogError('Error unresolving problem', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to unresolve: $e')),
+        );
+      }
+    }
+  }
+
+  void _toggleShowResolved(bool value) {
+    _updateState(_state.copyWith(showResolved: value, isLoading: true));
+    _loadProblems();
+  }
+
+  Widget _buildShowResolvedToggle(bool isApple) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Show resolved problems',
+            style: AppTypography.bodyLarge(context).copyWith(
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          isApple
+              ? CupertinoSwitch(
+                  key: const ValueKey('problems_show_resolved_toggle'),
+                  value: _state.showResolved,
+                  onChanged: _toggleShowResolved,
+                  activeTrackColor: AppColors.iosGreen,
+                )
+              : Switch(
+                  key: const ValueKey('problems_show_resolved_toggle'),
+                  value: _state.showResolved,
+                  onChanged: _toggleShowResolved,
+                ),
+        ],
       ),
     );
   }
@@ -886,9 +1054,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
             onResolve: () => _showResolveDialog(problem.id),
             onGoOnMyWay: () => _goOnMyWay(problem.id),
             onLoadMissingData: () => _loadMissingData(problem),
-            onEditSymptom: () => _showEditSymptomDialog(problem),
+            onEditSymptom: problem.isResolved ? null : () => _showEditSymptomDialog(problem),
+            onUnresolve: problem.isResolved ? () => _unresolveProblem(problem.id) : null,
           ),
-          if (!isUserCrew)
+          if (!isUserCrew && !_state.isReferee && userActiveCrew != null)
             Positioned(
               top: AppSpacing.sm,
               right: 52,
@@ -914,14 +1083,44 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Bottom bars
+  // ---------------------------------------------------------------------------
+
   Widget _buildAppleBottomBar() {
     final accentColor = AppColors.actionAccent(context);
 
     return SafeArea(
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: AppColors.separator(context),
+              width: 0.5,
+            ),
+          ),
+        ),
         child: Row(
           children: [
+            // Refresh icon
+            Semantics(
+              identifier: 'problems_refresh_button',
+              child: GestureDetector(
+                key: const ValueKey('problems_refresh_button'),
+                onTap: () {
+                  _updateState(_state.copyWith(isLoading: true));
+                  _loadProblems();
+                },
+                child: Icon(
+                  CupertinoIcons.refresh,
+                  color: AppColors.textSecondary(context),
+                  size: 22,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Report Problem button
             Expanded(
               child: Semantics(
                 identifier: 'problems_report_button',
@@ -935,18 +1134,18 @@ class _ProblemsPageState extends State<ProblemsPage> {
                     ),
                     decoration: BoxDecoration(
                       border: Border.all(color: accentColor, width: 1.5),
-                      borderRadius: AppSpacing.borderRadiusLg,
+                      borderRadius: BorderRadius.circular(22),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add, size: 20, color: accentColor),
+                        Icon(Icons.add, size: 18, color: accentColor),
                         const SizedBox(width: 6),
                         Text(
                           'Report Problem',
                           style: TextStyle(
                             color: accentColor,
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -956,19 +1155,63 @@ class _ProblemsPageState extends State<ProblemsPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialBottomBar() {
+    final accentColor = AppColors.actionAccent(context);
+
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            // Refresh icon
             Semantics(
               identifier: 'problems_refresh_button',
-              child: GestureDetector(
+              child: IconButton(
                 key: const ValueKey('problems_refresh_button'),
-                onTap: () {
+                onPressed: () {
                   _updateState(_state.copyWith(isLoading: true));
                   _loadProblems();
                 },
-                child: Icon(
-                  CupertinoIcons.refresh,
+                icon: Icon(
+                  Icons.refresh,
                   color: AppColors.textSecondary(context),
                   size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Report Problem button - filled Material style
+            Expanded(
+              child: Semantics(
+                identifier: 'problems_report_button',
+                child: ElevatedButton.icon(
+                  key: const ValueKey('problems_report_button'),
+                  onPressed: _showNewProblemDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text(
+                    'Report Problem',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),

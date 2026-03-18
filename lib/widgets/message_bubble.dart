@@ -27,39 +27,59 @@ class MessageBubble extends StatelessWidget {
     return fullName;
   }
 
+  String _formatTime() {
+    final local = createdAt.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: () {
-          final timeString =
-              '${createdAt.toLocal().hour.toString().padLeft(2, '0')}:${createdAt.toLocal().minute.toString().padLeft(2, '0')}';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Sent at $timeString'),
-              duration: const Duration(seconds: 1),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          // Sender name + timestamp
+          Padding(
+            padding: EdgeInsets.only(
+              left: isMe ? 0 : AppSpacing.xs,
+              right: isMe ? AppSpacing.xs : 0,
+              bottom: 2,
             ),
-          );
-        },
-        child: Container(
-          margin: EdgeInsets.symmetric(vertical: 2, horizontal: AppSpacing.xs),
-          padding: EdgeInsets.all(AppSpacing.sm + 2),
-          decoration: BoxDecoration(
-            color: isMe
-                ? AppColors.chatBubbleSelf(context).withValues(alpha: 0.2)
-                : AppColors.chatBubbleOther(context),
-            borderRadius: AppSpacing.borderRadiusMd,
-          ),
-          child: Text(
-            isMe ? text : '${_formatSenderName(senderName)}: $text',
-            style: AppTypography.chatMessage(context).copyWith(
-              color: isMe
-                  ? AppColors.textPrimary(context)
-                  : AppColors.chatBubbleOtherText(context),
+            child: Text(
+              isMe
+                  ? _formatTime()
+                  : '${_formatSenderName(senderName)} \u00B7 ${_formatTime()}',
+              style: AppTypography.bodySmall(context).copyWith(
+                color: AppColors.textSecondary(context),
+                fontSize: 11,
+              ),
             ),
           ),
-        ),
+          // Bubble
+          Align(
+            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              padding: EdgeInsets.all(AppSpacing.sm + 2),
+              decoration: BoxDecoration(
+                color: isMe
+                    ? AppColors.chatBubbleSelf(context).withValues(alpha: 0.2)
+                    : AppColors.chatBubbleOther(context),
+                borderRadius: AppSpacing.borderRadiusMd,
+              ),
+              child: Text(
+                text,
+                style: AppTypography.chatMessage(context).copyWith(
+                  color: isMe
+                      ? AppColors.textPrimary(context)
+                      : AppColors.chatBubbleOtherText(context),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

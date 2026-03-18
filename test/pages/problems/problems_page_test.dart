@@ -120,6 +120,7 @@ class MockProblemsRepository implements ProblemsRepository {
     required String userId,
     int? crewId,
     bool isSuperUser = false,
+    bool showResolved = false,
   }) async {
     await _maybeDelay();
     loadProblemsCallCount++;

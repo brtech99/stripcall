@@ -125,19 +125,7 @@ serve(async (req) => {
 
     console.log(`Responder recorded: ${responderName} for problem ${problemId}`);
 
-    // 4. Insert crew message (fire and forget)
-    adminClient
-      .from("crew_messages")
-      .insert({
-        crew: problem.crew,
-        author: userId,
-        message: `${responderName} is on the way`,
-      })
-      .then(({ error }) => {
-        if (error) console.error("Crew message insert failed:", error);
-      });
-
-    // 5. Send FCM notifications (fire and forget)
+    // 4. Send FCM notifications (fire and forget)
     sendFCMNotifications(
       adminClient,
       problem.crew,
@@ -147,7 +135,7 @@ serve(async (req) => {
       problemId,
     ).catch((e) => console.error("FCM notification error:", e));
 
-    // 6. Send SMS (fire and forget)
+    // 5. Send SMS (fire and forget)
     sendSMSNotifications(
       adminClient,
       problem,

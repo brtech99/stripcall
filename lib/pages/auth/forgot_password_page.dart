@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -91,10 +92,161 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = AppColors.actionAccent(context);
+    final isApple = AppTheme.isApplePlatform(context);
+
+    if (isApple) {
+      return _buildCupertinoLayout(context);
+    }
+    return _buildMaterialLayout(context);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // iOS / Cupertino
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Widget _buildCupertinoLayout(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+
+    return CupertinoPageScaffold(
+      backgroundColor: isDark
+          ? AppColors.iosBackgroundDark
+          : AppColors.iosBackground,
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Reset Password'),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => context.go(Routes.login),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(CupertinoIcons.back, size: 20),
+              const SizedBox(width: 2),
+              Text(
+                'Login',
+                style: TextStyle(
+                  color: AppColors.iosBlue,
+                  fontSize: 17,
+                ),
+              ),
+            ],
+          ),
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            // Dark mode toggle — no-op when using system theme
+          },
+          child: Icon(
+            isDark ? CupertinoIcons.sun_max_fill : CupertinoIcons.moon_fill,
+            size: 22,
+            color: AppColors.iosBlue,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: AppSpacing.screenPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+
+              // Instruction text
+              Text(
+                "Enter your email address and we'll send you a link to reset your password.",
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDark
+                      ? AppColors.iosTextSecondaryDark
+                      : AppColors.iosTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Error
+              if (_error != null) ...[
+                Container(
+                  padding: AppSpacing.paddingSm,
+                  decoration: BoxDecoration(
+                    color: AppColors.iosRed.withValues(alpha: 0.12),
+                    borderRadius: AppSpacing.borderRadiusLg,
+                  ),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: AppColors.iosRed,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                AppSpacing.verticalMd,
+              ],
+
+              // Email field in grouped card style
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.iosSurfaceDark
+                      : AppColors.iosSurface,
+                  borderRadius: AppSpacing.borderRadiusLg,
+                ),
+                child: AppTextField(
+                  key: const ValueKey('forgot_password_email_field'),
+                  controller: _emailController,
+                  hint: 'Email',
+                  keyboardType: TextInputType.emailAddress,
+                  textCapitalization: TextCapitalization.none,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enabled: !_isLoading,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Send Reset Link button
+              AppButton(
+                buttonKey: const ValueKey('forgot_password_submit_button'),
+                onPressed: _isLoading || !_isValidInput
+                    ? null
+                    : _handleSubmit,
+                isLoading: _isLoading,
+                expand: true,
+                child: const Text('Send Reset Link'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Android / Web — Material
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Widget _buildMaterialLayout(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('StripCall')),
+      appBar: AppBar(
+        centerTitle: true,
+        title: const Text('Reset password'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(Routes.login),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode : Icons.dark_mode,
+            ),
+            onPressed: () {
+              // Dark mode toggle — no-op when using system theme
+            },
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: AppSpacing.screenPadding,
         child: ConstrainedBox(
@@ -102,41 +254,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
 
-              // Logo
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    'assets/icons/app_icon.png',
-                    width: 72,
-                    height: 72,
-                  ),
+              // Instruction text
+              Text(
+                "Enter the email address associated with your account and we'll send you a link to reset your password.",
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: AppColors.textSecondary(context),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
-              Center(
-                child: Text(
-                  'Reset Password',
-                  style: AppTypography.headlineSmall(context).copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: Text(
-                  'Enter your email address and we\'ll send you a password reset link.',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    color: AppColors.textSecondary(context),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-
+              // Error
               if (_error != null) ...[
                 Container(
                   padding: AppSpacing.paddingSm,
@@ -155,24 +284,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 AppSpacing.verticalMd,
               ],
 
-              Text(
-                'Email',
-                style: AppTypography.titleSmall(context).copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
+              // Email address field with floating label
               AppTextField(
                 key: const ValueKey('forgot_password_email_field'),
                 controller: _emailController,
-                hint: 'your@email.com',
+                label: 'Email address',
                 keyboardType: TextInputType.emailAddress,
                 textCapitalization: TextCapitalization.none,
                 autocorrect: false,
                 enableSuggestions: false,
+                enabled: !_isLoading,
               ),
               const SizedBox(height: 24),
 
+              // Send reset link button
               AppButton(
                 buttonKey: const ValueKey('forgot_password_submit_button'),
                 onPressed: _isLoading || !_isValidInput
@@ -180,28 +305,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     : _handleSubmit,
                 isLoading: _isLoading,
                 expand: true,
-                child: const Text('Send Reset Link'),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Remember your password? ',
-                    style: AppTypography.bodyMedium(context),
-                  ),
-                  GestureDetector(
-                    onTap: () => context.go(Routes.login),
-                    child: Text(
-                      'Sign In',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+                child: const Text('Send reset link'),
               ),
             ],
           ),

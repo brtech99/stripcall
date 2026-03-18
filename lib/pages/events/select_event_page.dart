@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/supabase_manager.dart';
@@ -202,6 +203,12 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
     }).toList();
   }
 
+  /// Whether an event is currently live (start <= now <= end).
+  bool _isLive(Event event) {
+    final now = DateTime.now();
+    return !event.startDateTime.isAfter(now) && !event.endDateTime.isBefore(now);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -269,10 +276,6 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
     }
   }
 
-  String _formatDate(DateTime dateTime) {
-    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
-  }
-
   Future<void> _navigateToProblems(Event event) async {
     try {
       final userId = _repo.currentUserId;
@@ -321,22 +324,97 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Date formatting helpers
+  // ---------------------------------------------------------------------------
+
+  static const _monthAbbr = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _formatDateRange(DateTime start, DateTime end) {
+    final startMonth = _monthAbbr[start.month];
+    final endMonth = _monthAbbr[end.month];
+
+    if (start.year == end.year && start.month == end.month) {
+      return '$startMonth ${start.day}-${end.day}, ${start.year}';
+    }
+    if (start.year == end.year) {
+      return '$startMonth ${start.day} - $endMonth ${end.day}, ${start.year}';
+    }
+    return '$startMonth ${start.day}, ${start.year} - $endMonth ${end.day}, ${end.year}';
+  }
+
+  String _formatDate(DateTime dateTime) {
+    return '${_monthAbbr[dateTime.month]} ${dateTime.day}, ${dateTime.year}';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     debugLog('=== SELECT EVENT PAGE: build() method called ===');
     debugLog('=== SELECT EVENT PAGE: _isLoading = $_isLoading ===');
     debugLog('=== SELECT EVENT PAGE: _events.length = ${_events.length} ===');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Event'),
-        actions: const [SettingsMenu()],
+    final isApple = AppTheme.isApplePlatform(context);
+    return isApple ? _buildCupertinoLayout(context) : _buildMaterialLayout(context);
+  }
+
+  // ===========================================================================
+  // iOS / Cupertino layout
+  // ===========================================================================
+
+  Widget _buildCupertinoLayout(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+    final bgColor = isDark ? AppColors.iosBackgroundDark : AppColors.iosBackground;
+
+    return CupertinoPageScaffold(
+      backgroundColor: bgColor,
+      child: SafeArea(
+        child: _buildBody(context, isApple: true),
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  // ===========================================================================
+  // Material layout
+  // ===========================================================================
+
+  Widget _buildMaterialLayout(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Select Event'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            onPressed: () {
+              // Dark mode toggle placeholder
+            },
+            icon: Icon(
+              AppTheme.isDark(context)
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SettingsMenu(),
+        ],
+      ),
+      body: _buildBody(context, isApple: false),
+    );
+  }
+
+  // ===========================================================================
+  // Shared body
+  // ===========================================================================
+
+  Widget _buildBody(BuildContext context, {required bool isApple}) {
     if (_isLoading) {
       return const Center(child: AppLoadingIndicator());
     }
@@ -352,9 +430,8 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
               AppSpacing.verticalMd,
               Text(
                 _error!,
-                style: AppTypography.bodyMedium(
-                  context,
-                ).copyWith(color: AppColors.statusError),
+                style: AppTypography.bodyMedium(context)
+                    .copyWith(color: AppColors.statusError),
                 textAlign: TextAlign.center,
               ),
               AppSpacing.verticalLg,
@@ -365,7 +442,7 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
       );
     }
 
-    if (_events.isEmpty) {
+    if (_events.isEmpty && _crewRoles.isEmpty) {
       return const AppEmptyState(
         icon: Icons.event_busy,
         title: 'No current events',
@@ -373,9 +450,22 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
       );
     }
 
-    final upcoming = _upcomingRoles;
-    final eventRoles = _currentEventRoles;
     final filtered = _filteredEvents;
+    final eventRoles = _currentEventRoles;
+    final upcoming = _upcomingRoles;
+
+    // Split filtered events into live vs not-yet-live
+    final liveEvents = filtered.where(_isLive).toList();
+    final notLiveEvents = filtered.where((e) => !_isLive(e)).toList();
+
+    // Filter upcoming roles by search too
+    final filteredUpcoming = _searchQuery.isEmpty
+        ? upcoming
+        : upcoming.where((r) {
+            final q = _searchQuery.toLowerCase();
+            return r.eventName.toLowerCase().contains(q) ||
+                r.crewTypeName.toLowerCase().contains(q);
+          }).toList();
 
     return Semantics(
       identifier: 'select_event_list',
@@ -383,86 +473,178 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
         key: const ValueKey('select_event_list'),
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         children: [
-          // Search field
+          // iOS: Title + dark-mode toggle row (no nav bar)
+          if (isApple) ...[
+            Padding(
+              padding: EdgeInsets.only(top: AppSpacing.md),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Event',
+                    style: AppTypography.headlineMedium(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        onPressed: () {
+                          // Dark mode toggle placeholder
+                        },
+                        child: Icon(
+                          AppTheme.isDark(context)
+                              ? CupertinoIcons.sun_max_fill
+                              : CupertinoIcons.moon_fill,
+                          color: AppColors.iosBlue,
+                          size: 22,
+                        ),
+                      ),
+                      const SettingsMenu(),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Search bar
           Padding(
             padding: EdgeInsets.only(
-              top: AppSpacing.md,
+              top: isApple ? AppSpacing.md : AppSpacing.md,
               bottom: AppSpacing.sm,
             ),
-            child: AppTextField(
-              key: const ValueKey('select_event_search_field'),
-              controller: _searchController,
-              hint: 'Search events...',
-              prefix: Icon(
-                Icons.search,
-                color: AppColors.textSecondary(context),
-                size: 20,
-              ),
-            ),
+            child: isApple
+                ? _buildCupertinoSearchBar(context)
+                : _buildMaterialSearchBar(context),
           ),
 
-          // Event cards
-          ...filtered.map((event) {
-            final roles = eventRoles[event.id] ?? [];
-            return _buildEventCard(context, event, roles);
-          }),
-
-          // Upcoming crews section
-          if (upcoming.isNotEmpty) ...[
-            Padding(
-              padding: EdgeInsets.only(
-                top: AppSpacing.lg,
-                bottom: AppSpacing.sm,
-              ),
-              child: Text(
-                'Your Upcoming Crews',
-                style: AppTypography.titleSmall(
-                  context,
-                ).copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-            ...upcoming.map((role) {
-              return _buildUpcomingCard(context, role);
+          // HAPPENING NOW section
+          if (liveEvents.isNotEmpty) ...[
+            _buildSectionHeader(context, 'HAPPENING NOW'),
+            ...liveEvents.map((event) {
+              final roles = eventRoles[event.id] ?? [];
+              return _buildEventCard(context, event, roles, isApple: isApple, isLive: true);
             }),
           ],
 
-          // Footer
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(
-              child: Text(
-                'Showing ${filtered.length} current event${filtered.length == 1 ? '' : 's'}',
-                style: AppTypography.bodySmall(
-                  context,
-                ).copyWith(color: AppColors.textSecondary(context)),
-              ),
-            ),
-          ),
+          // UPCOMING section (events not yet live + upcoming roles)
+          if (notLiveEvents.isNotEmpty || filteredUpcoming.isNotEmpty) ...[
+            _buildSectionHeader(context, 'UPCOMING'),
+            ...notLiveEvents.map((event) {
+              final roles = eventRoles[event.id] ?? [];
+              return _buildEventCard(context, event, roles, isApple: isApple, isLive: false);
+            }),
+            ...filteredUpcoming.map((role) {
+              return _buildUpcomingCard(context, role, isApple: isApple);
+            }),
+          ],
+
+          SizedBox(height: AppSpacing.xl),
         ],
       ),
     );
   }
 
+  // ===========================================================================
+  // Section header
+  // ===========================================================================
+
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
+      child: Text(
+        title,
+        style: AppTypography.labelSmall(context).copyWith(
+          color: AppColors.textSecondary(context),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Search bars
+  // ===========================================================================
+
+  Widget _buildCupertinoSearchBar(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.iosSearchBgDark : AppColors.iosSearchBg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.search,
+            size: 18,
+            color: AppColors.textSecondary(context),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: CupertinoTextField.borderless(
+              key: const ValueKey('select_event_search_field'),
+              controller: _searchController,
+              placeholder: 'Search events',
+              placeholderStyle: AppTypography.bodyMedium(context).copyWith(
+                color: AppColors.textSecondary(context),
+              ),
+              style: AppTypography.bodyMedium(context),
+              padding: EdgeInsets.zero,
+            ),
+          ),
+          if (_searchQuery.isNotEmpty)
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(20, 20),
+              onPressed: () => _searchController.clear(),
+              child: Icon(
+                CupertinoIcons.xmark_circle_fill,
+                size: 16,
+                color: AppColors.textSecondary(context),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaterialSearchBar(BuildContext context) {
+    return AppTextField(
+      key: const ValueKey('select_event_search_field'),
+      controller: _searchController,
+      hint: 'Search events',
+      prefix: Icon(
+        Icons.search,
+        color: AppColors.textSecondary(context),
+        size: 20,
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Event card
+  // ===========================================================================
+
   Widget _buildEventCard(
     BuildContext context,
     Event event,
-    List<EventCrewRole> roles,
-  ) {
-    final accentColor = AppColors.actionAccent(context);
+    List<EventCrewRole> roles, {
+    required bool isApple,
+    required bool isLive,
+  }) {
     final location = [event.city, event.state]
         .where((s) => s.isNotEmpty)
         .join(', ');
-
-    // Build role label from roles
-    String? roleLabel;
-    if (roles.isNotEmpty) {
-      final roleNames = roles.map((r) {
-        return r.isCrewChief
-            ? 'Crew Chief - ${r.crewTypeName}'
-            : r.crewTypeName;
-      }).join(', ');
-      roleLabel = roleNames;
-    }
+    final dateRange = _formatDateRange(event.startDateTime, event.endDateTime);
+    final stripCount = event.count;
 
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.sm),
@@ -471,9 +653,15 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
         onTap: () => _navigateToProblems(event),
         child: Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: AppSpacing.borderRadiusLg,
-            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            color: isApple
+                ? (AppTheme.isDark(context)
+                    ? AppColors.iosSurfaceDark
+                    : AppColors.iosSurface)
+                : AppColors.surfaceContainerHigh(context),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: isApple
+                ? null
+                : null,
           ),
           padding: EdgeInsets.all(AppSpacing.md),
           child: Row(
@@ -482,28 +670,41 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      event.name,
-                      style: AppTypography.titleMedium(context).copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    // Event name + LIVE badge
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            event.name,
+                            style: AppTypography.titleMedium(context).copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (isLive) ...[
+                          const SizedBox(width: 8),
+                          _buildLiveBadge(context, isApple: isApple),
+                        ],
+                      ],
                     ),
+
+                    // Location line
                     if (location.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(
-                            Icons.location_on_outlined,
-                            size: 16,
+                            isApple
+                                ? CupertinoIcons.location_solid
+                                : Icons.location_on_outlined,
+                            size: 14,
                             color: AppColors.textSecondary(context),
                           ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               location,
-                              style: AppTypography.bodyMedium(
-                                context,
-                              ).copyWith(
+                              style: AppTypography.bodySmall(context).copyWith(
                                 color: AppColors.textSecondary(context),
                               ),
                             ),
@@ -511,43 +712,51 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
                         ],
                       ),
                     ],
-                    if (roleLabel != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 16,
+
+                    // Date range + strip count
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          isApple
+                              ? CupertinoIcons.calendar
+                              : Icons.calendar_today_outlined,
+                          size: 14,
+                          color: AppColors.textSecondary(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          stripCount > 0
+                              ? '$dateRange  \u00B7  $stripCount strips'
+                              : dateRange,
+                          style: AppTypography.bodySmall(context).copyWith(
                             color: AppColors.textSecondary(context),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Your role: ',
-                            style: AppTypography.bodyMedium(
-                              context,
-                            ).copyWith(
-                              color: AppColors.textSecondary(context),
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(
-                              roleLabel,
-                              style: AppTypography.bodyMedium(
-                                context,
-                              ).copyWith(
-                                color: accentColor,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+
+                    // Role badges
+                    if (roles.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: roles.map((r) {
+                          final label = r.isCrewChief
+                              ? 'CC - ${r.crewTypeName}'
+                              : r.crewTypeName;
+                          return _buildRoleBadge(context, label, r.crewTypeName);
+                        }).toList(),
                       ),
                     ],
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Icon(
-                Icons.chevron_right,
+                isApple ? CupertinoIcons.chevron_right : Icons.chevron_right,
+                size: 20,
                 color: AppColors.textSecondary(context),
               ),
             ],
@@ -557,77 +766,127 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
     );
   }
 
-  Widget _buildUpcomingCard(BuildContext context, EventCrewRole role) {
-    final accentColor = AppColors.actionAccent(context);
-    final roleLabel = role.isCrewChief
-        ? 'Crew Chief - ${role.crewTypeName}'
+  // ===========================================================================
+  // Upcoming card (role-based, no full Event object)
+  // ===========================================================================
+
+  Widget _buildUpcomingCard(
+    BuildContext context,
+    EventCrewRole role, {
+    required bool isApple,
+  }) {
+    final label = role.isCrewChief
+        ? 'CC - ${role.crewTypeName}'
         : role.crewTypeName;
 
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.sm),
-      key: ValueKey(
-        'upcoming_crew_${role.eventId}_${role.crewTypeName}',
-      ),
+      key: ValueKey('upcoming_crew_${role.eventId}_${role.crewTypeName}'),
       child: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: AppSpacing.borderRadiusLg,
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          color: isApple
+              ? (AppTheme.isDark(context)
+                  ? AppColors.iosSurfaceDark
+                  : AppColors.iosSurface)
+              : AppColors.surfaceContainerHigh(context),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         ),
         padding: EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              role.eventName,
-              style: AppTypography.titleMedium(context).copyWith(
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    role.eventName,
+                    style: AppTypography.titleMedium(context).copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        isApple
+                            ? CupertinoIcons.calendar
+                            : Icons.calendar_today_outlined,
+                        size: 14,
+                        color: AppColors.textSecondary(context),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDate(role.eventStartDate),
+                        style: AppTypography.bodySmall(context).copyWith(
+                          color: AppColors.textSecondary(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildRoleBadge(context, label, role.crewTypeName),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 16,
-                  color: AppColors.textSecondary(context),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _formatDate(role.eventStartDate),
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    color: AppColors.textSecondary(context),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  Icons.people_outline,
-                  size: 16,
-                  color: AppColors.textSecondary(context),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Your role: ',
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    color: AppColors.textSecondary(context),
-                  ),
-                ),
-                Text(
-                  roleLabel,
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    color: accentColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            const SizedBox(width: 8),
+            Icon(
+              isApple ? CupertinoIcons.chevron_right : Icons.chevron_right,
+              size: 20,
+              color: AppColors.textSecondary(context),
             ),
           ],
         ),
       ),
     );
   }
+
+  // ===========================================================================
+  // LIVE badge
+  // ===========================================================================
+
+  Widget _buildLiveBadge(BuildContext context, {required bool isApple}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isApple ? AppColors.iosRed : AppColors.md3Error,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCircular),
+      ),
+      child: Text(
+        'LIVE',
+        style: AppTypography.labelSmall(context).copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Role badge
+  // ===========================================================================
+
+  Widget _buildRoleBadge(
+    BuildContext context,
+    String label,
+    String crewTypeName,
+  ) {
+    final colors = AppColors.roleBadgeColors(context, crewTypeName);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCircular),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.labelSmall(context).copyWith(
+          color: colors.foreground,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
 }

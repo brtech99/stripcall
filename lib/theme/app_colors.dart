@@ -1,182 +1,251 @@
 import 'package:flutter/material.dart';
 
-/// Semantic color definitions for the app.
+/// Semantic color definitions matching the Stripcall design spec.
 ///
-/// These colors are designed to work with both light and dark themes,
-/// and provide semantic meaning (e.g., "error" rather than "red").
-///
-/// Usage:
-/// ```dart
-/// Container(color: AppColors.surface(context))
-/// Text('Error', style: TextStyle(color: AppColors.error(context)))
-/// ```
+/// Two distinct palettes: iOS (Apple HIG with blue accent) and
+/// Material Design 3 (purple seed #6750A4).
 class AppColors {
   AppColors._();
 
   // ==========================================================================
-  // Brand / Platform Colors (from designer spec)
+  // iOS / Cupertino Tokens
   // ==========================================================================
 
-  /// iOS primary accent
-  static const Color brandPrimary = Color(0xFF3B82F6);
-
-  /// Android primary accent
-  static const Color brandAndroid = Color(0xFF16A34A);
+  static const Color iosBackground = Color(0xFFF2F2F7);
+  static const Color iosBackgroundDark = Color(0xFF000000);
+  static const Color iosSurface = Color(0xFFFFFFFF);
+  static const Color iosSurfaceDark = Color(0xFF1C1C1E);
+  static const Color iosTextPrimary = Color(0xFF000000);
+  static const Color iosTextPrimaryDark = Color(0xFFFFFFFF);
+  static const Color iosTextSecondary = Color(0xFF6D6D72);
+  static const Color iosTextSecondaryDark = Color(0xFF8E8E93);
+  static const Color iosSeparator = Color(0xFFC6C6C8);
+  static const Color iosSeparatorDark = Color(0xFF38383A);
+  static const Color iosBlue = Color(0xFF007AFF);
+  static const Color iosGreen = Color(0xFF34C759);
+  static const Color iosOrange = Color(0xFFFF9500);
+  static const Color iosRed = Color(0xFFFF3B30);
+  static const Color iosPurple = Color(0xFF5856D6);
+  static const Color iosSearchBg = Color(0xFFE5E5EA);
+  static const Color iosSearchBgDark = Color(0xFF1C1C1E);
 
   // ==========================================================================
-  // Shared Palette (from designer spec)
+  // Material Design 3 Tokens (Purple seed #6750A4)
   // ==========================================================================
 
-  static const Color background = Color(0xFFF9FAFB);
-  static const Color cardBackground = Color(0xFFFFFFFF);
-  static const Color borderLight = Color(0xFFE5E7EB);
-  static const Color borderMedium = Color(0xFFD1D5DB);
-
-  static const Color unreadBadge = Color(0xFFEF4444);
+  static const Color md3Primary = Color(0xFF6750A4);
+  static const Color md3OnPrimary = Color(0xFFFFFFFF);
+  static const Color md3PrimaryDark = Color(0xFFD0BCFF);
+  static const Color md3OnPrimaryDark = Color(0xFF381E72);
+  static const Color md3Surface = Color(0xFFFFFBFE);
+  static const Color md3SurfaceDark = Color(0xFF1C1B1F);
+  static const Color md3SurfaceContainer = Color(0xFFECE6F0);
+  static const Color md3SurfaceContainerDark = Color(0xFF211F26);
+  static const Color md3SurfaceContainerHigh = Color(0xFFE7E0EC);
+  static const Color md3SurfaceContainerHighDark = Color(0xFF2B2930);
+  static const Color md3OnSurface = Color(0xFF1C1B1F);
+  static const Color md3OnSurfaceDark = Color(0xFFE6E1E5);
+  static const Color md3OnSurfaceVariant = Color(0xFF49454F);
+  static const Color md3OnSurfaceVariantDark = Color(0xFFCAC4D0);
+  static const Color md3Outline = Color(0xFF79747E);
+  static const Color md3OutlineDark = Color(0xFF938F99);
+  static const Color md3SecondaryContainer = Color(0xFFE8DEF8);
+  static const Color md3SecondaryContainerDark = Color(0xFF4A4458);
+  static const Color md3Error = Color(0xFFB3261E);
+  static const Color md3ErrorDark = Color(0xFFF2B8B5);
 
   // ==========================================================================
-  // Semantic Colors (adapt to theme)
+  // Problem State Colors
   // ==========================================================================
 
-  /// Primary brand color - use for primary actions, selected states
+  /// Reported/new — red
+  static Color problemReported(BuildContext context) =>
+      _isApple(context) ? iosRed : md3Error;
+
+  /// Responded/in-progress — orange
+  static Color problemResponded(BuildContext context) =>
+      _isApple(context) ? iosOrange : const Color(0xFFE8650A);
+
+  /// Resolved — green
+  static Color problemResolved(BuildContext context) =>
+      _isApple(context) ? iosGreen : const Color(0xFF386A20);
+
+  // Convenience constants for non-context situations (e.g. status indicator)
+  static const Color statusReportedIos = iosRed;
+  static const Color statusRespondedIos = iosOrange;
+  static const Color statusResolvedIos = iosGreen;
+  static const Color statusReportedMd3 = md3Error;
+  static const Color statusRespondedMd3 = Color(0xFFE8650A);
+  static const Color statusResolvedMd3 = Color(0xFF386A20);
+
+  // ==========================================================================
+  // Role Badge Colors
+  // ==========================================================================
+
+  static const Color roleArmorerFg = Color(0xFFFF9500);
+  static Color roleArmorerBg(BuildContext context) =>
+      const Color(0xFFFF9500).withValues(alpha: 0.13);
+
+  static Color roleMedicalFg(BuildContext context) =>
+      _isApple(context) ? iosRed : md3Error;
+  static const Color roleMedicalBg = Color(0xFFF9DEDC);
+
+  static Color roleEventMgmtFg(BuildContext context) =>
+      _isApple(context) ? iosGreen : const Color(0xFF386A20);
+  static const Color roleEventMgmtBg = Color(0xFFE9F5E1);
+
+  /// Get role badge colors by crew type name.
+  static ({Color foreground, Color background}) roleBadgeColors(
+    BuildContext context,
+    String crewType,
+  ) {
+    final lower = crewType.toLowerCase();
+    if (lower.contains('armor')) {
+      return (foreground: roleArmorerFg, background: roleArmorerBg(context));
+    }
+    if (lower.contains('medic')) {
+      return (foreground: roleMedicalFg(context), background: roleMedicalBg);
+    }
+    if (lower.contains('event') || lower.contains('mgmt')) {
+      return (
+        foreground: roleEventMgmtFg(context),
+        background: roleEventMgmtBg,
+      );
+    }
+    // Default: primary color
+    return (
+      foreground: primary(context),
+      background: primary(context).withValues(alpha: 0.12),
+    );
+  }
+
+  // ==========================================================================
+  // Semantic Colors (adapt to theme + platform)
+  // ==========================================================================
+
   static Color primary(BuildContext context) =>
       Theme.of(context).colorScheme.primary;
 
-  /// Color for content on primary color
   static Color onPrimary(BuildContext context) =>
       Theme.of(context).colorScheme.onPrimary;
 
-  /// Secondary brand color - use for secondary actions, accents
   static Color secondary(BuildContext context) =>
       Theme.of(context).colorScheme.secondary;
 
-  /// Color for content on secondary color
   static Color onSecondary(BuildContext context) =>
       Theme.of(context).colorScheme.onSecondary;
 
-  /// Main background color
   static Color surface(BuildContext context) =>
       Theme.of(context).colorScheme.surface;
 
-  /// Color for content on surface
   static Color onSurface(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
 
-  /// Variant surface color - for cards, elevated surfaces
   static Color surfaceContainerLow(BuildContext context) =>
       Theme.of(context).colorScheme.surfaceContainerLow;
 
-  /// Higher elevation surface
   static Color surfaceContainerHigh(BuildContext context) =>
       Theme.of(context).colorScheme.surfaceContainerHigh;
 
-  /// Error color - for errors, destructive actions
   static Color error(BuildContext context) =>
       Theme.of(context).colorScheme.error;
 
-  /// Color for content on error color
   static Color onError(BuildContext context) =>
       Theme.of(context).colorScheme.onError;
 
-  /// Error container - for error backgrounds
   static Color errorContainer(BuildContext context) =>
       Theme.of(context).colorScheme.errorContainer;
 
-  /// Color for content on error container
   static Color onErrorContainer(BuildContext context) =>
       Theme.of(context).colorScheme.onErrorContainer;
 
   // ==========================================================================
-  // Status Colors (from designer spec)
+  // Text Colors
   // ==========================================================================
 
-  /// Success/resolved state
-  static const Color statusSuccess = Color(0xFF16A34A);
-
-  /// Warning/in-progress state (en_route)
-  static const Color statusWarning = Color(0xFFF97316);
-
-  /// Error/new/urgent state
-  static const Color statusError = Color(0xFFEF4444);
-
-  /// Neutral/inactive state
-  static const Color statusNeutral = Color(0xFF9CA3AF);
-
-  // ==========================================================================
-  // Text Colors (theme-aware, adapts to light/dark)
-  // ==========================================================================
-
-  /// Primary text color - highest contrast
   static Color textPrimary(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
 
-  /// Secondary text color - medium emphasis (subtitles, timestamps)
   static Color textSecondary(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;
 
-  /// Body text color - slightly less emphasis than primary
   static Color textBody(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.87);
 
-  /// Tertiary text color - low emphasis
   static Color textTertiary(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;
 
-  /// Placeholder/hint text color
   static Color textPlaceholder(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38);
 
-  /// Disabled text color
   static Color textDisabled(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38);
 
-  /// Hint text color
   static Color textHint(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38);
 
   // ==========================================================================
-  // Action Accent (platform-specific)
+  // Action Accent (platform-specific primary action color)
   // ==========================================================================
 
-  /// Action accent color - blue on iOS, green on Android/web
-  static Color actionAccent(BuildContext context) {
-    final platform = Theme.of(context).platform;
-    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
-      return brandPrimary;
-    }
-    return brandAndroid;
-  }
+  static Color actionAccent(BuildContext context) =>
+      _isApple(context) ? iosBlue : primary(context);
 
-  /// Foreground color on action accent
   static Color onActionAccent(BuildContext context) => Colors.white;
 
   // ==========================================================================
-  // Divider & Border Colors (from designer spec)
+  // Divider & Border Colors
   // ==========================================================================
 
-  /// Standard divider color
   static Color divider(BuildContext context) =>
       Theme.of(context).colorScheme.outlineVariant;
 
-  /// Border/outline color
   static Color outline(BuildContext context) =>
       Theme.of(context).colorScheme.outline;
+
+  /// iOS hairline separator (0.5pt)
+  static Color separator(BuildContext context) {
+    if (_isApple(context)) {
+      return _isDark(context) ? iosSeparatorDark : iosSeparator;
+    }
+    return divider(context);
+  }
 
   // ==========================================================================
   // Chat/Message Colors
   // ==========================================================================
 
-  /// Background for user's own messages
   static Color chatBubbleSelf(BuildContext context) => actionAccent(context);
-
-  /// Text color for user's own messages
   static Color chatBubbleSelfText(BuildContext context) => Colors.white;
-
-  /// Background for other users' messages
   static Color chatBubbleOther(BuildContext context) =>
       Theme.of(context).colorScheme.surfaceContainerHigh;
-
-  /// Text color for other users' messages
   static Color chatBubbleOtherText(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
+
+  // ==========================================================================
+  // Unread badge
+  // ==========================================================================
+
+  static const Color unreadBadge = Color(0xFFFF3B30);
+
+  // ==========================================================================
+  // Legacy compatibility aliases
+  // ==========================================================================
+
+  static const Color statusSuccess = Color(0xFF34C759);
+  static const Color statusWarning = Color(0xFFFF9500);
+  static const Color statusError = Color(0xFFEF4444);
+  static const Color statusNeutral = Color(0xFF9CA3AF);
+
+  // ==========================================================================
+  // Helpers
+  // ==========================================================================
+
+  static bool _isApple(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+  }
+
+  static bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
 }

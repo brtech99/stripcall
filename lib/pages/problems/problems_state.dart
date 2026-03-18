@@ -24,6 +24,9 @@ class ProblemsPageState {
   final List<Map<String, dynamic>> allCrews;
   final int? selectedCrewId;
 
+  // Filter
+  final bool showResolved;
+
   const ProblemsPageState({
     this.problems = const [],
     this.responders = const {},
@@ -36,6 +39,7 @@ class ProblemsPageState {
     this.isSuperUser = false,
     this.allCrews = const [],
     this.selectedCrewId,
+    this.showResolved = false,
   });
 
   /// Returns the active crew ID for the current view.
@@ -69,6 +73,7 @@ class ProblemsPageState {
     List<Map<String, dynamic>>? allCrews,
     int? selectedCrewId,
     bool clearSelectedCrewId = false,
+    bool? showResolved,
   }) {
     return ProblemsPageState(
       problems: problems ?? this.problems,
@@ -86,6 +91,7 @@ class ProblemsPageState {
       selectedCrewId: clearSelectedCrewId
           ? null
           : (selectedCrewId ?? this.selectedCrewId),
+      showResolved: showResolved ?? this.showResolved,
     );
   }
 

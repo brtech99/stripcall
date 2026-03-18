@@ -2,17 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 
-/// Adaptive text field that uses Material on Android/web and Cupertino on iOS.
+/// Adaptive text field.
 ///
-/// Usage:
-/// ```dart
-/// AppTextField(
-///   controller: _emailController,
-///   label: 'Email',
-///   keyboardType: TextInputType.emailAddress,
-///   validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-/// )
-/// ```
+/// iOS: CupertinoTextField in grouped-row style (placeholder as label, no border
+/// by default — border provided by the enclosing grouped card).
+/// Material: TextFormField with outlined decoration.
 class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? label;
@@ -39,6 +33,7 @@ class AppTextField extends StatelessWidget {
   final bool readOnly;
   final FocusNode? focusNode;
   final Key? fieldKey;
+  final Iterable<String>? autofillHints;
 
   const AppTextField({
     super.key,
@@ -67,6 +62,7 @@ class AppTextField extends StatelessWidget {
     this.readOnly = false,
     this.focusNode,
     this.fieldKey,
+    this.autofillHints,
   });
 
   @override
@@ -80,12 +76,9 @@ class AppTextField extends StatelessWidget {
       field = _buildMaterialTextField(context);
     }
 
-    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
-    // Check fieldKey first, then fall back to the widget's own key
     final effectiveKey = fieldKey ?? key;
-    final keyId = effectiveKey is ValueKey<String>
-        ? effectiveKey.value
-        : null;
+    final keyId =
+        effectiveKey is ValueKey<String> ? effectiveKey.value : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: field);
     }
@@ -94,19 +87,28 @@ class AppTextField extends StatelessWidget {
   }
 
   Widget _buildCupertinoTextField(BuildContext context) {
-    // For Cupertino, we need to wrap in a Column to show label and error
+    final isDark = AppTheme.isDark(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (label != null) ...[
-          Text(label!, style: AppTypography.formLabel(context)),
-          AppSpacing.verticalXs,
-        ],
         CupertinoTextField(
           key: fieldKey,
           controller: controller,
-          placeholder: hint,
+          placeholder: hint ?? label,
+          placeholderStyle: TextStyle(
+            color: isDark
+                ? AppColors.iosTextSecondaryDark
+                : AppColors.iosTextSecondary,
+            fontSize: 17,
+          ),
+          style: TextStyle(
+            color: isDark
+                ? AppColors.iosTextPrimaryDark
+                : AppColors.iosTextPrimary,
+            fontSize: 17,
+          ),
           obscureText: obscureText,
           enabled: enabled,
           autofocus: autofocus,
@@ -122,7 +124,10 @@ class AppTextField extends StatelessWidget {
           onSubmitted: onSubmitted,
           onTap: onTap,
           prefix: prefix != null
-              ? Padding(padding: const EdgeInsets.only(left: 8), child: prefix)
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: prefix,
+                )
               : null,
           suffix: (suffix ?? suffixIcon) != null
               ? Padding(
@@ -132,26 +137,28 @@ class AppTextField extends StatelessWidget {
               : null,
           readOnly: readOnly,
           focusNode: focusNode,
-          padding: AppSpacing.formFieldPadding,
+          autofillHints: autofillHints,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: errorText != null
-                  ? CupertinoColors.destructiveRed
-                  : CupertinoColors.systemGrey4,
-            ),
-            borderRadius: AppSpacing.borderRadiusMd,
+            color: isDark ? AppColors.iosSurfaceDark : AppColors.iosSurface,
+            border: errorText != null
+                ? Border.all(color: CupertinoColors.destructiveRed)
+                : null,
+            borderRadius: AppSpacing.borderRadiusLg,
           ),
         ),
         if (errorText != null) ...[
           AppSpacing.verticalXs,
-          Text(errorText!, style: AppTypography.errorText(context)),
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Text(errorText!, style: AppTypography.errorText(context)),
+          ),
         ],
       ],
     );
   }
 
   Widget _buildMaterialTextField(BuildContext context) {
-    // Use TextFormField if validator is provided, otherwise TextField
     if (validator != null) {
       return TextFormField(
         key: fieldKey,
@@ -180,6 +187,7 @@ class AppTextField extends StatelessWidget {
         validator: validator,
         readOnly: readOnly,
         focusNode: focusNode,
+        autofillHints: autofillHints,
       );
     }
 
@@ -209,6 +217,7 @@ class AppTextField extends StatelessWidget {
       onTap: onTap,
       readOnly: readOnly,
       focusNode: focusNode,
+      autofillHints: autofillHints,
     );
   }
 }

@@ -2,19 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 
-/// Adaptive list tile that uses Material ListTile on Android/web
-/// and a Cupertino-styled equivalent on iOS.
-///
-/// Usage:
-/// ```dart
-/// AppListTile(
-///   title: Text('Settings'),
-///   subtitle: Text('Configure your preferences'),
-///   leading: Icon(Icons.settings),
-///   trailing: Icon(Icons.chevron_right),
-///   onTap: () => navigateToSettings(),
-/// )
-/// ```
+/// Adaptive list tile: iOS Cupertino-styled row, Material ListTile.
 class AppListTile extends StatelessWidget {
   final Widget? title;
   final Widget? subtitle;
@@ -54,11 +42,9 @@ class AppListTile extends StatelessWidget {
       tile = _buildMaterialTile(context);
     }
 
-    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
     final effectiveKey = tileKey ?? key;
-    final keyId = effectiveKey is ValueKey<String>
-        ? effectiveKey.value
-        : null;
+    final keyId =
+        effectiveKey is ValueKey<String> ? effectiveKey.value : null;
     if (keyId != null) {
       return Semantics(
         identifier: keyId,
@@ -76,14 +62,13 @@ class AppListTile extends StatelessWidget {
       onTap: enabled ? onTap : null,
       onLongPress: enabled ? onLongPress : null,
       child: Container(
-        padding:
-            contentPadding ??
+        padding: contentPadding ??
             (dense
                 ? const EdgeInsets.symmetric(horizontal: 16, vertical: 4)
                 : AppSpacing.listItemPadding),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.primary(context).withValues(alpha: 0.1)
+              ? AppColors.iosBlue.withValues(alpha: 0.1)
               : null,
         ),
         child: Row(
@@ -92,7 +77,7 @@ class AppListTile extends StatelessWidget {
               IconTheme(
                 data: IconThemeData(
                   color: enabled
-                      ? AppColors.primary(context)
+                      ? AppColors.iosBlue
                       : AppColors.textDisabled(context),
                   size: AppSpacing.iconMd,
                 ),
@@ -115,7 +100,7 @@ class AppListTile extends StatelessWidget {
                       child: title!,
                     ),
                   if (subtitle != null) ...[
-                    AppSpacing.verticalXs,
+                    const SizedBox(height: 2),
                     DefaultTextStyle(
                       style: AppTypography.bodySmall(context).copyWith(
                         color: enabled
@@ -130,17 +115,8 @@ class AppListTile extends StatelessWidget {
             ),
             if (trailing != null) ...[
               AppSpacing.horizontalSm,
-              IconTheme(
-                data: IconThemeData(
-                  color: enabled
-                      ? AppColors.textSecondary(context)
-                      : AppColors.textDisabled(context),
-                  size: AppSpacing.iconMd,
-                ),
-                child: trailing!,
-              ),
+              trailing!,
             ] else if (onTap != null) ...[
-              // Show chevron on iOS if tappable
               AppSpacing.horizontalSm,
               Icon(
                 CupertinoIcons.chevron_right,
@@ -171,8 +147,10 @@ class AppListTile extends StatelessWidget {
   }
 }
 
-/// A group of list tiles with an optional header.
-/// On iOS, this provides section-style grouping.
+/// A group of list tiles with an optional section header.
+///
+/// iOS: Rounded grouped card with hairline dividers (Apple HIG grouped style).
+/// Material: Flat list with primary-colored section header.
 class AppListSection extends StatelessWidget {
   final String? header;
   final String? footer;
@@ -199,42 +177,49 @@ class AppListSection extends StatelessWidget {
   }
 
   Widget _buildCupertinoSection(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+
     return Padding(
-      padding: margin ?? AppSpacing.paddingVerticalSm,
+      padding: margin ?? const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (header != null)
             Padding(
               padding: const EdgeInsets.only(
-                left: AppSpacing.md,
-                bottom: AppSpacing.xs,
+                left: 16,
+                bottom: 6,
               ),
               child: Text(
                 header!.toUpperCase(),
-                style: AppTypography.labelSmall(
-                  context,
-                ).copyWith(color: AppColors.textSecondary(context)),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.4,
+                  color: isDark
+                      ? AppColors.iosTextSecondaryDark
+                      : AppColors.iosTextSecondary,
+                ),
               ),
             ),
           Container(
             decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius: AppSpacing.borderRadiusMd,
+              color: isDark ? AppColors.iosSurfaceDark : AppColors.iosSurface,
+              borderRadius: AppSpacing.borderRadiusLg,
             ),
             child: Column(children: _buildDividedChildren(context)),
           ),
           if (footer != null)
             Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.md,
-                top: AppSpacing.xs,
-              ),
+              padding: const EdgeInsets.only(left: 16, top: 6),
               child: Text(
                 footer!,
-                style: AppTypography.labelSmall(
-                  context,
-                ).copyWith(color: AppColors.textSecondary(context)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? AppColors.iosTextSecondaryDark
+                      : AppColors.iosTextSecondary,
+                ),
               ),
             ),
         ],
@@ -244,29 +229,36 @@ class AppListSection extends StatelessWidget {
 
   Widget _buildMaterialSection(BuildContext context) {
     return Padding(
-      padding: margin ?? AppSpacing.paddingVerticalSm,
+      padding: margin ?? const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (header != null)
             Padding(
-              padding: AppSpacing.paddingHorizontalMd,
+              padding: const EdgeInsets.only(left: 16, bottom: 4),
               child: Text(
-                header!,
-                style: AppTypography.titleSmall(
-                  context,
-                ).copyWith(color: AppColors.primary(context)),
+                header!.toUpperCase(),
+                style: AppTypography.labelMedium(context).copyWith(
+                  color: AppColors.primary(context),
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
-          ...children,
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLow(context),
+              borderRadius: AppSpacing.borderRadiusLg,
+            ),
+            child: Column(children: _buildDividedChildren(context)),
+          ),
           if (footer != null)
             Padding(
               padding: AppSpacing.paddingMd,
               child: Text(
                 footer!,
-                style: AppTypography.bodySmall(
-                  context,
-                ).copyWith(color: AppColors.textSecondary(context)),
+                style: AppTypography.bodySmall(context).copyWith(
+                  color: AppColors.textSecondary(context),
+                ),
               ),
             ),
         ],
@@ -281,9 +273,10 @@ class AppListSection extends StatelessWidget {
       if (i < children.length - 1) {
         result.add(
           Divider(
-            height: 1,
-            indent: AppSpacing.md,
-            color: AppColors.divider(context),
+            height: 0.5,
+            thickness: 0.5,
+            indent: 16,
+            color: AppColors.separator(context),
           ),
         );
       }

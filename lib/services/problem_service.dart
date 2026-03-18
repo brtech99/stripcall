@@ -33,6 +33,7 @@ class ProblemService {
   List<ProblemWithDetails> parseAndFilterProblems(
     List<dynamic> response, {
     bool deduplicate = false,
+    bool showResolved = false,
   }) {
     final problems = <ProblemWithDetails>[];
     final seenIds = <int>{};
@@ -46,8 +47,8 @@ class ProblemService {
           seenIds.add(problem.id);
         }
 
-        // Filter out resolved problems older than 5 minutes
-        if (problem.resolvedDateTimeParsed != null) {
+        // Filter out resolved problems older than 5 minutes (unless showing all)
+        if (!showResolved && problem.resolvedDateTimeParsed != null) {
           final minutesSinceResolved = DateTime.now()
               .difference(problem.resolvedDateTimeParsed!)
               .inMinutes;
@@ -72,6 +73,7 @@ class ProblemService {
     required String userId,
     int? crewId,
     bool isSuperUser = false,
+    bool showResolved = false,
   }) async {
     try {
       debugLog('loadProblems START (isSuperUser=$isSuperUser, crewId=$crewId)');
@@ -94,7 +96,7 @@ class ProblemService {
           'Super user crew query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = parseAndFilterProblems(response);
+        final problems = parseAndFilterProblems(response, showResolved: showResolved);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(
@@ -137,7 +139,7 @@ class ProblemService {
           'Own problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = parseAndFilterProblems(response);
+        final problems = parseAndFilterProblems(response, showResolved: showResolved);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(
@@ -163,7 +165,7 @@ class ProblemService {
           'Crew problems query completed in ${afterQuery.difference(queryStart).inMilliseconds}ms, count=${response.length}',
         );
 
-        final problems = parseAndFilterProblems(response, deduplicate: true);
+        final problems = parseAndFilterProblems(response, deduplicate: true, showResolved: showResolved);
         final enrichedProblems = await enrichWithSmsReporterNames(problems);
 
         debugLog(

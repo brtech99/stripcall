@@ -266,8 +266,14 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                 onSelected: (selected) {
                   setState(() {
                     _selectedPod = podLetter;
-                    _selectedStripNumber = null;
-                    _selectedStrip = podLetter == 'Finals' ? 'Finals' : null;
+                    if (podLetter == 'Finals') {
+                      _selectedStripNumber = null;
+                      _selectedStrip = 'Finals';
+                    } else if (_selectedStripNumber != null) {
+                      _selectedStrip = '$podLetter$_selectedStripNumber';
+                    } else {
+                      _selectedStrip = null;
+                    }
                   });
                 },
                 showCheckmark: false,
@@ -295,7 +301,7 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
               );
             }).toList(),
           ),
-          if (_selectedPod != null && _selectedPod != 'Finals') ...[
+          if (_selectedPod != 'Finals') ...[
             AppSpacing.verticalSm,
             Wrap(
               spacing: 8,
@@ -307,7 +313,9 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
                   onSelected: (selected) {
                     setState(() {
                       _selectedStripNumber = stripNum;
-                      _selectedStrip = '$_selectedPod$stripNum';
+                      if (_selectedPod != null) {
+                        _selectedStrip = '$_selectedPod$stripNum';
+                      }
                     });
                   },
                   showCheckmark: false,

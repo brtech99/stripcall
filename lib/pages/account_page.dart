@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -447,11 +448,120 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  String get _fullName {
+    final name = '$_firstName $_lastName'.trim();
+    return name.isEmpty ? 'User' : name;
+  }
+
+  String get _initials {
+    final first = _firstName.isNotEmpty ? _firstName[0].toUpperCase() : '';
+    final last = _lastName.isNotEmpty ? _lastName[0].toUpperCase() : '';
+    if (first.isEmpty && last.isEmpty) return 'U';
+    return '$first$last';
+  }
+
+  void _toggleEditMode() {
+    if (_isEditingProfile) {
+      // Save
+      _saveProfile();
+    } else {
+      setState(() => _isEditingProfile = true);
+    }
+  }
+
+  void _cancelEditMode() {
+    _firstNameController.text = _firstName;
+    _lastNameController.text = _lastName;
+    setState(() => _isEditingProfile = false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+    final isApple = AppTheme.isApplePlatform(context);
+
+    return AppScaffold(
+      title: 'Account',
+      actions: [
+        if (!_isLoading && _error == null)
+          isApple ? _buildCupertinoEditAction() : _buildMaterialEditAction(),
+      ],
       body: _buildBody(),
+    );
+  }
+
+  Widget _buildCupertinoEditAction() {
+    if (_isEditingProfile) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: _isSaving ? null : _cancelEditMode,
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: _isSaving ? null : _saveProfile,
+            child: _isSaving
+                ? const CupertinoActivityIndicator()
+                : const Text(
+                    'Done',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+          ),
+        ],
+      );
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: _toggleEditMode,
+      child: const Text('Edit'),
+    );
+  }
+
+  Widget _buildMaterialEditAction() {
+    if (_isEditingProfile) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: _isSaving ? null : _cancelEditMode,
+            tooltip: 'Cancel',
+          ),
+          _isSaving
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.check),
+                  onPressed: _saveProfile,
+                  tooltip: 'Save',
+                ),
+        ],
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.edit_outlined),
+      onPressed: _toggleEditMode,
+      tooltip: 'Edit profile',
     );
   }
 
@@ -484,155 +594,283 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       );
     }
 
-    return SingleChildScrollView(
-      padding: AppSpacing.screenPadding,
+    return ListView(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      children: [
+        // Avatar + Name + Email + Role badge
+        _buildHeader(),
+
+        // PROFILE section
+        _buildProfileSection(),
+
+        // PHONE section (only visible when editing/verifying)
+        if (_isEditingPhone || _isVerifyingPhone) _buildPhoneEditSection(),
+
+        // EMAIL section (only visible when editing/verifying)
+        if (_isEditingEmail || _isVerifyingEmail) _buildEmailEditSection(),
+
+        // SMS MODE section
+        _buildSmsModeSection(),
+
+        // EVENTS section
+        _buildEventsSection(),
+
+        // PASSWORD section
+        _buildPasswordSection(),
+
+        // Sign Out
+        _buildSignOutButton(),
+
+        const SizedBox(height: AppSpacing.lg),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Header: Avatar + Name + Email + Role
+  // ---------------------------------------------------------------------------
+
+  Widget _buildHeader() {
+    final isApple = AppTheme.isApplePlatform(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildProfileSection(),
-          AppSpacing.verticalMd,
-          _buildPhoneSection(),
-          AppSpacing.verticalMd,
-          _buildSmsModeSection(),
-          AppSpacing.verticalMd,
-          _buildEmailSection(),
-          AppSpacing.verticalMd,
-          _buildPasswordSection(),
-          AppSpacing.verticalLg,
-          _buildSignOutButton(),
+          // Avatar
+          _buildAvatar(isApple),
+          const SizedBox(height: 12),
+
+          // Name
+          Text(
+            _fullName,
+            style: AppTypography.titleLarge(context).copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+
+          // Email
+          Text(
+            _email,
+            style: AppTypography.bodyMedium(context).copyWith(
+              color: AppColors.textSecondary(context),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+
+          // Role badge (placeholder -- could be dynamic per event)
+          // For now show SMS mode status as a badge
+          if (_isSmsMode)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.iosOrange.withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusCircular),
+              ),
+              child: Text(
+                'SMS Mode',
+                style: AppTypography.labelSmall(context).copyWith(
+                  color: AppColors.iosOrange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileSection() {
-    return AppCard(
-      child: Padding(
-        padding: AppSpacing.paddingMd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Profile',
-                  style: AppTypography.titleMedium(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.bold),
-                ),
-                if (!_isEditingProfile)
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => setState(() => _isEditingProfile = true),
-                  ),
-              ],
-            ),
-            AppSpacing.verticalSm,
-            if (_isEditingProfile) ...[
-              AppTextField(
-                controller: _firstNameController,
-                label: 'First Name',
-                textCapitalization: TextCapitalization.words,
-              ),
-              AppSpacing.verticalSm,
-              AppTextField(
-                controller: _lastNameController,
-                label: 'Last Name',
-                textCapitalization: TextCapitalization.words,
-              ),
-              AppSpacing.verticalMd,
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () {
-                            _firstNameController.text = _firstName;
-                            _lastNameController.text = _lastName;
-                            setState(() => _isEditingProfile = false);
-                          },
-                    child: const Text('Cancel'),
-                  ),
-                  AppSpacing.horizontalSm,
-                  AppButton(
-                    onPressed: _isSaving ? null : _saveProfile,
-                    isLoading: _isSaving,
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            ] else ...[
-              AppListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.person),
-                title: Text('$_firstName $_lastName'),
-                subtitle: const Text('Name'),
-              ),
-            ],
-          ],
+  Widget _buildAvatar(bool isApple) {
+    final size = isApple ? 84.0 : 88.0;
+    final bgColor = AppColors.actionAccent(context);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        _initials,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: size * 0.38,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1,
         ),
       ),
     );
   }
 
-  Widget _buildPhoneSection() {
-    return AppCard(
-      child: Padding(
-        padding: AppSpacing.paddingMd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  // ---------------------------------------------------------------------------
+  // PROFILE section (read-only fields, edit mode swaps to text fields)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildProfileSection() {
+    if (_isEditingProfile) {
+      return AppListSection(
+        header: 'Profile',
+        children: [
+          Padding(
+            padding: AppSpacing.paddingMd,
+            child: Column(
               children: [
-                Text(
-                  'Phone Number',
-                  style: AppTypography.titleMedium(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.bold),
+                AppTextField(
+                  controller: _firstNameController,
+                  label: 'First Name',
+                  textCapitalization: TextCapitalization.words,
                 ),
-                if (!_isEditingPhone && !_isVerifyingPhone)
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => setState(() => _isEditingPhone = true),
-                  ),
+                AppSpacing.verticalSm,
+                AppTextField(
+                  controller: _lastNameController,
+                  label: 'Last Name',
+                  textCapitalization: TextCapitalization.words,
+                ),
               ],
             ),
-            AppSpacing.verticalSm,
-            if (_isVerifyingPhone) ...[
-              Text(
-                'Enter the verification code sent to $_pendingPhone',
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ],
+      );
+    }
+
+    return AppListSection(
+      header: 'Profile',
+      children: [
+        _buildFieldRow('Full Name', _fullName),
+        _buildFieldRow('Email', _email, onTap: () {
+          setState(() => _isEditingEmail = true);
+        }),
+        _buildFieldRow(
+          'Phone',
+          _phoneNumber.isNotEmpty ? _phoneNumber : 'Not set',
+          onTap: () {
+            setState(() => _isEditingPhone = true);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFieldRow(String label, String value, {VoidCallback? onTap}) {
+    final isApple = AppTheme.isApplePlatform(context);
+
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 12,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTypography.labelSmall(context).copyWith(
+              color: AppColors.textSecondary(context),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: AppTypography.bodyLarge(context).copyWith(
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap != null && !_isEditingProfile) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          children: [
+            Expanded(child: content),
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.md),
+              child: Icon(
+                isApple
+                    ? CupertinoIcons.chevron_right
+                    : Icons.chevron_right,
+                color: AppColors.textSecondary(context),
+                size: 20,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return content;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phone edit / verify (overlay sections)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildPhoneEditSection() {
+    if (_isVerifyingPhone) {
+      return AppListSection(
+        header: 'Verify Phone',
+        children: [
+          Padding(
+            padding: AppSpacing.paddingMd,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enter the verification code sent to $_pendingPhone',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.textSecondary(context),
+                  ),
                 ),
-              ),
-              AppSpacing.verticalSm,
-              AppTextField(
-                controller: _otpController,
-                label: 'Verification Code',
-                hint: '6-digit code',
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-              ),
-              AppSpacing.verticalMd,
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _isSaving ? null : _cancelPhoneVerification,
-                    child: const Text('Cancel'),
-                  ),
-                  AppSpacing.horizontalSm,
-                  AppButton(
-                    onPressed: _isSaving ? null : _verifyPhoneOtp,
-                    isLoading: _isSaving,
-                    child: const Text('Verify'),
-                  ),
-                ],
-              ),
-            ] else if (_isEditingPhone) ...[
+                AppSpacing.verticalSm,
+                AppTextField(
+                  controller: _otpController,
+                  label: 'Verification Code',
+                  hint: '6-digit code',
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                ),
+                AppSpacing.verticalMd,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _isSaving ? null : _cancelPhoneVerification,
+                      child: const Text('Cancel'),
+                    ),
+                    AppSpacing.horizontalSm,
+                    AppButton(
+                      onPressed: _isSaving ? null : _verifyPhoneOtp,
+                      isLoading: _isSaving,
+                      child: const Text('Verify'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Editing phone
+    return AppListSection(
+      header: 'Change Phone',
+      children: [
+        Padding(
+          padding: AppSpacing.paddingMd,
+          child: Column(
+            children: [
               AppTextField(
                 controller: _phoneController,
                 label: 'Phone Number',
@@ -659,108 +897,61 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-            ] else ...[
-              AppListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.phone),
-                title: Text(_phoneNumber.isNotEmpty ? _phoneNumber : 'Not set'),
-                subtitle: const Text(
-                  'Used for SMS notifications when not logged in',
-                ),
-              ),
             ],
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildSmsModeSection() {
-    return AppCard(
-      child: Padding(
-        padding: AppSpacing.paddingMd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'SMS Mode',
-              style: AppTypography.titleMedium(
-                context,
-              ).copyWith(fontWeight: FontWeight.bold),
-            ),
-            AppSpacing.verticalSm,
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: const Icon(Icons.sms),
-              title: const Text('Receive messages via SMS'),
-              subtitle: Text(
-                _isSmsMode
-                    ? 'Messages will be sent to your phone via SMS'
-                    : 'Messages will appear in the app',
-              ),
-              value: _isSmsMode,
-              onChanged: _isSaving ? null : _toggleSmsMode,
-            ),
-            if (_phoneNumber.isEmpty) ...[
-              AppSpacing.verticalSm,
-              Text(
-                'Add a phone number above to enable SMS mode',
-                style: AppTypography.labelSmall(
-                  context,
-                ).copyWith(color: AppColors.statusWarning),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Email edit / verify (overlay sections)
+  // ---------------------------------------------------------------------------
 
-  Widget _buildEmailSection() {
-    return AppCard(
-      child: Padding(
-        padding: AppSpacing.paddingMd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildEmailEditSection() {
+    if (_isVerifyingEmail) {
+      return AppListSection(
+        header: 'Verify Email',
+        children: [
+          Padding(
+            padding: AppSpacing.paddingMd,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Email',
-                  style: AppTypography.titleMedium(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.bold),
-                ),
-                if (!_isEditingEmail && !_isVerifyingEmail)
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => setState(() => _isEditingEmail = true),
+                  'Confirmation emails have been sent to BOTH your old and new addresses. '
+                  'You must click the link in BOTH emails to complete the change.',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.textSecondary(context),
                   ),
+                ),
+                AppSpacing.verticalSm,
+                Text('New email: $_pendingEmail'),
+                AppSpacing.verticalMd,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _cancelEmailVerification,
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
               ],
             ),
-            AppSpacing.verticalSm,
-            if (_isVerifyingEmail) ...[
-              Text(
-                'Confirmation emails have been sent to BOTH your old and new addresses. '
-                'You must click the link in BOTH emails to complete the change.',
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              AppSpacing.verticalSm,
-              Text('New email: $_pendingEmail'),
-              AppSpacing.verticalMd,
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _cancelEmailVerification,
-                    child: const Text('Cancel'),
-                  ),
-                ],
-              ),
-            ] else if (_isEditingEmail) ...[
+          ),
+        ],
+      );
+    }
+
+    // Editing email
+    return AppListSection(
+      header: 'Change Email',
+      children: [
+        Padding(
+          padding: AppSpacing.paddingMd,
+          child: Column(
+            children: [
               AppTextField(
                 controller: _emailController,
                 label: 'Email',
@@ -787,40 +978,205 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-            ] else ...[
-              AppListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.email),
-                title: Text(_email),
-                subtitle: const Text('Email address'),
-              ),
             ],
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildPasswordSection() {
-    return AppCard(
-      child: Padding(
-        padding: AppSpacing.paddingMd,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Password',
-              style: AppTypography.titleMedium(
-                context,
-              ).copyWith(fontWeight: FontWeight.bold),
+  // ---------------------------------------------------------------------------
+  // SMS Mode section
+  // ---------------------------------------------------------------------------
+
+  Widget _buildSmsModeSection() {
+    final isApple = AppTheme.isApplePlatform(context);
+
+    return AppListSection(
+      header: 'SMS Mode',
+      footer: _phoneNumber.isEmpty
+          ? 'Add a phone number to enable SMS mode'
+          : null,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 10,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isApple ? CupertinoIcons.chat_bubble_text : Icons.sms_outlined,
+                color: AppColors.actionAccent(context),
+                size: 22,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Receive messages via SMS',
+                      style: AppTypography.bodyLarge(context).copyWith(
+                        color: AppColors.textPrimary(context),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _isSmsMode
+                          ? 'Messages will be sent to your phone via SMS'
+                          : 'Messages will appear in the app',
+                      style: AppTypography.bodySmall(context).copyWith(
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isApple)
+                CupertinoSwitch(
+                  value: _isSmsMode,
+                  onChanged: _isSaving ? null : _toggleSmsMode,
+                  activeTrackColor: AppColors.iosGreen,
+                )
+              else
+                Switch(
+                  value: _isSmsMode,
+                  onChanged: _isSaving ? null : _toggleSmsMode,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // EVENTS section (placeholder)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildEventsSection() {
+    final isApple = AppTheme.isApplePlatform(context);
+
+    return AppListSection(
+      header: 'Events',
+      children: [
+        // Placeholder current event
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 12,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'No active events',
+                            style: AppTypography.bodyLarge(context).copyWith(
+                              color: AppColors.textPrimary(context),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Events will appear here when assigned',
+                      style: AppTypography.bodySmall(context).copyWith(
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // View all events link
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            // TODO: Navigate to events list
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 12,
             ),
-            AppSpacing.verticalSm,
-            AppListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.lock),
-              title: const Text('********'),
-              subtitle: const Text('Change your password via email'),
-              trailing: _isSaving
+            child: Row(
+              children: [
+                Icon(
+                  isApple
+                      ? CupertinoIcons.calendar
+                      : Icons.calendar_month_outlined,
+                  color: AppColors.actionAccent(context),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'View all events',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    color: AppColors.actionAccent(context),
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  isApple
+                      ? CupertinoIcons.chevron_right
+                      : Icons.chevron_right,
+                  color: AppColors.textSecondary(context),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // PASSWORD section
+  // ---------------------------------------------------------------------------
+
+  Widget _buildPasswordSection() {
+    return AppListSection(
+      header: 'Security',
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 12,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Password',
+                      style: AppTypography.labelSmall(context).copyWith(
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '********',
+                      style: AppTypography.bodyLarge(context),
+                    ),
+                  ],
+                ),
+              ),
+              _isSaving
                   ? const SizedBox(
                       height: 20,
                       width: 20,
@@ -828,23 +1184,70 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
                     )
                   : TextButton(
                       onPressed: _sendPasswordResetEmail,
-                      child: const Text('Reset Password'),
+                      child: const Text('Reset'),
                     ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sign Out button
+  // ---------------------------------------------------------------------------
+
+  Widget _buildSignOutButton() {
+    final isApple = AppTheme.isApplePlatform(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      child: isApple
+          ? _buildCupertinoSignOut()
+          : _buildMaterialSignOut(),
+    );
+  }
+
+  Widget _buildCupertinoSignOut() {
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        key: const ValueKey('account_sign_out_button'),
+        color: AppColors.iosRed,
+        borderRadius: AppSpacing.borderRadiusLg,
+        onPressed: _signOut,
+        child: const Text(
+          'Sign Out',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSignOutButton() {
-    return AppButton(
-      onPressed: _signOut,
-      expand: true,
-      isDestructive: true,
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [Icon(Icons.logout), SizedBox(width: 8), Text('Sign Out')],
+  Widget _buildMaterialSignOut() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        key: const ValueKey('account_sign_out_button'),
+        onPressed: _signOut,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.error(context),
+          side: BorderSide(color: AppColors.error(context)),
+          minimumSize: const Size(0, 52),
+          shape: const StadiumBorder(),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout, color: AppColors.error(context)),
+            const SizedBox(width: 8),
+            const Text('Sign Out'),
+          ],
+        ),
       ),
     );
   }

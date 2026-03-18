@@ -30,6 +30,26 @@ class NotificationService {
   /// Used by problems_page to trigger immediate reload + watch sync.
   VoidCallback? onForegroundMessage;
 
+  /// Clear the app badge count (call when app comes to foreground)
+  Future<void> clearBadge() async {
+    if (!kIsWeb) {
+      try {
+        if (platform.isIOS()) {
+          final iosPlugin = _localNotifications
+              .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin
+              >();
+          // ignore: deprecated_member_use
+          await iosPlugin?.requestPermissions(badge: true);
+        }
+        // Cancel all local notifications to reset badge
+        await _localNotifications.cancelAll();
+      } catch (e) {
+        debugLogError('Error clearing badge', e);
+      }
+    }
+  }
+
   /// Initialize Firebase, request permissions, and set up local notifications
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -288,12 +308,22 @@ class NotificationService {
           .maybeSingle();
 
       if (existingToken == null) {
+        // Remove old tokens for this user on this platform to prevent stale tokens
+        try {
+          await SupabaseManager().dualDelete(
+            'device_tokens',
+            filters: {'user_id': userId, 'platform': platformName},
+          );
+        } catch (e) {
+          debugLogError('Error cleaning up old tokens', e);
+        }
+
         await SupabaseManager().dualInsert('device_tokens', {
           'user_id': userId,
           'device_token': token,
           'platform': platformName,
         });
-        debugLog('FCM token saved to database');
+        debugLog('FCM token saved to database (old tokens cleaned up)');
       }
     } catch (e) {
       debugLogError('Error saving FCM token to database', e);
@@ -406,6 +436,8 @@ class NotificationService {
       }
 
       // Add reporter if includeReporter is true and reporter is not already in the list
+      // Note: if reporter IS a crew member of the assigned crew, they're already in userIds
+      // and should get the message regardless of includeReporter (as a crew member, not reporter)
       if (includeReporter &&
           reporterId != null &&
           !userIds.contains(reporterId)) {

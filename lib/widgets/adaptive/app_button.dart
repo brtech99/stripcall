@@ -2,20 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 
-/// Adaptive button that uses Material on Android/web and Cupertino on iOS.
-///
-/// Usage:
-/// ```dart
-/// AppButton(
-///   onPressed: () => print('Pressed'),
-///   child: Text('Submit'),
-/// )
-///
-/// AppButton.secondary(
-///   onPressed: () => print('Cancel'),
-///   child: Text('Cancel'),
-/// )
-/// ```
+/// Adaptive button: CupertinoButton (12pt radius) on iOS,
+/// ElevatedButton (full pill) on Android/web.
 class AppButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
@@ -38,7 +26,6 @@ class AppButton extends StatelessWidget {
     this.buttonKey,
   });
 
-  /// Secondary/text button style
   const AppButton.secondary({
     super.key,
     required this.onPressed,
@@ -50,7 +37,6 @@ class AppButton extends StatelessWidget {
     this.buttonKey,
   }) : isSecondary = true;
 
-  /// Primary/filled button style (default)
   const AppButton.primary({
     super.key,
     required this.onPressed,
@@ -66,7 +52,6 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isApple = AppTheme.isApplePlatform(context);
 
-    // Show loading indicator if loading
     final effectiveChild = isLoading
         ? SizedBox(
             height: 20,
@@ -82,35 +67,22 @@ class AppButton extends StatelessWidget {
           )
         : child;
 
-    // Disable button when loading
     final effectiveOnPressed = isLoading ? null : onPressed;
 
     Widget button;
-
     if (isApple) {
-      button = _buildCupertinoButton(
-        context,
-        effectiveChild,
-        effectiveOnPressed,
-      );
+      button = _buildCupertinoButton(context, effectiveChild, effectiveOnPressed);
     } else {
-      button = _buildMaterialButton(
-        context,
-        effectiveChild,
-        effectiveOnPressed,
-      );
+      button = _buildMaterialButton(context, effectiveChild, effectiveOnPressed);
     }
 
     if (expand) {
       button = SizedBox(width: double.infinity, child: button);
     }
 
-    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
-    // Check buttonKey first, then fall back to the widget's own key
     final effectiveKey = buttonKey ?? key;
-    final keyId = effectiveKey is ValueKey<String>
-        ? effectiveKey.value
-        : null;
+    final keyId =
+        effectiveKey is ValueKey<String> ? effectiveKey.value : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: button);
     }
@@ -132,7 +104,7 @@ class AppButton extends StatelessWidget {
           style: TextStyle(
             color: isDestructive
                 ? CupertinoColors.destructiveRed
-                : AppColors.primary(context),
+                : AppColors.iosBlue,
           ),
           child: child,
         ),
@@ -140,19 +112,20 @@ class AppButton extends StatelessWidget {
     }
 
     final accentColor = isDestructive
-        ? AppColors.error(context)
-        : AppColors.actionAccent(context);
+        ? AppColors.iosRed
+        : AppColors.iosBlue;
+
     return CupertinoButton(
       key: buttonKey,
       onPressed: onPressed,
       color: accentColor,
-      padding: padding ?? AppSpacing.buttonPadding,
-      borderRadius: AppSpacing.borderRadiusMd,
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      borderRadius: AppSpacing.borderRadiusLg, // 12pt
       child: DefaultTextStyle(
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w600,
-          fontSize: 16,
+          fontSize: 17,
         ),
         child: child,
       ),
@@ -183,11 +156,14 @@ class AppButton extends StatelessWidget {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         padding: effectivePadding,
+        minimumSize: const Size(0, 52),
         backgroundColor: isDestructive
             ? AppColors.error(context)
-            : AppColors.actionAccent(context),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadiusMd),
+            : AppColors.primary(context),
+        foregroundColor: isDestructive
+            ? Colors.white
+            : AppColors.onPrimary(context),
+        shape: const StadiumBorder(), // full pill
       ),
       child: child,
     );
@@ -218,16 +194,15 @@ class AppIconButton extends StatelessWidget {
     final isApple = AppTheme.isApplePlatform(context);
 
     Widget button;
-
     if (isApple) {
       button = CupertinoButton(
         key: buttonKey,
         onPressed: onPressed,
         padding: EdgeInsets.zero,
-        minimumSize: const Size(44, 44), // iOS minimum touch target
+        minimumSize: const Size(44, 44),
         child: IconTheme(
           data: IconThemeData(
-            color: color ?? AppColors.primary(context),
+            color: color ?? AppColors.iosBlue,
             size: iconSize ?? AppSpacing.iconMd,
           ),
           child: icon,
@@ -244,12 +219,9 @@ class AppIconButton extends StatelessWidget {
       );
     }
 
-    // Add Semantics identifier for native accessibility (Maestro, Appium, etc.)
-    // Check buttonKey first, then fall back to the widget's own key
     final effectiveKey = buttonKey ?? key;
-    final keyId = effectiveKey is ValueKey<String>
-        ? effectiveKey.value
-        : null;
+    final keyId =
+        effectiveKey is ValueKey<String> ? effectiveKey.value : null;
     if (keyId != null) {
       return Semantics(identifier: keyId, child: button);
     }

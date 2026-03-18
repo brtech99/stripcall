@@ -13,6 +13,7 @@ class ProblemChat extends StatefulWidget {
   final String? currentUserId;
   final bool isCrewMember;
   final bool isSuperUser;
+  final bool readOnly;
 
   const ProblemChat({
     super.key,
@@ -23,6 +24,7 @@ class ProblemChat extends StatefulWidget {
     required this.currentUserId,
     required this.isCrewMember,
     required this.isSuperUser,
+    this.readOnly = false,
   });
 
   @override
@@ -249,46 +251,48 @@ class _ProblemChatState extends State<ProblemChat> {
                   _buildMessageBubble(_messages[idx]),
             ),
           ),
-        AppSpacing.verticalSm,
+        if (!widget.readOnly) ...[
+          AppSpacing.verticalSm,
 
-        // Input row
-        Row(
-          children: [
-            Expanded(
-              child: AppTextField(
-                key: ValueKey(
-                  'problem_chat_message_field_${widget.problemId}',
-                ),
-                controller: _messageController,
-                hint: 'Type a message...',
-                maxLines: 1,
-                onSubmitted: (_) => _sendMessage(),
-              ),
-            ),
-            AppSpacing.horizontalSm,
-            _buildSendButton(),
-          ],
-        ),
-
-        // Include reporter checkbox
-        if (canSeeAllMessages)
+          // Input row
           Row(
             children: [
-              Checkbox(
-                key: ValueKey(
-                  'problem_chat_include_reporter_${widget.problemId}',
+              Expanded(
+                child: AppTextField(
+                  key: ValueKey(
+                    'problem_chat_message_field_${widget.problemId}',
+                  ),
+                  controller: _messageController,
+                  hint: 'Type a message...',
+                  maxLines: 1,
+                  onSubmitted: (_) => _sendMessage(),
                 ),
-                value: _includeReporter,
-                onChanged: (val) =>
-                    setState(() => _includeReporter = val ?? false),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              Text(
-                'Include reporter',
-                style: AppTypography.labelSmall(context),
-              ),
+              AppSpacing.horizontalSm,
+              _buildSendButton(),
             ],
           ),
+
+          // Include reporter checkbox
+          if (canSeeAllMessages)
+            Row(
+              children: [
+                Checkbox(
+                  key: ValueKey(
+                    'problem_chat_include_reporter_${widget.problemId}',
+                  ),
+                  value: _includeReporter,
+                  onChanged: (val) =>
+                      setState(() => _includeReporter = val ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                Text(
+                  'Include reporter',
+                  style: AppTypography.labelSmall(context),
+                ),
+              ],
+            ),
+        ],
       ],
     );
   }

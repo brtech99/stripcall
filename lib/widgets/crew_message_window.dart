@@ -107,8 +107,11 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
 
       if (mounted) {
         setState(() {
+          // Query fetches newest 10, reverse to display oldest-on-top
           _messages = response
               .map((json) => CrewMessage.fromJson(json))
+              .toList()
+              .reversed
               .toList();
           _isLoading = false;
         });
@@ -126,7 +129,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
     if (_messages.isEmpty) return;
 
     try {
-      final latestMessageTime = _messages.first.createdAt;
+      final latestMessageTime = _messages.last.createdAt;
       final response = await SupabaseManager()
           .from('crew_messages')
           .select('''
@@ -135,7 +138,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
           ''')
           .eq('crew', widget.crewId)
           .gt('created_at', latestMessageTime.toIso8601String())
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: true);
 
       if (mounted && response.isNotEmpty) {
         final newMessages = response
@@ -149,10 +152,10 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
               .toList();
 
           if (uniqueNewMessages.isNotEmpty) {
-            _messages.insertAll(0, uniqueNewMessages);
+            _messages.addAll(uniqueNewMessages);
             // Keep only the last 20 messages to prevent memory issues
             if (_messages.length > 20) {
-              _messages = _messages.take(20).toList();
+              _messages = _messages.sublist(_messages.length - 20);
             }
           }
         });
@@ -298,9 +301,8 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
                     setState(() {
                       _isExpanded = !_isExpanded;
                     });
-                    if (wasExpanded) {
-                      _markMessagesAsRead(); // Mark messages as read when collapsing
-                    }
+                    // Mark messages as read when expanding (viewing) or collapsing
+                    _markMessagesAsRead();
                   },
                 ),
               ],
@@ -318,7 +320,7 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
                   borderRadius: AppSpacing.borderRadiusMd,
                 ),
                 child: Text(
-                  '${_messages.first.authorName ?? 'Unknown'}: ${_messages.first.message}',
+                  '${_messages.last.authorName ?? 'Unknown'}: ${_messages.last.message}',
                   style: AppTypography.bodySmall(
                     context,
                   ).copyWith(color: AppColors.textSecondary(context)),

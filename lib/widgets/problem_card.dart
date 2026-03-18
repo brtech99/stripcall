@@ -20,6 +20,7 @@ class ProblemCard extends StatefulWidget {
   final VoidCallback onGoOnMyWay;
   final VoidCallback onLoadMissingData;
   final VoidCallback? onEditSymptom;
+  final VoidCallback? onUnresolve;
 
   const ProblemCard({
     super.key,
@@ -37,6 +38,7 @@ class ProblemCard extends StatefulWidget {
     required this.onGoOnMyWay,
     required this.onLoadMissingData,
     this.onEditSymptom,
+    this.onUnresolve,
   });
 
   @override
@@ -68,7 +70,7 @@ class _ProblemCardState extends State<ProblemCard> {
 
   int get _responderCount => widget.responders?.length ?? 0;
 
-  /// Short names for collapsed card: "John D., Sarah M."
+  /// Short names for collapsed card: "K. Lee, P. Singh"
   String _getResponderNames() {
     if (widget.responders == null || widget.responders!.isEmpty) return '';
     return widget.responders!.map((r) {
@@ -76,28 +78,122 @@ class _ProblemCardState extends State<ProblemCard> {
       if (user != null) {
         final first = user['firstname'] as String? ?? '';
         final last = user['lastname'] as String? ?? '';
-        if (last.isNotEmpty) return '$first ${last[0]}.';
+        if (first.isNotEmpty && last.isNotEmpty) {
+          return '${first[0]}. $last';
+        }
+        if (last.isNotEmpty) return last;
         return first;
       }
       return 'Unknown';
     }).join(', ');
   }
 
-  /// Third line of collapsed card: responder summary or reporter info
-  String _getCollapsedSubline() {
-    if (_responderCount > 0) {
-      final names = _getResponderNames();
-      final isMe = widget.responders!.any(
-        (r) => r['user_id'] == widget.currentUserId,
-      );
-      final parts = <String>[
-        '$names responding',
-        if (isMe) 'You',
-        _formatTime(widget.problem.startDateTime),
-      ];
-      return parts.join(' \u2022 ');
+  /// Get last message preview text for collapsed card
+  String? _getLastMessagePreview() {
+    final msgs = widget.problem.messages;
+    if (msgs == null || msgs.isEmpty) return null;
+    final last = msgs.last;
+    final text = last['message'] as String? ?? '';
+    if (text.isEmpty) return null;
+    // Truncate long messages
+    return text.length > 50 ? '${text.substring(0, 50)}...' : text;
+  }
+
+  /// Status color based on problem status
+  Color _statusColor(BuildContext context) {
+    switch (widget.status) {
+      case 'new':
+        return AppColors.problemReported(context);
+      case 'en_route':
+        return AppColors.problemResponded(context);
+      case 'resolved':
+        return AppColors.problemResolved(context);
+      default:
+        return AppColors.textSecondary(context);
     }
-    return '${widget.problem.originatorName ?? 'Unknown'} \u2022 ${_formatTime(widget.problem.startDateTime)}';
+  }
+
+  /// Status label for badge
+  String? get _statusLabel {
+    switch (widget.status) {
+      case 'resolved':
+        return 'Resolved';
+      default:
+        return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Status & crew type badges
+  // ---------------------------------------------------------------------------
+
+  Widget _buildStatusBadge(BuildContext context) {
+    final label = _statusLabel;
+    if (label == null) return const SizedBox.shrink();
+    final color = _statusColor(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCrewTypeBadge(BuildContext context) {
+    final crewName = widget.problem.crewTypeName;
+    if (crewName == null) return const SizedBox.shrink();
+    final colors = AppColors.roleBadgeColors(context, crewName);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        crewName,
+        style: TextStyle(
+          color: colors.foreground,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unread count badge (blue circle with number)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildUnreadBadge() {
+    final msgCount = widget.problem.messages?.length ?? 0;
+    if (msgCount == 0) return const SizedBox.shrink();
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: const BoxDecoration(
+        color: AppColors.iosBlue,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          '$msgCount',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -127,57 +223,135 @@ class _ProblemCardState extends State<ProblemCard> {
   }
 
   // ---------------------------------------------------------------------------
+  // Resolution info helpers
+  // ---------------------------------------------------------------------------
+
+  /// "Resolved 13:47 by T. Webb · Fixed on spot"
+  String _resolvedSummary() {
+    final parts = <String>[];
+    parts.add('Resolved');
+    if (widget.problem.resolvedDateTimeParsed != null) {
+      parts.add(_formatTime(widget.problem.resolvedDateTimeParsed!));
+    }
+    if (widget.problem.actionByName != null) {
+      parts.add('by ${widget.problem.actionByName}');
+    }
+    if (widget.problem.actionString != null) {
+      parts.add('\u00B7 ${widget.problem.actionString}');
+    }
+    return parts.join(' ');
+  }
+
+  Widget _buildCollapsedResolvedInfo() {
+    return Text(
+      _resolvedSummary(),
+      style: AppTypography.problemSubtitle(context).copyWith(
+        color: AppColors.problemResolved(context),
+      ),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Collapsed layout
   // ---------------------------------------------------------------------------
 
   Widget _buildCollapsedProblem() {
-    return Row(
+    final isApple = AppTheme.isApplePlatform(context);
+    final lastMessage = _getLastMessagePreview();
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: StatusIndicator(status: widget.status),
-        ),
-        AppSpacing.horizontalSm,
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Strip ${widget.problem.strip}',
+        // Row 1: status dot, title, badges, expand chevron
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            StatusIndicator(status: widget.status, size: 10),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Strip ${widget.problem.strip}${widget.problem.symptomString != null ? ': ${widget.problem.symptomString}' : ''}',
                 style: AppTypography.problemTitle(context),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.problem.symptomString ?? 'Unknown',
-                style: AppTypography.bodyMedium(context),
                 overflow: TextOverflow.ellipsis,
-                maxLines: 1,
               ),
-              const SizedBox(height: 2),
-              Text(
-                _getCollapsedSubline(),
-                style: AppTypography.problemSubtitle(context).copyWith(
-                  color: AppColors.textSecondary(context),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              isApple ? CupertinoIcons.chevron_down : Icons.expand_more,
+              size: 20,
+              color: AppColors.textSecondary(context),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 4),
+
+        // Row 2: subtitle
+        Padding(
+          padding: const EdgeInsets.only(left: 18),
+          child: widget.problem.isResolved
+              ? _buildCollapsedResolvedInfo()
+              : Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Reported by ${widget.problem.originatorName ?? 'Unknown'} \u00B7 ${_formatTime(widget.problem.startDateTime)}',
+                        style: AppTypography.problemSubtitle(context).copyWith(
+                          color: AppColors.textSecondary(context),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                    if (_responderCount > 0) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Responded: ${_getResponderNames()}',
+                          style: AppTypography.problemSubtitle(context).copyWith(
+                            color: AppColors.problemResponded(context),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ],
-          ),
         ),
-        AppSpacing.horizontalSm,
-        _buildResponderBadge(),
-        IconButton(
-          onPressed: widget.onToggleExpansion,
-          icon: Icon(
-            Icons.expand_more,
-            size: AppSpacing.iconMd,
-            color: AppColors.textSecondary(context),
+
+        // Row 3: last message preview (if any, only for unresolved)
+        if (!widget.problem.isResolved && lastMessage != null) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.iosBlue,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    lastMessage,
+                    style: AppTypography.bodySmall(context).copyWith(
+                      color: AppColors.textSecondary(context),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
           ),
-          padding: AppSpacing.paddingXs,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
+        ],
       ],
     );
   }
@@ -193,91 +367,138 @@ class _ProblemCardState extends State<ProblemCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header: status dot + strip title + chevron
+        // Header: status dot + strip title + symptom + chevron
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: StatusIndicator(status: widget.status),
-            ),
-            AppSpacing.horizontalSm,
+            StatusIndicator(status: widget.status, size: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Strip ${widget.problem.strip}',
+                'Strip ${widget.problem.strip}: ${widget.problem.symptomString ?? 'Unknown'}',
                 style: AppTypography.problemTitle(context),
               ),
             ),
+            _buildStatusBadge(context),
+            const SizedBox(width: 4),
             IconButton(
               onPressed: widget.onToggleExpansion,
               icon: Icon(
-                Icons.expand_less,
-                size: 28,
+                isApple ? CupertinoIcons.chevron_up : Icons.expand_less,
+                size: 22,
                 color: AppColors.textSecondary(context),
               ),
-              padding: AppSpacing.paddingSm,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              padding: AppSpacing.paddingXs,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
           ],
         ),
-
-        // Symptom description
-        Padding(
-          padding: const EdgeInsets.only(left: 20),
-          child: Text(
-            widget.problem.symptomString ?? 'Unknown',
-            style: AppTypography.bodyMedium(context),
-          ),
-        ),
-        AppSpacing.verticalXs,
 
         // Reporter + time
         Padding(
           padding: const EdgeInsets.only(left: 20),
           child: Text(
-            'Reported by ${widget.problem.originatorName ?? 'Unknown'} \u2022 ${_formatTime(widget.problem.startDateTime)}',
+            'Reported by ${widget.problem.originatorName ?? 'Unknown'} \u00B7 ${_formatTime(widget.problem.startDateTime)}',
             style: AppTypography.timestamp(context),
           ),
         ),
 
-        // Resolution info
-        if (widget.problem.actionString != null) ...[
-          AppSpacing.verticalXs,
-          Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: Text('Resolution: ${widget.problem.actionString}'),
-          ),
-        ],
-        if (widget.problem.notes?.isNotEmpty ?? false) ...[
-          AppSpacing.verticalXs,
-          Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: Text('Notes: ${widget.problem.notes}'),
-          ),
-        ],
-        if (widget.problem.isResolved &&
-            widget.problem.actionByName != null) ...[
-          AppSpacing.verticalXs,
+        // Responders
+        if (_responderCount > 0) ...[
           Padding(
             padding: const EdgeInsets.only(left: 20),
             child: Text(
-              'Resolved by: ${widget.problem.actionByName}',
-              style: AppTypography.successText(context),
+              'Responded: ${_getResponderNames()}',
+              style: AppTypography.timestamp(context).copyWith(
+                color: AppColors.problemResponded(context),
+              ),
             ),
           ),
         ],
 
-        // Action buttons row
+        // Resolution info (for resolved problems, show in green)
+        if (widget.problem.isResolved) ...[
+          AppSpacing.verticalXs,
+          Padding(
+            padding: const EdgeInsets.only(left: 20),
+            child: Text(
+              _resolvedSummary(),
+              style: AppTypography.bodySmall(context).copyWith(
+                color: AppColors.problemResolved(context),
+              ),
+            ),
+          ),
+          // Unresolve button (right under the status/resolution info)
+          if (widget.onUnresolve != null) ...[
+            AppSpacing.verticalSm,
+            Padding(
+              padding: const EdgeInsets.only(left: 20, right: 20),
+              child: SizedBox(
+                width: double.infinity,
+                child: GestureDetector(
+                  key: ValueKey(
+                    'problem_unresolve_button_${widget.problem.id}',
+                  ),
+                  onTap: widget.onUnresolve,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFFFF6B6B),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Unresolve',
+                        style: TextStyle(
+                          color: Color(0xFFFF6B6B),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ] else ...[
+          if (widget.problem.actionString != null) ...[
+            AppSpacing.verticalXs,
+            Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                'Resolution: ${widget.problem.actionString}',
+                style: AppTypography.bodySmall(context),
+              ),
+            ),
+          ],
+          if (widget.problem.notes?.isNotEmpty ?? false) ...[
+            AppSpacing.verticalXs,
+            Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: Text(
+                'Notes: ${widget.problem.notes}',
+                style: AppTypography.bodySmall(context),
+              ),
+            ),
+          ],
+        ],
+
+        // Action buttons row (only for unresolved problems)
         if (_canShowActions) ...[
           AppSpacing.verticalSm,
           Padding(
             padding: const EdgeInsets.only(left: 20),
             child: Row(
               children: [
-                // On my way / En route (filled)
+                // On my way / En route
                 if (!widget.isUserResponding)
                   Semantics(
                     identifier: 'problem_onmyway_button_${widget.problem.id}',
-                    child: _buildFilledButton(
+                    child: _buildOutlinedButton(
                       key: ValueKey(
                         'problem_onmyway_button_${widget.problem.id}',
                       ),
@@ -296,46 +517,42 @@ class _ProblemCardState extends State<ProblemCard> {
                       ),
                       label: 'En route',
                       onPressed: null,
-                      color: AppColors.statusWarning,
+                      color: AppColors.problemResponded(context),
                       isApple: isApple,
                     ),
                   ),
                 AppSpacing.horizontalSm,
 
-                // Resolve: solid when user is responding, outlined otherwise
+                // Resolve
                 Semantics(
                   identifier: 'problem_resolve_button_${widget.problem.id}',
-                  child: widget.isUserResponding
-                      ? _buildFilledButton(
-                          key: ValueKey(
-                            'problem_resolve_button_${widget.problem.id}',
-                          ),
-                          label: 'Resolve',
-                          onPressed: widget.onResolve,
-                          color: accentColor,
-                          isApple: isApple,
-                        )
-                      : _buildOutlinedButton(
-                          key: ValueKey(
-                            'problem_resolve_button_${widget.problem.id}',
-                          ),
-                          label: 'Resolve',
-                          onPressed: widget.onResolve,
-                          color: accentColor,
-                          isApple: isApple,
-                        ),
+                  child: _buildFilledButton(
+                    key: ValueKey(
+                      'problem_resolve_button_${widget.problem.id}',
+                    ),
+                    label: 'Resolve',
+                    onPressed: widget.onResolve,
+                    color: accentColor,
+                    isApple: isApple,
+                  ),
                 ),
                 AppSpacing.horizontalSm,
 
-                // Edit (outlined icon button)
+                // Edit text link
                 if (widget.onEditSymptom != null)
-                  _buildEditIconButton(
+                  GestureDetector(
                     key: ValueKey(
                       'problem_edit_symptom_button_${widget.problem.id}',
                     ),
-                    onPressed: widget.onEditSymptom!,
-                    color: accentColor,
-                    isApple: isApple,
+                    onTap: widget.onEditSymptom,
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -344,20 +561,13 @@ class _ProblemCardState extends State<ProblemCard> {
 
         AppSpacing.verticalSm,
 
-        // MESSAGES header
+        // Problem description line ("Problem: Blade broken" + Edit) - only for unresolved
+        // MESSAGES section
         Padding(
           padding: const EdgeInsets.only(left: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'MESSAGES',
-                style: AppTypography.labelSmall(context).copyWith(
-                  color: AppColors.textSecondary(context),
-                  letterSpacing: 1.0,
-                ),
-              ),
-              AppSpacing.verticalSm,
               ProblemChat(
                 messages: widget.problem.messages,
                 problemId: widget.problem.id,
@@ -368,10 +578,12 @@ class _ProblemCardState extends State<ProblemCard> {
                     widget.userCrewId != null &&
                     widget.userCrewId == widget.problem.crewId,
                 isSuperUser: widget.isSuperUser,
+                readOnly: widget.problem.isResolved,
               ),
             ],
           ),
         ),
+
 
       ],
     );
@@ -388,7 +600,7 @@ class _ProblemCardState extends State<ProblemCard> {
     required Color color,
     required bool isApple,
   }) {
-    final borderRadius = BorderRadius.circular(8);
+    final borderRadius = BorderRadius.circular(20);
     if (isApple) {
       return CupertinoButton(
         key: key,
@@ -416,6 +628,7 @@ class _ProblemCardState extends State<ProblemCard> {
         disabledBackgroundColor: color.withValues(alpha: 0.5),
         disabledForegroundColor: Colors.white70,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        minimumSize: Size.zero,
         shape: RoundedRectangleBorder(borderRadius: borderRadius),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
@@ -430,7 +643,7 @@ class _ProblemCardState extends State<ProblemCard> {
     required Color color,
     required bool isApple,
   }) {
-    final borderRadius = BorderRadius.circular(8);
+    final borderRadius = BorderRadius.circular(20);
     if (isApple) {
       return GestureDetector(
         key: key,
@@ -459,31 +672,11 @@ class _ProblemCardState extends State<ProblemCard> {
         foregroundColor: color,
         side: BorderSide(color: color, width: 1.5),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        minimumSize: Size.zero,
         shape: RoundedRectangleBorder(borderRadius: borderRadius),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
       child: Text(label),
-    );
-  }
-
-  Widget _buildEditIconButton({
-    Key? key,
-    required VoidCallback onPressed,
-    required Color color,
-    required bool isApple,
-  }) {
-    return GestureDetector(
-      key: key,
-      onTap: onPressed,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          border: Border.all(color: color, width: 1.5),
-          borderRadius: AppSpacing.borderRadiusMd,
-        ),
-        child: Icon(Icons.edit_outlined, size: 18, color: color),
-      ),
     );
   }
 
@@ -513,8 +706,12 @@ class _ProblemCardState extends State<ProblemCard> {
               )
             : InkWell(
                 onTap: widget.onToggleExpansion,
+                borderRadius: AppSpacing.borderRadiusLg,
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   child: content,
                 ),
               ),
