@@ -1,0 +1,213 @@
+# Screenshot capture flow for all non-superuser pages
+# Prerequisites: App already running via flutter run with local Supabase dart-defines
+# Run: maestro test maestro/screenshots.yaml
+
+appId: com.brianrosen.stripcall
+
+---
+# ── 1. Login Page ──
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 15000
+- takeScreenshot: screenshots/01_login_page
+
+# ── 2. Forgot Password Page ──
+- tapOn:
+    id: "login_forgot_password_button"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/02_forgot_password_page
+# Tap the back button in the AppBar
+- swipe:
+    start: "1%,50%"
+    end: "90%,50%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 5000
+
+# ── 3. Create Account Page ──
+- tapOn:
+    id: "login_create_account_button"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/03_create_account_page
+# Tap the back button in the AppBar
+- swipe:
+    start: "1%,50%"
+    end: "90%,50%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 5000
+- tapOn:
+    id: "login_email_field"
+- inputText: "e2e_superuser@test.com"
+- tapOn:
+    id: "login_password_field"
+- inputText: "TestPassword123!"
+- tapOn:
+    id: "login_submit_button"
+- waitForAnimationToEnd
+# Dismiss iOS "Save Password?" dialog if it appears
+- tapOn:
+    text: "Not Now"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "select_event_list"
+    timeout: 15000
+
+# ── 5. Select Event Page ──
+- takeScreenshot: screenshots/04_select_event_page
+
+# Select the seeded event
+- tapOn:
+    id: "select_event_item_.*"
+    index: 0
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "problems_report_button"
+    timeout: 15000
+
+# ── 6. Problems Page (empty) ──
+- takeScreenshot: screenshots/05_problems_page_empty
+
+# ── 7. New Problem Dialog ──
+- tapOn:
+    id: "problems_report_button"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "new_problem_dialog"
+    timeout: 5000
+- takeScreenshot: screenshots/06_new_problem_dialog
+
+# Fill in new problem - Select Armorer crew
+- tapOn:
+    text: "Armorer"
+    index: 0
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "new_problem_symptom_class_dropdown"
+    timeout: 10000
+
+# Select strip 1
+- tapOn:
+    text: "1"
+    index: 0
+- waitForAnimationToEnd
+
+# Select symptom class
+- tapOn:
+    id: "new_problem_symptom_class_dropdown"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Weapon Issue"
+- waitForAnimationToEnd
+
+# Select symptom
+- tapOn:
+    id: "new_problem_symptom_dropdown"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Blade broken"
+- waitForAnimationToEnd
+
+- takeScreenshot: screenshots/07_new_problem_filled
+
+# Submit
+- tapOn:
+    text: "Submit"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "problems_report_button"
+    timeout: 10000
+
+# ── 8. Problems Page with problem ──
+- takeScreenshot: screenshots/08_problems_page_with_problem
+
+# ── 9. Expand problem card ──
+- tapOn:
+    id: "problem_card_.*"
+    index: 0
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/09_problem_expanded
+
+# ── 10. Edit Symptom Dialog ──
+- tapOn:
+    text: "Edit"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/10_edit_symptom_dialog
+- tapOn:
+    text: "Cancel"
+- waitForAnimationToEnd
+
+# ── 11. Resolve Problem Dialog ──
+- tapOn:
+    text: "^Resolve$"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/11_resolve_problem_dialog
+- tapOn:
+    text: "Cancel"
+- waitForAnimationToEnd
+
+# ── 12. Settings Menu ──
+- tapOn:
+    id: "settings_menu_button"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/12_settings_menu
+
+# ── 13. Account Page ──
+- tapOn:
+    text: "Account"
+- waitForAnimationToEnd
+- takeScreenshot: screenshots/13_account_page
+- swipe:
+    start: "1%,50%"
+    end: "90%,50%"
+
+# ── 14. Logout ──
+- tapOn:
+    id: "settings_menu_button"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Logout"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "login_email_field"
+    timeout: 10000
+
+# ── 15. Login as referee to see non-crew-member view ──
+- tapOn:
+    id: "login_email_field"
+- inputText: "e2e_referee1@test.com"
+- tapOn:
+    id: "login_password_field"
+- inputText: "TestPassword123!"
+- tapOn:
+    id: "login_submit_button"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Not Now"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "select_event_list"
+    timeout: 15000
+- tapOn:
+    id: "select_event_item_.*"
+    index: 0
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "problems_report_button"
+    timeout: 15000
+- takeScreenshot: screenshots/14_referee_problems_page

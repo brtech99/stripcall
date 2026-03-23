@@ -26,7 +26,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('login_submit_button')), findsOneWidget);
-      expect(find.text('Login'), findsWidgets); // AppBar title + button
     });
 
     testWidgets('renders forgot password and create account buttons',

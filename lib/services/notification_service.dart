@@ -30,19 +30,13 @@ class NotificationService {
   /// Used by problems_page to trigger immediate reload + watch sync.
   VoidCallback? onForegroundMessage;
 
-  /// Clear the app badge count (call when app comes to foreground)
+  /// Clear the app badge count (call when app comes to foreground).
+  /// On iOS, the native AppDelegate handles clearing the badge via
+  /// applicationDidBecomeActive. This method cancels any pending
+  /// local notifications as a supplementary cleanup.
   Future<void> clearBadge() async {
     if (!kIsWeb) {
       try {
-        if (platform.isIOS()) {
-          final iosPlugin = _localNotifications
-              .resolvePlatformSpecificImplementation<
-                IOSFlutterLocalNotificationsPlugin
-              >();
-          // ignore: deprecated_member_use
-          await iosPlugin?.requestPermissions(badge: true);
-        }
-        // Cancel all local notifications to reset badge
         await _localNotifications.cancelAll();
       } catch (e) {
         debugLogError('Error clearing badge', e);

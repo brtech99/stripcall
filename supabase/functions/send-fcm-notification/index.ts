@@ -293,6 +293,7 @@ async function sendFCMNotification(
                 body: body,
               },
               sound: "default",
+              badge: 1,
               ...(data?.problemId ? { "category": "PROBLEM_CATEGORY" } : {}),
             },
             ...(data || {}),

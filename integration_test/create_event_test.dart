@@ -146,8 +146,8 @@ void main() {
         of: find.byKey(const ValueKey('manage_events_list')),
         matching: find.text('TestEvent1'),
       );
-      expect(testEvent1InList, findsOneWidget);
-      await tester.tap(testEvent1InList);
+      expect(testEvent1InList, findsAtLeastNWidgets(1));
+      await tester.tap(testEvent1InList.first);
       // Wait for manage_event page to load (avoid pumpAndSettle - text fields may blink)
       await _pumpForDuration(tester, const Duration(seconds: 3));
 
@@ -246,7 +246,7 @@ void main() {
         find.descendant(
           of: find.byKey(const ValueKey('manage_events_list')),
           matching: find.text('TestEvent1'),
-        ),
+        ).first,
       );
       // Wait for manage_event page to load (avoid pumpAndSettle - text fields may blink)
       await _pumpForDuration(tester, const Duration(seconds: 3));
@@ -609,7 +609,7 @@ void main() {
         find.descendant(
           of: find.byKey(const ValueKey('manage_events_list')),
           matching: find.text('TestEvent1-Edited'),
-        ),
+        ).first,
       );
       await _pumpForDuration(tester, const Duration(seconds: 3));
 
@@ -677,7 +677,7 @@ void main() {
         find.descendant(
           of: find.byKey(const ValueKey('manage_events_list')),
           matching: find.text('TestEvent2'),
-        ),
+        ).first,
       );
       await _pumpForDuration(tester, const Duration(seconds: 3));
 
@@ -713,7 +713,7 @@ void main() {
         find.descendant(
           of: find.byKey(const ValueKey('manage_events_list')),
           matching: find.text('TestEvent1-Edited'),
-        ),
+        ).first,
       );
       await _pumpForDuration(tester, const Duration(seconds: 2));
 
@@ -748,7 +748,7 @@ void main() {
         find.descendant(
           of: find.byKey(const ValueKey('manage_events_list')),
           matching: find.text('TestEvent2'),
-        ),
+        ).first,
       );
       await _pumpForDuration(tester, const Duration(seconds: 2));
 

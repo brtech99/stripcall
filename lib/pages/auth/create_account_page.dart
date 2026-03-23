@@ -72,10 +72,10 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
         try {
           debugLog('Inserting user data into pending_users table...');
-          // Use plain insert (no .select()) because the user is not yet
-          // authenticated — signUp with email confirmation doesn't create a
-          // session, so .select() would fail the read RLS policy.
-          await SupabaseManager().client.from('pending_users').insert({
+          // Use dualInsertNoReturn (no .select()) because the user is not
+          // yet authenticated — signUp with email confirmation doesn't create
+          // a session, so .select() would fail the read RLS policy.
+          await SupabaseManager().dualInsertNoReturn('pending_users', {
             'email': email,
             'firstname': firstName,
             'lastname': lastName,
@@ -407,7 +407,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                         onTap: () => context.go(Routes.login),
                         child: Text(
                           'Sign In',
-                          style: TextStyle(
+                          style: AppTypography.bodyMedium(context).copyWith(
                             color: AppColors.iosBlue,
                             fontWeight: FontWeight.w600,
                           ),

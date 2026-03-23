@@ -11,6 +11,7 @@ import 'pages/events/select_event_page.dart';
 import 'pages/problems/problems_page.dart';
 import 'pages/crews/select_crew_page.dart';
 import 'pages/sms_simulator_page.dart';
+import 'pages/reports/crew_report_page.dart';
 import 'routes.dart';
 import 'pages/auth/create_account_page.dart';
 import 'pages/auth/forgot_password_page.dart';
@@ -274,6 +275,10 @@ final router = GoRouter(
     GoRoute(
       path: Routes.smsSimulator,
       builder: (context, state) => const SmsSimulatorPage(),
+    ),
+    GoRoute(
+      path: Routes.crewReport,
+      builder: (context, state) => const CrewReportPage(),
     ),
   ],
 );

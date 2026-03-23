@@ -496,6 +496,12 @@ void main() {
     testWidgets('shows resolved problem with action info', (tester) async {
       final problems = [
         _makeProblem(
+          id: 2,
+          strip: '3',
+          crewId: 10,
+          symptom: {'id': 2, 'symptomstring': 'Active problem'},
+        ),
+        _makeProblem(
           id: 1,
           strip: '5',
           crewId: 10,
@@ -522,6 +528,13 @@ void main() {
       );
       await tester.pumpWidget(buildTestWidget(repository: repo));
       await pumpAndWaitForInit(tester);
+
+      // Toggle "Show resolved" to make resolved problems visible
+      final toggleFinder = find.byKey(const ValueKey('problems_show_resolved_toggle'));
+      await tester.tap(toggleFinder);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       // Expand
       final cardFinder = find.byKey(const ValueKey('problem_card_1'));
@@ -629,12 +642,18 @@ void main() {
       await tester.tap(inkWellFinder.first);
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Responding'), findsOneWidget);
-      expect(find.textContaining('Jane Smith'), findsOneWidget);
+      expect(find.textContaining('Responded'), findsOneWidget);
+      expect(find.textContaining('J. Smith'), findsOneWidget);
     });
 
     testWidgets('resolved problems do not show action buttons', (tester) async {
       final problems = [
+        _makeProblem(
+          id: 2,
+          strip: '3',
+          crewId: 10,
+          symptom: {'id': 2, 'symptomstring': 'Active problem'},
+        ),
         _makeProblem(
           id: 1,
           strip: '5',
@@ -658,7 +677,14 @@ void main() {
       await tester.pumpWidget(buildTestWidget(repository: repo));
       await pumpAndWaitForInit(tester);
 
-      // Expand
+      // Toggle "Show resolved" to make resolved problems visible
+      final toggleFinder = find.byKey(const ValueKey('problems_show_resolved_toggle'));
+      await tester.tap(toggleFinder);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+
+      // Expand the resolved problem
       final cardFinder = find.byKey(const ValueKey('problem_card_1'));
       final inkWellFinder = find.descendant(
         of: cardFinder,
@@ -668,7 +694,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('On my way'), findsNothing);
-      expect(find.text('Resolve'), findsNothing);
+      // 'Resolve' button should not be on resolved card (only on active card)
+      // The active card has one, so check specifically within the resolved card
+      final resolvedCard = find.byKey(const ValueKey('problem_card_1'));
+      expect(
+        find.descendant(of: resolvedCard, matching: find.text('Resolve')),
+        findsNothing,
+      );
     });
 
     testWidgets('handles null userId gracefully', (tester) async {
@@ -936,6 +968,281 @@ void main() {
       await pumpAndWaitForInit(tester);
 
       expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+    });
+
+    testWidgets('show resolved toggle visible for crew member', (
+      tester,
+    ) async {
+      final problems = [
+        _makeProblem(
+          id: 1,
+          strip: '5',
+          crewId: 10,
+          symptom: {'id': 1, 'symptomstring': 'Broken blade'},
+        ),
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: problems,
+        mockUserCrewId: 10,
+        mockUserCrewName: 'Armorer',
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      expect(
+        find.byKey(const ValueKey('problems_show_resolved_toggle')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('show resolved toggle hidden for referee (non-crew)', (
+      tester,
+    ) async {
+      final problems = [
+        _makeProblem(
+          id: 1,
+          strip: '5',
+          crewId: 10,
+          symptom: {'id': 1, 'symptomstring': 'Broken blade'},
+          originator: {
+            'supabase_id': 'user-1',
+            'firstname': 'John',
+            'lastname': 'Doe',
+          },
+        ),
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: problems,
+        mockIsReferee: true,
+        mockUserCrewId: null,
+        mockUserCrewName: null,
+      );
+      await tester.pumpWidget(
+        buildTestWidget(repository: repo, crewId: null, crewType: null),
+      );
+      await pumpAndWaitForInit(tester);
+
+      expect(
+        find.byKey(const ValueKey('problems_show_resolved_toggle')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('show resolved toggle visible for superuser', (
+      tester,
+    ) async {
+      final crews = [
+        <String, dynamic>{
+          'id': 10,
+          'crewtype': <String, dynamic>{'crewtype': 'Armorer'},
+        },
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: [],
+        mockIsSuperUser: true,
+        mockUserCrewId: null,
+        mockUserCrewName: null,
+        mockAllCrews: crews,
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      expect(
+        find.byKey(const ValueKey('problems_show_resolved_toggle')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('show resolved toggle visible for crew member in empty state', (
+      tester,
+    ) async {
+      final repo = MockProblemsRepository(
+        mockProblems: [],
+        mockUserCrewId: 10,
+        mockUserCrewName: 'Armorer',
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      expect(
+        find.byKey(const ValueKey('problems_show_resolved_toggle')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('show resolved toggle hidden for referee in empty state', (
+      tester,
+    ) async {
+      final repo = MockProblemsRepository(
+        mockProblems: [],
+        mockIsReferee: true,
+        mockUserCrewId: null,
+        mockUserCrewName: null,
+      );
+      await tester.pumpWidget(
+        buildTestWidget(repository: repo, crewId: null, crewType: null),
+      );
+      await pumpAndWaitForInit(tester);
+
+      expect(
+        find.byKey(const ValueKey('problems_show_resolved_toggle')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('resolved problem shows Unresolve button when expanded', (
+      tester,
+    ) async {
+      final problems = [
+        _makeProblem(
+          id: 2,
+          strip: '3',
+          crewId: 10,
+          symptom: {'id': 2, 'symptomstring': 'Active problem'},
+        ),
+        _makeProblem(
+          id: 1,
+          strip: '5',
+          crewId: 10,
+          resolvedDateTime: DateTime(2025, 1, 1, 13, 0).toIso8601String(),
+          symptom: {'id': 1, 'symptomstring': 'Broken blade'},
+          action: {'id': 1, 'actionstring': 'Fixed'},
+          originator: {
+            'supabase_id': 'user-1',
+            'firstname': 'John',
+            'lastname': 'Doe',
+          },
+          actionBy: {
+            'supabase_id': 'user-2',
+            'firstname': 'Jane',
+            'lastname': 'Smith',
+          },
+        ),
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: problems,
+        mockUserCrewId: 10,
+        mockUserCrewName: 'Armorer',
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      // Toggle "Show resolved" to make resolved problems visible
+      final toggleFinder = find.byKey(const ValueKey('problems_show_resolved_toggle'));
+      await tester.tap(toggleFinder);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+
+      // Expand the resolved problem
+      final cardFinder = find.byKey(const ValueKey('problem_card_1'));
+      final inkWellFinder = find.descendant(
+        of: cardFinder,
+        matching: find.byType(InkWell),
+      );
+      await tester.tap(inkWellFinder.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unresolve'), findsOneWidget);
+    });
+
+    testWidgets('unresolved problem does not show Unresolve button', (
+      tester,
+    ) async {
+      final problems = [
+        _makeProblem(
+          id: 1,
+          strip: '5',
+          crewId: 10,
+          symptom: {'id': 1, 'symptomstring': 'Broken blade'},
+          originator: {
+            'supabase_id': 'other-user',
+            'firstname': 'John',
+            'lastname': 'Doe',
+          },
+        ),
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: problems,
+        mockUserCrewId: 10,
+        mockUserCrewName: 'Armorer',
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      // Expand
+      final cardFinder = find.byKey(const ValueKey('problem_card_1'));
+      final inkWellFinder = find.descendant(
+        of: cardFinder,
+        matching: find.byType(InkWell),
+      );
+      await tester.tap(inkWellFinder.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unresolve'), findsNothing);
+    });
+
+    testWidgets('Unresolve button has correct ValueKey', (tester) async {
+      final problems = [
+        _makeProblem(
+          id: 2,
+          strip: '3',
+          crewId: 10,
+          symptom: {'id': 2, 'symptomstring': 'Active problem'},
+        ),
+        _makeProblem(
+          id: 1,
+          strip: '5',
+          crewId: 10,
+          resolvedDateTime: DateTime(2025, 1, 1, 13, 0).toIso8601String(),
+          symptom: {'id': 1, 'symptomstring': 'Broken blade'},
+          action: {'id': 1, 'actionstring': 'Fixed'},
+          originator: {
+            'supabase_id': 'user-1',
+            'firstname': 'John',
+            'lastname': 'Doe',
+          },
+          actionBy: {
+            'supabase_id': 'user-2',
+            'firstname': 'Jane',
+            'lastname': 'Smith',
+          },
+        ),
+      ];
+
+      final repo = MockProblemsRepository(
+        mockProblems: problems,
+        mockUserCrewId: 10,
+        mockUserCrewName: 'Armorer',
+      );
+      await tester.pumpWidget(buildTestWidget(repository: repo));
+      await pumpAndWaitForInit(tester);
+
+      // Toggle "Show resolved" to make resolved problems visible
+      final toggleFinder = find.byKey(const ValueKey('problems_show_resolved_toggle'));
+      await tester.tap(toggleFinder);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
+
+      // Expand the resolved problem
+      final cardFinder = find.byKey(const ValueKey('problem_card_1'));
+      final inkWellFinder = find.descendant(
+        of: cardFinder,
+        matching: find.byType(InkWell),
+      );
+      await tester.tap(inkWellFinder.first);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('problem_unresolve_button_1')),
+        findsOneWidget,
+      );
     });
   });
 }

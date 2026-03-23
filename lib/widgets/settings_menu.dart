@@ -72,6 +72,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
             case 'manage_crews':
               context.push(Routes.selectCrew);
               break;
+            case 'reports':
+              context.push(Routes.crewReport);
+              break;
             case 'database':
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const DatabasePage()),
@@ -130,6 +133,20 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 child: ListTile(
                   leading: Icon(Icons.people),
                   title: Text('Manage Crews'),
+                ),
+              ),
+            );
+          }
+
+          // Add Reports option for crew chiefs and superusers
+          if (_isCrewChief || _isSuperUser) {
+            items.add(
+              const PopupMenuItem<String>(
+                key: ValueKey('settings_menu_reports'),
+                value: 'reports',
+                child: ListTile(
+                  leading: Icon(Icons.summarize),
+                  title: Text('Reports'),
                 ),
               ),
             );

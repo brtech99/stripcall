@@ -384,4 +384,23 @@ void main() {
       expect(updated.problems.first.messages, hasLength(1));
     });
   });
+
+  group('ProblemsPageState - showResolved', () {
+    test('defaults to false', () {
+      const state = ProblemsPageState();
+      expect(state.showResolved, isFalse);
+    });
+
+    test('copyWith can set showResolved to true', () {
+      const state = ProblemsPageState();
+      final updated = state.copyWith(showResolved: true);
+      expect(updated.showResolved, isTrue);
+    });
+
+    test('copyWith preserves showResolved when not specified', () {
+      const state = ProblemsPageState(showResolved: true);
+      final updated = state.copyWith(isLoading: false);
+      expect(updated.showResolved, isTrue);
+    });
+  });
 }

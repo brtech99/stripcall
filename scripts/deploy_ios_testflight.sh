@@ -122,7 +122,9 @@ echo ""
 echo "Step 2/4: Building Flutter iOS release..."
 flutter build ios --release \
     --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-    --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+    --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+    --dart-define=SUPABASE_SECONDARY_URL="$SUPABASE_SECONDARY_URL" \
+    --dart-define=SUPABASE_SECONDARY_SERVICE_ROLE_KEY="$SUPABASE_SECONDARY_SERVICE_ROLE_KEY"
 
 # Archive (includes watchOS companion app via Embed Watch Content build phase)
 echo ""

@@ -163,86 +163,181 @@ class SupabaseManager {
 
   // ─── Dual-write methods ─────────────────────────────────────────────
 
+  /// Insert into both instances without returning data.
+  /// Use when the caller has no session (e.g. during account creation)
+  /// and .select() would fail RLS.
+  Future<void> dualInsertNoReturn(
+    String table,
+    Map<String, dynamic> data,
+  ) async {
+    // Primary: plain insert (no .select())
+    try {
+      if (!_primaryHealthy) {
+        _queueTransaction('primary', table, 'insert', data);
+        throw Exception(
+          'Primary database is currently unavailable. '
+          'Operation queued for retry.',
+        );
+      }
+      await _primary.from(table).insert(data);
+    } catch (e) {
+      if (_primaryHealthy) {
+        debugLogError(
+          'SupabaseManager: primary insert on "$table" failed',
+          e,
+        );
+        _markPrimaryUnhealthy();
+        _queueTransaction('primary', table, 'insert', data);
+      }
+      rethrow;
+    }
+
+    // Secondary: best-effort
+    if (_secondary != null) {
+      try {
+        if (!_secondaryHealthy) {
+          _queueTransaction('secondary', table, 'insert', data);
+          return;
+        }
+        await _secondary!.from(table).insert(data);
+      } catch (e) {
+        debugLogError(
+          'SupabaseManager: secondary insert on "$table" failed',
+          e,
+        );
+        _markSecondaryUnhealthy();
+        _queueTransaction('secondary', table, 'insert', data);
+      }
+    }
+  }
+
   /// Insert into both instances. Queues failures for replay.
+  /// During failover (primary down), still writes to secondary and returns
+  /// the secondary result instead of throwing.
   Future<List<dynamic>> dualInsert(
     String table,
     Map<String, dynamic> data,
   ) async {
-    final primaryResult = await _writeTo(
-      target: 'primary',
-      client: _primary,
-      table: table,
-      operation: 'insert',
-      data: data,
-    );
+    List<dynamic>? primaryResult;
+    Object? primaryError;
 
-    if (_secondary != null) {
-      await _writeTo(
-        target: 'secondary',
-        client: _secondary!,
+    try {
+      primaryResult = await _writeTo(
+        target: 'primary',
+        client: _primary,
         table: table,
         operation: 'insert',
         data: data,
       );
+    } catch (e) {
+      primaryError = e;
     }
 
-    return primaryResult ?? [];
+    List<dynamic>? secondaryResult;
+    if (_secondary != null) {
+      try {
+        secondaryResult = await _writeTo(
+          target: 'secondary',
+          client: _secondary!,
+          table: table,
+          operation: 'insert',
+          data: data,
+        );
+      } catch (_) {
+        // Secondary errors are silent (already queued by _writeTo)
+      }
+    }
+
+    // If primary succeeded, return its result.
+    if (primaryError == null) return primaryResult ?? [];
+    // If primary failed but secondary succeeded, return secondary result.
+    if (secondaryResult != null) return secondaryResult;
+    // Both failed — rethrow primary error.
+    throw primaryError!;
   }
 
   /// Update on both instances. [filters] is a map of column→value for .eq().
+  /// During failover, still writes to secondary.
   Future<void> dualUpdate(
     String table,
     Map<String, dynamic> data, {
     required Map<String, dynamic> filters,
   }) async {
-    await _writeTo(
-      target: 'primary',
-      client: _primary,
-      table: table,
-      operation: 'update',
-      data: data,
-      filters: filters,
-    );
+    Object? primaryError;
 
-    if (_secondary != null) {
+    try {
       await _writeTo(
-        target: 'secondary',
-        client: _secondary!,
+        target: 'primary',
+        client: _primary,
         table: table,
         operation: 'update',
         data: data,
         filters: filters,
       );
+    } catch (e) {
+      primaryError = e;
+    }
+
+    if (_secondary != null) {
+      try {
+        await _writeTo(
+          target: 'secondary',
+          client: _secondary!,
+          table: table,
+          operation: 'update',
+          data: data,
+          filters: filters,
+        );
+      } catch (_) {}
+    }
+
+    // Only throw if primary failed AND no secondary is available/healthy.
+    if (primaryError != null && (_secondary == null || !_secondaryHealthy)) {
+      throw primaryError;
     }
   }
 
   /// Delete from both instances. [filters] is a map of column→value for .eq().
+  /// During failover, still writes to secondary.
   Future<void> dualDelete(
     String table, {
     required Map<String, dynamic> filters,
   }) async {
-    await _writeTo(
-      target: 'primary',
-      client: _primary,
-      table: table,
-      operation: 'delete',
-      data: {},
-      filters: filters,
-    );
+    Object? primaryError;
 
-    if (_secondary != null) {
+    try {
       await _writeTo(
-        target: 'secondary',
-        client: _secondary!,
+        target: 'primary',
+        client: _primary,
         table: table,
         operation: 'delete',
         data: {},
         filters: filters,
       );
+    } catch (e) {
+      primaryError = e;
+    }
+
+    if (_secondary != null) {
+      try {
+        await _writeTo(
+          target: 'secondary',
+          client: _secondary!,
+          table: table,
+          operation: 'delete',
+          data: {},
+          filters: filters,
+        );
+      } catch (_) {}
+    }
+
+    if (primaryError != null && (_secondary == null || !_secondaryHealthy)) {
+      throw primaryError;
     }
   }
 
   /// Delete from both instances using inFilter (for batch deletes by ID list).
+  /// During failover, still writes to secondary.
   Future<void> dualDeleteIn(
     String table, {
     required String column,
@@ -251,48 +346,72 @@ class SupabaseManager {
     if (values.isEmpty) return;
 
     final data = {'_inFilter_column': column, '_inFilter_values': values};
+    Object? primaryError;
 
-    await _writeTo(
-      target: 'primary',
-      client: _primary,
-      table: table,
-      operation: 'delete_in',
-      data: data,
-    );
-
-    if (_secondary != null) {
+    try {
       await _writeTo(
-        target: 'secondary',
-        client: _secondary!,
+        target: 'primary',
+        client: _primary,
         table: table,
         operation: 'delete_in',
         data: data,
       );
+    } catch (e) {
+      primaryError = e;
+    }
+
+    if (_secondary != null) {
+      try {
+        await _writeTo(
+          target: 'secondary',
+          client: _secondary!,
+          table: table,
+          operation: 'delete_in',
+          data: data,
+        );
+      } catch (_) {}
+    }
+
+    if (primaryError != null && (_secondary == null || !_secondaryHealthy)) {
+      throw primaryError;
     }
   }
 
   /// Upsert on both instances.
+  /// During failover, still writes to secondary.
   Future<void> dualUpsert(
     String table,
     Map<String, dynamic> data, {
     String? onConflict,
   }) async {
-    await _writeTo(
-      target: 'primary',
-      client: _primary,
-      table: table,
-      operation: 'upsert',
-      data: {...data, if (onConflict != null) '_onConflict': onConflict},
-    );
+    Object? primaryError;
 
-    if (_secondary != null) {
+    try {
       await _writeTo(
-        target: 'secondary',
-        client: _secondary!,
+        target: 'primary',
+        client: _primary,
         table: table,
         operation: 'upsert',
         data: {...data, if (onConflict != null) '_onConflict': onConflict},
       );
+    } catch (e) {
+      primaryError = e;
+    }
+
+    if (_secondary != null) {
+      try {
+        await _writeTo(
+          target: 'secondary',
+          client: _secondary!,
+          table: table,
+          operation: 'upsert',
+          data: {...data, if (onConflict != null) '_onConflict': onConflict},
+        );
+      } catch (_) {}
+    }
+
+    if (primaryError != null && (_secondary == null || !_secondaryHealthy)) {
+      throw primaryError;
     }
   }
 

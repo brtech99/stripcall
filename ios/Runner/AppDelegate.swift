@@ -32,7 +32,15 @@ import UserNotifications
     )
     UNUserNotificationCenter.current().setNotificationCategories([problemCategory])
 
+    // Clear badge when app launches
+    application.applicationIconBadgeNumber = 0
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Clear badge when app comes to foreground
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    application.applicationIconBadgeNumber = 0
   }
 
   // Handle notification action (On my way)

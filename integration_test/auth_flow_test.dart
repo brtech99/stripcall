@@ -55,7 +55,7 @@ void main() {
     // Scroll to password fields
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('register_password_field')),
-      find.byType(SingleChildScrollView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -64,21 +64,10 @@ void main() {
       TestConfig.testPassword);
     await tester.pumpAndSettle();
 
-    await tester.dragUntilVisible(
-      find.byKey(const ValueKey('register_confirm_password_field')),
-      find.byType(SingleChildScrollView),
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('register_confirm_password_field')),
-      TestConfig.testPassword);
-    await tester.pumpAndSettle();
-
     // Scroll to and tap submit
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('register_submit_button')),
-      find.byType(SingleChildScrollView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -112,7 +101,7 @@ void main() {
     // Scroll to and tap submit with empty form
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('register_submit_button')),
-      find.byType(SingleChildScrollView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -130,7 +119,7 @@ void main() {
 
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('register_signin_button')),
-      find.byType(SingleChildScrollView),
+      find.byType(Scrollable).first,
       const Offset(0, -200),
     );
     await tester.pumpAndSettle();
@@ -196,7 +185,9 @@ void main() {
     // ═══════════════════════════════════════════════════════════════
     debugPrint('=== TEST 6: Forgot password Sign In link ===');
 
-    await tester.tap(find.text('Sign In'));
+    // On iOS layout, the forgot password page has a "Login" back button
+    // in the navigation bar (no "Sign In" link at the bottom).
+    await tester.tap(find.text('Login'));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     expect(find.byKey(const ValueKey('login_email_field')), findsOneWidget);

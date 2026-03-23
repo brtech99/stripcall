@@ -38,8 +38,19 @@ class CrewMessageWindowState extends State<CrewMessageWindow> {
   void initState() {
     super.initState();
     _loadCrewDisplayStyle();
-    _loadMessages();
-    _loadReadMessageIds();
+    _initMessages();
+  }
+
+  /// Load read IDs first, then messages. If no prior read state exists,
+  /// mark the initial batch as read so old messages don't appear "new."
+  Future<void> _initMessages() async {
+    await _loadReadMessageIds();
+    await _loadMessages();
+    // If we have messages but none were previously marked read,
+    // this is a fresh start — mark them all as read.
+    if (_messages.isNotEmpty && _readMessageIds.isEmpty) {
+      await _markMessagesAsRead();
+    }
   }
 
   @override

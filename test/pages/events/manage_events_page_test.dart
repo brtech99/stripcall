@@ -16,7 +16,7 @@ class MockEventsRepository implements EventsRepository {
   });
 
   @override
-  Future<List<Event>> fetchEvents(String userId) async {
+  Future<List<Event>> fetchEvents(String userId, {bool isSuperUser = false}) async {
     if (delay.inMilliseconds > 0) {
       await Future.delayed(delay);
     }

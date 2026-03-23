@@ -14,4 +14,5 @@ class Routes {
   static const problems = '/problems';
   static const resetPassword = '/auth/reset-password';
   static const smsSimulator = '/sms-simulator';
+  static const crewReport = '/crew-report';
 }

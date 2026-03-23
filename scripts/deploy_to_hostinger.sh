@@ -91,6 +91,8 @@ build_web_app() {
     flutter build web \
         --dart-define=SUPABASE_URL="$SUPABASE_URL" \
         --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+        --dart-define=SUPABASE_SECONDARY_URL="$SUPABASE_SECONDARY_URL" \
+        --dart-define=SUPABASE_SECONDARY_SERVICE_ROLE_KEY="$SUPABASE_SECONDARY_SERVICE_ROLE_KEY" \
         --release \
         --base-href "${HOSTINGER_APP_PATH}/"
 
@@ -159,9 +161,10 @@ set ssl:verify-certificate no
 set ftp:ssl-allow no
 open -u $HOSTINGER_FTP_USER,$HOSTINGER_FTP_PASS -p 21 $HOSTINGER_FTP_HOST
 cd $HOSTINGER_FTP_PATH
-# Upload firebase SW, config, and icons to site root (needed for SW scope)
+# Upload firebase SW, config, privacy policy, and icons to site root (needed for SW scope)
 put $DEPLOY_DIR/firebase-messaging-sw.js
 put $DEPLOY_DIR/firebase-config.js
+put $DEPLOY_DIR/privacy.html
 mkdir -p icons
 cd icons
 put $DEPLOY_DIR/icons/Icon-192.png

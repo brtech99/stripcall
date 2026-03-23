@@ -97,12 +97,16 @@ if [ "$BUILD_TYPE" = "release" ]; then
     fi
     flutter build apk --release \
         --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+        --dart-define=SUPABASE_SECONDARY_URL="$SUPABASE_SECONDARY_URL" \
+        --dart-define=SUPABASE_SECONDARY_SERVICE_ROLE_KEY="$SUPABASE_SECONDARY_SERVICE_ROLE_KEY"
     APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
 else
     flutter build apk --debug \
         --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+        --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+        --dart-define=SUPABASE_SECONDARY_URL="$SUPABASE_SECONDARY_URL" \
+        --dart-define=SUPABASE_SECONDARY_SERVICE_ROLE_KEY="$SUPABASE_SECONDARY_SERVICE_ROLE_KEY"
     APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
 fi
 
