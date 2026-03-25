@@ -8,6 +8,7 @@ import '../routes.dart';
 import '../utils/debug_utils.dart';
 import '../theme/theme.dart';
 import '../widgets/adaptive/adaptive.dart';
+import '../widgets/sms_consent_dialog.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -201,6 +202,10 @@ class _AccountPageState extends State<AccountPage> with WidgetsBindingObserver {
       setState(() => _isEditingPhone = false);
       return;
     }
+
+    // Show SMS consent dialog before sending verification code
+    final consented = await showSmsConsentDialog(context);
+    if (consented != true) return;
 
     setState(() => _isSaving = true);
 

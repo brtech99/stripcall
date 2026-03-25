@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:stripcall/pages/problems/problems_page.dart';
 import 'package:stripcall/models/problem_with_details.dart';
 import 'package:stripcall/models/problem.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:stripcall/services/supabase_manager.dart';
+import 'package:stripcall/services/transaction_log.dart';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -274,6 +277,16 @@ void main() {
     } catch (_) {
       // Already initialized from a prior test suite run
     }
+
+    // Initialize the SupabaseManager singleton so SettingsMenu._loadUserRoles()
+    // doesn't crash when it calls SupabaseManager().auth
+    SharedPreferences.setMockInitialValues({});
+    final txnLog = TransactionLog();
+    await txnLog.initialize();
+    SupabaseManager().initializeForTest(
+      primary: Supabase.instance.client,
+      transactionLog: txnLog,
+    );
   });
 
   group('ProblemsPage', () {

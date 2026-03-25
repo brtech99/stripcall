@@ -9,6 +9,7 @@ import '../../models/event.dart';
 import '../../utils/debug_utils.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/help_walkthrough.dart';
 
 /// Route observer for detecting when routes are pushed/popped over SelectEventPage.
 final selectEventRouteObserver = RouteObserver<ModalRoute<void>>();
@@ -268,6 +269,13 @@ class _SelectEventPageState extends State<SelectEventPage> with RouteAware {
 
         _isLoading = false;
       });
+
+      // Show help walkthrough on first visit
+      HelpWalkthrough.showIfFirstVisit(
+        context,
+        page: HelpPage.selectEvent,
+        isCrewMember: true, // same content for everyone on this page
+      );
     } catch (e) {
       setState(() {
         _error = e.toString();

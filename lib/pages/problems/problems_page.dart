@@ -18,6 +18,7 @@ import 'new_problem_dialog.dart';
 import 'resolve_problem_dialog.dart';
 import 'edit_symptom_dialog.dart';
 import 'problems_state.dart';
+import '../../widgets/help_walkthrough.dart';
 
 /// Abstract interface for problem data operations.
 /// Used for dependency injection to enable unit testing.
@@ -235,6 +236,16 @@ class _ProblemsPageState extends State<ProblemsPage> {
       const Duration(seconds: 10),
       (_) => _checkForUpdates(),
     );
+
+    // Show help walkthrough on first visit
+    if (mounted) {
+      final isCrewMember = !_state.isReferee && widget.crewId != null;
+      HelpWalkthrough.showIfFirstVisit(
+        context,
+        page: HelpPage.problems,
+        isCrewMember: isCrewMember,
+      );
+    }
   }
 
   void _updateState(ProblemsPageState newState) {
@@ -810,7 +821,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         leadingWidth: 100,
         title: titleWidget,
         centerTitle: true,
-        actions: [const SettingsMenu()],
+        actions: [SettingsMenu(isCrewMember: !_state.isReferee && widget.crewId != null)],
       ),
       body: body,
       bottomNavigationBar: _buildAppleBottomBar(),
@@ -822,7 +833,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       appBar: AppBar(
         title: titleWidget,
         centerTitle: true,
-        actions: [const SettingsMenu()],
+        actions: [SettingsMenu(isCrewMember: !_state.isReferee && widget.crewId != null)],
       ),
       body: body,
       bottomNavigationBar: _buildMaterialBottomBar(),

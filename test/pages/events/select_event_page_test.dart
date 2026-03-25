@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:stripcall/pages/events/select_event_page.dart';
 import 'package:stripcall/models/event.dart';
 import 'package:stripcall/routes.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:stripcall/services/supabase_manager.dart';
+import 'package:stripcall/services/transaction_log.dart';
 
 // ---------------------------------------------------------------------------
 // Mock Repository
@@ -173,6 +176,15 @@ void main() {
     } catch (_) {
       // Already initialized
     }
+
+    // Initialize the SupabaseManager singleton so SettingsMenu doesn't crash
+    SharedPreferences.setMockInitialValues({});
+    final txnLog = TransactionLog();
+    await txnLog.initialize();
+    SupabaseManager().initializeForTest(
+      primary: Supabase.instance.client,
+      transactionLog: txnLog,
+    );
   });
 
   group('SelectEventPage', () {

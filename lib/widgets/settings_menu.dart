@@ -7,6 +7,7 @@ import '../routes.dart';
 import '../pages/database_page.dart';
 import '../pages/account_page.dart';
 import '../utils/debug_utils.dart';
+import 'help_walkthrough.dart';
 
 // Conditional import for web notification functionality
 import 'settings_menu_stub.dart'
@@ -14,7 +15,12 @@ import 'settings_menu_stub.dart'
     as web_notifications;
 
 class SettingsMenu extends StatefulWidget {
-  const SettingsMenu({super.key});
+  /// Whether the current user is a crew member for the selected event.
+  /// Null on the select event page (role unknown yet).
+  /// True = crew member, false = referee.
+  final bool? isCrewMember;
+
+  const SettingsMenu({super.key, this.isCrewMember});
 
   @override
   State<SettingsMenu> createState() => _SettingsMenuState();
@@ -82,6 +88,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
               break;
             case 'sms_simulator':
               context.push(Routes.smsSimulator);
+              break;
+            case 'help':
+              if (context.mounted) {
+                // If isCrewMember is set, we're on the problems page
+                if (widget.isCrewMember != null) {
+                  await HelpWalkthrough.show(
+                    context,
+                    page: HelpPage.problems,
+                    isCrewMember: widget.isCrewMember!,
+                  );
+                } else {
+                  await HelpWalkthrough.show(
+                    context,
+                    page: HelpPage.selectEvent,
+                    isCrewMember: true, // same content for everyone
+                  );
+                }
+              }
               break;
             case 'logout':
               SupabaseManager().auth.signOut();
@@ -179,6 +203,18 @@ class _SettingsMenuState extends State<SettingsMenu> {
               ),
             );
           }
+
+          // Help guide
+          items.add(
+            const PopupMenuItem<String>(
+              key: ValueKey('settings_menu_help'),
+              value: 'help',
+              child: ListTile(
+                leading: Icon(Icons.help_outline),
+                title: Text('Help'),
+              ),
+            ),
+          );
 
           // Always add logout option
           items.add(

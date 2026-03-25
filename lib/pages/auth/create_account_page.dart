@@ -1,11 +1,15 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_manager.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/sms_consent_dialog.dart';
 
 class CreateAccountPage extends StatefulWidget {
   const CreateAccountPage({super.key});
@@ -21,9 +25,20 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _otpController = TextEditingController();
   bool _isLoading = false;
   String? _error;
   bool _obscurePassword = true;
+
+  // Phone verification state
+  bool _showVerification = false;
+  String _pendingPhone = '';
+  String _pendingEmail = '';
+  bool _phoneVerified = false;
+  bool _isVerifyingCode = false;
+
+  static const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   @override
   void dispose() {
@@ -32,6 +47,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -42,89 +58,210 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       return;
     }
 
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+
+    // If phone number is provided, show SMS consent dialog first
+    if (phone.isNotEmpty) {
+      final consented = await showSmsConsentDialog(context);
+      if (consented != true) return;
+    }
+
     setState(() {
       _isLoading = true;
+      _error = null;
     });
 
     try {
-      final email = _emailController.text.trim();
       final password = _passwordController.text;
       final firstName = _firstNameController.text.trim();
       final lastName = _lastNameController.text.trim();
 
-      debugLog('Attempting to sign up with email: $email');
-      final response = await SupabaseManager().auth.signUp(
-        email: email,
-        password: password,
-        emailRedirectTo: 'https://stripcall.us/app',
-        data: {'firstname': firstName, 'lastname': lastName},
-      );
+      // Run signUp and OTP send simultaneously
+      late final AuthResponse response;
+      bool otpSent = false;
 
-      debugLog(
-        'Signup response received: ${response.user != null ? 'User created' : 'No user'}',
-      );
-      debugLog('Response error: ${response.session}');
-      debugLog('Response user: ${response.user?.id}');
-
-      if (response.user != null) {
-        final userId = response.user!.id;
-        debugLog('User created successfully with ID: $userId');
-
-        try {
-          debugLog('Inserting user data into pending_users table...');
-          // Use dualInsertNoReturn (no .select()) because the user is not
-          // yet authenticated — signUp with email confirmation doesn't create
-          // a session, so .select() would fail the read RLS policy.
-          await SupabaseManager().dualInsertNoReturn('pending_users', {
-            'email': email,
-            'firstname': firstName,
-            'lastname': lastName,
-            'phone_number': _phoneController.text.trim(),
-          });
-          debugLog('User data inserted successfully');
-        } catch (dbError) {
-          debugLogError('Database error during account creation', dbError);
-          setState(() {
-            _error = dbError.toString();
-            _isLoading = false;
-          });
-          return;
-        }
-
-        debugLog('Account created successfully, redirecting to login');
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Account created! Please check your email and click the confirmation link.',
-              ),
-              duration: Duration(seconds: 5),
-            ),
-          );
-          context.go(Routes.login);
-        }
+      if (phone.isNotEmpty) {
+        final results = await Future.wait([
+          SupabaseManager().auth.signUp(
+            email: email,
+            password: password,
+            emailRedirectTo: 'https://stripcall.us/app',
+            data: {'firstname': firstName, 'lastname': lastName},
+          ),
+          _sendSignupOtp(phone),
+        ]);
+        response = results[0] as AuthResponse;
+        otpSent = results[1] as bool;
       } else {
-        debugLog('No user created in response');
+        response = await SupabaseManager().auth.signUp(
+          email: email,
+          password: password,
+          emailRedirectTo: 'https://stripcall.us/app',
+          data: {'firstname': firstName, 'lastname': lastName},
+        );
+      }
+
+      if (response.user == null) {
         setState(() {
           _error = 'Failed to create account. Please try again.';
           _isLoading = false;
         });
+        return;
+      }
+
+      // Upsert pending_users WITHOUT phone (phone added after OTP verification).
+      // Upsert handles retries where signUp succeeded but this insert failed.
+      try {
+        await SupabaseManager().dualUpsert('pending_users', {
+          'email': email,
+          'firstname': firstName,
+          'lastname': lastName,
+        }, onConflict: 'email');
+      } catch (dbError) {
+        debugLogError('Database error during account creation', dbError);
+        setState(() {
+          _error = dbError.toString();
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (!mounted) return;
+
+      if (phone.isNotEmpty && otpSent) {
+        // Show verification page for simultaneous phone + email verification
+        setState(() {
+          _pendingPhone = phone;
+          _pendingEmail = email;
+          _showVerification = true;
+          _isLoading = false;
+        });
+      } else {
+        // No phone — go straight to login
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created! Please check your email and click the confirmation link.',
+            ),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        context.go(Routes.login);
       }
     } catch (e) {
       debugLogError('Error during signup', e);
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    } finally {
       if (mounted) {
         setState(() {
+          _error = e.toString();
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Send OTP via the unauthenticated signup endpoint.
+  Future<bool> _sendSignupOtp(String phone) async {
+    try {
+      final url = Uri.parse('$_supabaseUrl/functions/v1/send-signup-otp');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': _supabaseAnonKey,
+        },
+        body: jsonEncode({'phone': phone}),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        debugLog('Signup OTP sent to $phone');
+        return true;
+      } else {
+        debugLogError('Failed to send signup OTP', data['error']);
+        return false;
+      }
+    } catch (e) {
+      debugLogError('Error sending signup OTP', e);
+      return false;
+    }
+  }
+
+  /// Verify the OTP code entered by the user.
+  Future<void> _verifySignupOtp() async {
+    final code = _otpController.text.trim();
+    if (code.isEmpty) {
+      setState(() => _error = 'Please enter the verification code');
+      return;
+    }
+
+    setState(() {
+      _isVerifyingCode = true;
+      _error = null;
+    });
+
+    try {
+      final url = Uri.parse('$_supabaseUrl/functions/v1/verify-signup-otp');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': _supabaseAnonKey,
+        },
+        body: jsonEncode({
+          'phone': _pendingPhone,
+          'code': code,
+          'email': _pendingEmail,
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _phoneVerified = true;
+            _isVerifyingCode = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _error = data['error'] as String? ?? 'Verification failed';
+            _isVerifyingCode = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugLogError('Error verifying signup OTP', e);
+      if (mounted) {
+        setState(() {
+          _error = 'Verification failed: $e';
+          _isVerifyingCode = false;
+        });
+      }
+    }
+  }
+
+  /// Resend the OTP code.
+  Future<void> _resendOtp() async {
+    setState(() {
+      _error = null;
+      _isVerifyingCode = true;
+    });
+
+    final sent = await _sendSignupOtp(_pendingPhone);
+
+    if (mounted) {
+      setState(() => _isVerifyingCode = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(sent
+              ? 'New verification code sent'
+              : 'Failed to resend code. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -147,8 +284,9 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   }
 
   String? _validatePhone(String? value) {
+    // Phone is optional — only validate format if something was entered
     if (value == null || value.trim().isEmpty) {
-      return 'Please enter your phone number';
+      return null;
     }
     if (value.trim().length < 10) {
       return 'Please enter a valid phone number';
@@ -270,10 +408,172 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showVerification) {
+      return _buildVerificationPage(context);
+    }
     if (AppTheme.isApplePlatform(context)) {
       return _buildIosLayout(context);
     }
     return _buildMaterialLayout(context);
+  }
+
+  // ===========================================================================
+  // Verification Page (shown after signup when phone OTP is pending)
+  // ===========================================================================
+
+  Widget _buildVerificationPage(BuildContext context) {
+    final isApple = AppTheme.isApplePlatform(context);
+    final isDark = AppTheme.isDark(context);
+    final accentColor = AppColors.actionAccent(context);
+
+    final content = SafeArea(
+      child: SingleChildScrollView(
+        padding: AppSpacing.screenPadding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 40),
+
+            // Icon
+            Icon(
+              Icons.verified_user_outlined,
+              size: 64,
+              color: accentColor,
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Text(
+              'Verify Your Account',
+              style: AppTypography.headlineMedium(context).copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Phone verification section
+            Container(
+              padding: AppSpacing.paddingMd,
+              decoration: BoxDecoration(
+                color: isApple
+                    ? (isDark ? AppColors.iosSurfaceDark : AppColors.iosSurface)
+                    : AppColors.surfaceContainerHigh(context),
+                borderRadius: AppSpacing.borderRadiusLg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _phoneVerified ? Icons.check_circle : Icons.sms_outlined,
+                        color: _phoneVerified ? AppColors.statusSuccess : accentColor,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _phoneVerified
+                              ? 'Phone verified'
+                              : 'Enter the code sent to $_pendingPhone',
+                          style: AppTypography.bodyLarge(context).copyWith(
+                            color: _phoneVerified
+                                ? AppColors.statusSuccess
+                                : AppColors.textPrimary(context),
+                            fontWeight: _phoneVerified ? FontWeight.w600 : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!_phoneVerified) ...[
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      controller: _otpController,
+                      label: 'Verification Code',
+                      hint: '6-digit code',
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _error!,
+                        style: AppTypography.bodySmall(context).copyWith(
+                          color: AppColors.error(context),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: _isVerifyingCode ? null : _resendOtp,
+                          child: const Text('Resend Code'),
+                        ),
+                        AppButton(
+                          onPressed: _isVerifyingCode ? null : _verifySignupOtp,
+                          isLoading: _isVerifyingCode,
+                          child: const Text('Verify'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Email verification section
+            Container(
+              padding: AppSpacing.paddingMd,
+              decoration: BoxDecoration(
+                color: isApple
+                    ? (isDark ? AppColors.iosSurfaceDark : AppColors.iosSurface)
+                    : AppColors.surfaceContainerHigh(context),
+                borderRadius: AppSpacing.borderRadiusLg,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.email_outlined,
+                    color: accentColor,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Check your email at $_pendingEmail and click the confirmation link.',
+                      style: AppTypography.bodyMedium(context).copyWith(
+                        color: AppColors.textSecondary(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Go to Login button
+            AppButton(
+              onPressed: () => context.go(Routes.login),
+              expand: true,
+              child: const Text('Go to Login'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (isApple) {
+      return CupertinoPageScaffold(
+        backgroundColor: isDark ? AppColors.iosBackgroundDark : AppColors.iosBackground,
+        child: content,
+      );
+    }
+    return Scaffold(body: content);
   }
 
   // ===========================================================================

@@ -84,8 +84,16 @@ Future<bool> ensureUserRecord(User user) async {
       'firstname': firstName,
       'lastname': lastName,
     };
-    if (phone != null) {
-      insertData['phonenbr'] = phone;
+    if (phone != null && phone.isNotEmpty) {
+      // Normalize to +1XXXXXXXXXX format
+      final digits = phone.replaceAll(RegExp(r'[^\d]'), '');
+      if (digits.length == 10) {
+        insertData['phonenbr'] = '+1$digits';
+      } else if (digits.length == 11 && digits.startsWith('1')) {
+        insertData['phonenbr'] = '+$digits';
+      } else {
+        insertData['phonenbr'] = phone; // Already formatted or international
+      }
     }
     debugLog('ensureUserRecord: Inserting into users: $insertData');
     await SupabaseManager().dualInsert('users', insertData);
