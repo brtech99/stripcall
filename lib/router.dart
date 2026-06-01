@@ -240,7 +240,15 @@ final router = GoRouter(
     GoRoute(path: Routes.login, builder: (context, state) => LoginPage()),
     GoRoute(
       path: Routes.register,
-      builder: (context, state) => CreateAccountPage(),
+      builder: (context, state) {
+        // Crew-invite links carry the invitee's email/name to pre-fill signup.
+        final q = state.uri.queryParameters;
+        return CreateAccountPage(
+          prefillEmail: q['email'],
+          prefillFirstName: q['firstname'],
+          prefillLastName: q['lastname'],
+        );
+      },
     ),
     GoRoute(
       path: Routes.forgotPassword,

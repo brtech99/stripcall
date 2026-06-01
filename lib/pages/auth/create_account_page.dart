@@ -12,7 +12,19 @@ import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/sms_consent_dialog.dart';
 
 class CreateAccountPage extends StatefulWidget {
-  const CreateAccountPage({super.key});
+  /// When arriving from a crew invite link, these pre-fill the form. The email is
+  /// locked so the person signs up with the exact address they were invited with,
+  /// which is what auto-attaches them to the crew.
+  final String? prefillEmail;
+  final String? prefillFirstName;
+  final String? prefillLastName;
+
+  const CreateAccountPage({
+    super.key,
+    this.prefillEmail,
+    this.prefillFirstName,
+    this.prefillLastName,
+  });
 
   @override
   State<CreateAccountPage> createState() => _CreateAccountPageState();
@@ -29,6 +41,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   bool _isLoading = false;
   String? _error;
   bool _obscurePassword = true;
+  bool _emailLocked = false;
 
   // Phone verification state
   bool _showVerification = false;
@@ -39,6 +52,22 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
   static const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  @override
+  void initState() {
+    super.initState();
+    final email = widget.prefillEmail?.trim() ?? '';
+    if (email.isNotEmpty) {
+      _emailController.text = email;
+      _emailLocked = true;
+    }
+    if ((widget.prefillFirstName ?? '').isNotEmpty) {
+      _firstNameController.text = widget.prefillFirstName!.trim();
+    }
+    if ((widget.prefillLastName ?? '').isNotEmpty) {
+      _lastNameController.text = widget.prefillLastName!.trim();
+    }
+  }
 
   @override
   void dispose() {
@@ -655,6 +684,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                       keyboardType: TextInputType.emailAddress,
                       textCapitalization: TextCapitalization.none,
                       validator: _validateEmail,
+                      readOnly: _emailLocked,
                     ),
                   ]),
                   const SizedBox(height: 20),
@@ -751,6 +781,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
     bool obscureText = false,
     Widget? suffix,
     String? Function(String?)? validator,
+    bool readOnly = false,
   }) {
     final isDark = AppTheme.isDark(context);
     final keyId = key is ValueKey<String> ? key.value : null;
@@ -781,6 +812,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 fontSize: 17,
               ),
               obscureText: obscureText,
+              readOnly: readOnly,
               keyboardType: keyboardType,
               textCapitalization: textCapitalization,
               autofillHints: autofillHints,
@@ -904,6 +936,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                   keyboardType: TextInputType.emailAddress,
                   textCapitalization: TextCapitalization.none,
                   validator: _validateEmail,
+                  readOnly: _emailLocked,
                 ),
                 AppSpacing.verticalMd,
 
