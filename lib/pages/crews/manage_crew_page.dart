@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'name_finder_dialog.dart';
+import 'invite_by_email_dialog.dart';
 import '../../services/supabase_manager.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew_member.dart';
@@ -26,6 +27,7 @@ class ManageCrewPage extends StatefulWidget {
 
 class _ManageCrewPageState extends State<ManageCrewPage> {
   List<CrewMember> _crewMembers = [];
+  List<Map<String, dynamic>> _pendingInvites = [];
   bool _isLoading = true;
   String? _error;
   String? _crewChiefName;
@@ -37,7 +39,28 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
   }
 
   Future<void> _loadCrewData() async {
-    await Future.wait([_loadCrewMembers(), _loadCrewChief()]);
+    await Future.wait([
+      _loadCrewMembers(),
+      _loadCrewChief(),
+      _loadPendingInvites(),
+    ]);
+  }
+
+  Future<void> _loadPendingInvites() async {
+    try {
+      final response = await SupabaseManager()
+          .from('pending_crewmembers')
+          .select('id, email, firstname, lastname')
+          .eq('crew', widget.crewId);
+      if (mounted) {
+        setState(() {
+          _pendingInvites = List<Map<String, dynamic>>.from(response);
+        });
+      }
+    } catch (e) {
+      // Non-fatal: invites are supplementary to the member list.
+      debugLogError('Error loading pending invites', e);
+    }
   }
 
   Future<void> _loadCrewChief() async {
@@ -124,7 +147,10 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
   Future<void> _addCrewMember() async {
     final result = await showDialog<app_models.User>(
       context: context,
-      builder: (context) => const NameFinderDialog(title: 'Find Crew Member'),
+      builder: (context) => NameFinderDialog(
+        title: 'Find Crew Member',
+        onInviteByEmail: _inviteByEmail,
+      ),
     );
 
     if (result != null) {
@@ -150,6 +176,95 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
             ),
           );
         }
+      }
+    }
+  }
+
+  Future<void> _inviteByEmail() async {
+    final input = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => const InviteByEmailDialog(),
+    );
+    if (input == null) return;
+    await _sendInvite(
+      email: input['email']!,
+      firstname: input['firstname'] ?? '',
+      lastname: input['lastname'] ?? '',
+    );
+  }
+
+  Future<void> _sendInvite({
+    required String email,
+    required String firstname,
+    required String lastname,
+    bool isResend = false,
+  }) async {
+    try {
+      final response = await SupabaseManager().functionInvoke(
+        'invite-crew-member',
+        body: {
+          'crewId': int.parse(widget.crewId),
+          'email': email,
+          'firstname': firstname,
+          'lastname': lastname,
+        },
+      );
+
+      if (response.status != 200) {
+        final msg = (response.data is Map && response.data['error'] != null)
+            ? response.data['error']
+            : 'Failed to send invite';
+        throw Exception(msg);
+      }
+
+      final status = (response.data is Map) ? response.data['status'] : null;
+      final message = status == 'added'
+          ? '$email is already registered — added to the crew'
+          : isResend
+              ? 'Invite re-sent to $email'
+              : 'Invite sent to $email';
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+      await _loadCrewMembers();
+      await _loadPendingInvites();
+    } catch (e) {
+      debugLogError('Error sending invite', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send invite: $e'),
+            backgroundColor: AppColors.statusError,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelInvite(int inviteId, String email) async {
+    try {
+      await SupabaseManager()
+          .from('pending_crewmembers')
+          .delete()
+          .eq('id', inviteId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invite to $email cancelled')),
+        );
+      }
+      await _loadPendingInvites();
+    } catch (e) {
+      debugLogError('Error cancelling invite', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to cancel invite: $e'),
+            backgroundColor: AppColors.statusError,
+          ),
+        );
       }
     }
   }
@@ -192,6 +307,88 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
         key: const ValueKey('manage_crew_add_member_button'),
         onPressed: _addCrewMember,
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildMemberCard(CrewMember member) {
+    final user = member.user;
+    if (user == null) {
+      return AppCard(
+        margin: EdgeInsets.only(bottom: AppSpacing.sm),
+        child: const AppListTile(
+          title: Text('Unknown User'),
+          subtitle: Text('User data not available'),
+        ),
+      );
+    }
+    return AppCard(
+      key: ValueKey('manage_crew_member_${user.supabaseId}'),
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppListTile(
+        title: Text(user.fullName),
+        subtitle: Text(user.phoneNumber ?? 'No phone'),
+        trailing: IconButton(
+          key: ValueKey('manage_crew_remove_${user.supabaseId}'),
+          icon: Icon(Icons.delete, color: AppColors.statusError),
+          onPressed: () => _removeCrewMember(user.supabaseId),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInviteCard(Map<String, dynamic> invite) {
+    final id = invite['id'] as int;
+    final email = invite['email'] as String? ?? '';
+    final first = (invite['firstname'] as String?)?.trim() ?? '';
+    final last = (invite['lastname'] as String?)?.trim() ?? '';
+    final name = '$first $last'.trim();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AppCard(
+      key: ValueKey('manage_crew_invite_$id'),
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppListTile(
+        title: Text(name.isNotEmpty ? name : email),
+        subtitle: Text(name.isNotEmpty ? email : 'Invitation sent'),
+        leading: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            color: colorScheme.secondaryContainer,
+            borderRadius: AppSpacing.borderRadiusSm,
+          ),
+          child: Text(
+            'Invited',
+            style: AppTypography.bodySmall(context).copyWith(
+              color: colorScheme.onSecondaryContainer,
+            ),
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              key: ValueKey('manage_crew_invite_resend_$id'),
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Resend invite',
+              onPressed: () => _sendInvite(
+                email: email,
+                firstname: first,
+                lastname: last,
+                isResend: true,
+              ),
+            ),
+            IconButton(
+              key: ValueKey('manage_crew_invite_cancel_$id'),
+              icon: Icon(Icons.close, color: AppColors.statusError),
+              tooltip: 'Cancel invite',
+              onPressed: () => _cancelInvite(id, email),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -251,49 +448,19 @@ class _ManageCrewPageState extends State<ManageCrewPage> {
             ),
           ),
         Expanded(
-          child: _crewMembers.isEmpty
+          child: (_crewMembers.isEmpty && _pendingInvites.isEmpty)
               ? const AppEmptyState(
                   icon: Icons.person_add,
                   title: 'No crew members yet',
                   subtitle: 'Tap + to add crew members',
                 )
-              : ListView.builder(
+              : ListView(
                   key: const ValueKey('manage_crew_members_list'),
                   padding: AppSpacing.screenPadding,
-                  itemCount: _crewMembers.length,
-                  itemBuilder: (context, index) {
-                    final member = _crewMembers[index];
-                    final user = member.user;
-
-                    if (user == null) {
-                      return AppCard(
-                        margin: EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: const AppListTile(
-                          title: Text('Unknown User'),
-                          subtitle: Text('User data not available'),
-                        ),
-                      );
-                    }
-
-                    return AppCard(
-                      key: ValueKey('manage_crew_member_${user.supabaseId}'),
-                      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: AppListTile(
-                        title: Text(user.fullName),
-                        subtitle: Text(user.phoneNumber ?? 'No phone'),
-                        trailing: IconButton(
-                          key: ValueKey(
-                            'manage_crew_remove_${user.supabaseId}',
-                          ),
-                          icon: Icon(
-                            Icons.delete,
-                            color: AppColors.statusError,
-                          ),
-                          onPressed: () => _removeCrewMember(user.supabaseId),
-                        ),
-                      ),
-                    );
-                  },
+                  children: [
+                    ..._crewMembers.map(_buildMemberCard),
+                    ..._pendingInvites.map(_buildInviteCard),
+                  ],
                 ),
         ),
       ],

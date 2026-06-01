@@ -7,7 +7,16 @@ import '../../widgets/adaptive/adaptive.dart';
 class NameFinderDialog extends StatefulWidget {
   final String title;
 
-  const NameFinderDialog({super.key, this.title = 'Find User'});
+  /// When provided, an "Invite by email instead" action is shown (used when adding a
+  /// crew member who hasn't created an account yet). The dialog pops first, then this
+  /// runs. Left null by callers that require an existing user (e.g. crew-chief pick).
+  final VoidCallback? onInviteByEmail;
+
+  const NameFinderDialog({
+    super.key,
+    this.title = 'Find User',
+    this.onInviteByEmail,
+  });
 
   @override
   State<NameFinderDialog> createState() => _NameFinderDialogState();
@@ -173,6 +182,20 @@ class _NameFinderDialogState extends State<NameFinderDialog> {
                   'No users found',
                   style: AppTypography.bodyMedium(context),
                 ),
+              if (widget.onInviteByEmail != null) ...[
+                AppSpacing.verticalSm,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton.secondary(
+                    key: const ValueKey('name_finder_invite_by_email_button'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      widget.onInviteByEmail!();
+                    },
+                    child: const Text('Invite by email instead'),
+                  ),
+                ),
+              ],
               AppSpacing.verticalMd,
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
