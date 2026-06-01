@@ -108,15 +108,11 @@ async function sendInviteEmail(
   firstname: string | null,
   lastname: string | null,
 ): Promise<boolean> {
+  // Send only when a Resend key is configured. Production has the RESEND_API_KEY
+  // secret set; local dev does not, so local records the invite without emailing.
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey) {
-    console.log("RESEND_API_KEY not set; skipping invite email");
-    return false;
-  }
-  // Only send real email from a deployed (prod) project, not from a local/dev stack.
-  const isProd = (Deno.env.get("SUPABASE_URL") ?? "").includes(".supabase.co");
-  if (!isProd) {
-    console.log("Local/dev environment; recorded invite but not sending email");
+    console.log("RESEND_API_KEY not set; recorded invite but not sending email");
     return false;
   }
 
