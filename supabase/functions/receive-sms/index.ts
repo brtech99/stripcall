@@ -344,7 +344,21 @@ async function handleReporterMessage(
   }
 }
 
-// Find crew by crew type name, preferring the event with use_sms=true
+// Find the crew that should receive SMS for a crew-type name.
+//
+// A crew-type Twilio number (e.g. the Armorer number) serves many events over time,
+// so we must pick the ONE event the SMS belongs to. We route to the event that is
+// actually happening *now*, using `use_sms` only to disambiguate when more than one
+// event is live. Priority (highest first):
+//   0. active (now within [start,end]) AND use_sms=true   -- the designated live event
+//   1. active                                             -- a live event, even if unflagged
+//   2. use_sms=true (not currently active)                -- designated but outside its window
+//   3. anything else                                      -- last-resort backwards compatibility
+// Within a tier we prefer the most recent start, then the highest crew id.
+//
+// This replaced an earlier version that picked the highest-id crew among *all*
+// use_sms=true events, which let a stale (past) or not-yet-started (future) event with
+// use_sms=true capture SMS and create reports in the wrong event.
 async function findCrewByType(
   adminClient: any,
   crewTypeName: string,
@@ -358,44 +372,56 @@ async function findCrewByType(
 
   if (!crewType) return null;
 
-  // Find the crew belonging to the event with use_sms=true
-  const { data: smsCrew } = await adminClient
+  // All crews of this type, with their event's flag + date window.
+  const { data: crews } = await adminClient
     .from("crews")
-    .select("id, event, crew_type, events!crew_event_fkey(use_sms)")
+    .select(
+      "id, event, crew_type, events!crew_event_fkey(use_sms, startdatetime, enddatetime)",
+    )
     .eq("crew_type", crewType.id)
-    .eq("events.use_sms", true)
-    .order("id", { ascending: false })
-    .limit(10);
+    .limit(200);
 
-  // Filter to crews where the event join actually matched (use_sms=true)
-  const matchingCrew = smsCrew?.find(
-    (c: any) => c.events && c.events.use_sms === true,
-  );
-
-  if (matchingCrew) {
-    console.log(
-      `Found crew ${matchingCrew.id} via use_sms flag on event ${matchingCrew.event}`,
-    );
-    return {
-      id: matchingCrew.id,
-      event: matchingCrew.event,
-      crew_type: matchingCrew.crew_type,
-    };
+  const candidates = (crews || []).filter((c: any) => c.events);
+  if (candidates.length === 0) {
+    console.log(`findCrewByType: no crews exist for ${crewTypeName}`);
+    return null;
   }
 
-  // Fallback: most recent crew of this type (backwards compatibility)
-  console.log(
-    "No event with use_sms=true found, falling back to most recent crew",
-  );
-  const { data: crew } = await adminClient
-    .from("crews")
-    .select("id, event, crew_type")
-    .eq("crew_type", crewType.id)
-    .order("id", { ascending: false })
-    .limit(1)
-    .single();
+  const now = Date.now();
+  const rank = (c: any) => {
+    const e = c.events || {};
+    const start = e.startdatetime ? Date.parse(e.startdatetime) : NaN;
+    const end = e.enddatetime ? Date.parse(e.enddatetime) : NaN;
+    const active = !isNaN(start) && !isNaN(end) && start <= now && now <= end;
+    const useSms = e.use_sms === true;
+    let tier: number;
+    if (active && useSms) tier = 0;
+    else if (active) tier = 1;
+    else if (useSms) tier = 2;
+    else tier = 3;
+    return { tier, start: isNaN(start) ? -Infinity : start };
+  };
 
-  return crew;
+  candidates.sort((a: any, b: any) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra.tier !== rb.tier) return ra.tier - rb.tier; // lower tier wins
+    if (ra.start !== rb.start) return rb.start - ra.start; // most recent start
+    return b.id - a.id; // highest crew id
+  });
+
+  const chosen = candidates[0];
+  console.log(
+    `findCrewByType: ${candidates.length} ${crewTypeName} crew(s); chose crew ` +
+      `${chosen.id} (event ${chosen.event}, tier ${rank(chosen).tier}, ` +
+      `use_sms=${chosen.events.use_sms === true})`,
+  );
+
+  return {
+    id: chosen.id,
+    event: chosen.event,
+    crew_type: chosen.crew_type,
+  };
 }
 
 // Find crew member by phone number

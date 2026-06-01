@@ -191,10 +191,24 @@ INSERT INTO public.users (supabase_id, firstname, lastname, phonenbr, superuser,
 -- ============================================================================
 -- CREW TYPES
 -- ============================================================================
+-- The medical_withdrawal migration inserts the "Bout Committee" crew type. Because
+-- `supabase db reset` applies migrations BEFORE this seed runs, Bout Committee already
+-- occupies id=1 on the otherwise-empty table, which would shift Armorer/Medical/Natloff
+-- to ids 2/3/4 and break every hardcoded crew_type / symptomclass.crewType / crewmember
+-- reference below (e.g. the "SMS Report - Needs Triage" symptom would not exist for
+-- Natloff, so SMS reporters to Natloff get a config error instead of a new problem).
+-- Reset the table so this seed deterministically controls the IDs.
+DELETE FROM public.crewtypes;
+ALTER TABLE public.crewtypes ALTER COLUMN id RESTART WITH 1;
+
 INSERT INTO public.crewtypes (crewtype) VALUES
-  ('Armorer'),
-  ('Medical'),
-  ('Natloff');
+  ('Armorer'),   -- id 1
+  ('Medical'),   -- id 2
+  ('Natloff');   -- id 3
+-- Bout Committee re-created here so it lands at id 4 (matching this seed's assumptions
+-- and the migration's intent: receives_problems = false).
+INSERT INTO public.crewtypes (crewtype, receives_problems) VALUES
+  ('Bout Committee', false);  -- id 4
 
 -- ============================================================================
 -- SYMPTOM CLASSES (linked to crew types)
@@ -367,6 +381,33 @@ INSERT INTO public.action (symptom, actionstring, display_order) VALUES
   (27, 'Other', 99);
 
 -- ============================================================================
+-- MEDICAL WITHDRAWAL SYMPTOM DATA (Medical crew type)
+-- ============================================================================
+-- Mirrors 20260408000000_medical_withdrawal.sql. That migration only seeds this data
+-- WHERE the 'Medical' crew type exists, but crew types are created by THIS seed, which
+-- runs AFTER migrations during `supabase db reset` -- so the migration finds no Medical
+-- crew type and inserts nothing locally. Re-create it here (by name, appended last, so
+-- the hardcoded symptomclass/symptom/action IDs above are unaffected).
+INSERT INTO public.symptomclass (symptomclassstring, "crewType", display_order)
+SELECT 'Medical Withdrawal', id, 4 FROM public.crewtypes WHERE crewtype = 'Medical';
+
+INSERT INTO public.symptom (symptomclass, symptomstring, display_order)
+SELECT sc.id, 'Medical Withdrawal Request', 1
+FROM public.symptomclass sc
+JOIN public.crewtypes ct ON ct.id = sc."crewType"
+WHERE sc.symptomclassstring = 'Medical Withdrawal' AND ct.crewtype = 'Medical';
+
+INSERT INTO public.action (symptom, actionstring, display_order)
+SELECT s.id, v.actionstring, v.display_order
+FROM public.symptom s
+CROSS JOIN (VALUES
+  ('Approved', 1),
+  ('Not Approved', 2),
+  ('Withdrawal Rescinded', 3)
+) AS v(actionstring, display_order)
+WHERE s.symptomstring = 'Medical Withdrawal Request';
+
+-- ============================================================================
 -- PRE-CONFIGURED EVENT FOR E2E TESTING
 -- ============================================================================
 -- Create a test event that's ready to use
@@ -408,6 +449,35 @@ INSERT INTO public.crewmembers (crew, crewmember) VALUES
   (2, 'a0000000-0000-0000-0000-000000000005');  -- Medical Two is member
 
 -- ============================================================================
+-- NATLOFF AND BOUT COMMITTEE CREWS (for medical withdrawal testing)
+-- ============================================================================
+-- Natloff crew (crew ID 3) with superuser as chief (no dedicated natloff user yet)
+INSERT INTO public.crews (event, crew_type, crew_chief)
+VALUES (
+  1,  -- event ID
+  3,  -- Natloff crew type
+  'a0000000-0000-0000-0000-000000000001'  -- Super User is chief
+);
+
+-- Bout Committee crew (crew ID 4) - crew type 4 is created by the migration
+-- Using superuser as chief for now
+INSERT INTO public.crews (event, crew_type, crew_chief)
+VALUES (
+  1,  -- event ID
+  4,  -- Bout Committee crew type (receives_problems = false)
+  'a0000000-0000-0000-0000-000000000001'  -- Super User is chief
+);
+
+-- ============================================================================
+-- MEDICAL WITHDRAWAL SYMPTOM DATA
+-- ============================================================================
+-- Note: The migration (20260408000000_medical_withdrawal.sql) creates:
+--   - Crew type: "Bout Committee" (id=4, receives_problems=false)
+--   - Symptom class: "Medical Withdrawal" under Medical crew type
+--   - Symptom: "Medical Withdrawal Request"
+--   - Actions: "Approved", "Not Approved", "Withdrawal Rescinded"
+
+-- ============================================================================
 -- TEST USER CREDENTIALS REFERENCE
 -- ============================================================================
 -- Email                      | Password          | Role                | Sim Phone
@@ -420,7 +490,9 @@ INSERT INTO public.crewmembers (crew, crewmember) VALUES
 -- e2e_referee1@test.com      | TestPassword123!  | Referee (no crew)   | (none)
 -- ============================================================================
 --
--- CREW TYPES: Armorer=1, Medical=2, Natloff=3
+-- CREW TYPES: Armorer=1, Medical=2, Natloff=3, Bout Committee=4
+--
+-- CREWS: Armorer=1, Medical=2, Natloff=3, Bout Committee=4
 --
 -- SMS SIMULATOR PHONE MAPPING:
 -- SimPhone.phone1 (2025551001) -> Armorer One (crew chief)
