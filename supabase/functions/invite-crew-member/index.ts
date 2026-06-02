@@ -119,7 +119,7 @@ async function sendInviteEmail(
   const params = new URLSearchParams({ email });
   if (firstname) params.set("firstname", firstname);
   if (lastname) params.set("lastname", lastname);
-  const signupUrl = `${APP_BASE_URL}/#/auth/register?${params.toString()}`;
+  const signupUrl = `${APP_BASE_URL}/#/auth/accept-invite?${params.toString()}`;
 
   const greeting = firstname ? `Hi ${firstname},` : "Hi,";
   const html = `

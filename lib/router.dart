@@ -14,6 +14,7 @@ import 'pages/sms_simulator_page.dart';
 import 'pages/reports/crew_report_page.dart';
 import 'routes.dart';
 import 'pages/auth/create_account_page.dart';
+import 'pages/auth/accept_invite_page.dart';
 import 'pages/auth/forgot_password_page.dart';
 import 'models/event.dart';
 import 'pages/auth/email_confirmation_page.dart';
@@ -157,6 +158,7 @@ final router = GoRouter(
     final isAuthRoute =
         state.matchedLocation == Routes.login ||
         state.matchedLocation == Routes.register ||
+        state.matchedLocation == Routes.acceptInvite ||
         state.matchedLocation == Routes.forgotPassword ||
         state.matchedLocation == Routes.resetPassword ||
         state.matchedLocation == '/confirm-email';
@@ -247,6 +249,17 @@ final router = GoRouter(
           prefillEmail: q['email'],
           prefillFirstName: q['firstname'],
           prefillLastName: q['lastname'],
+        );
+      },
+    ),
+    GoRoute(
+      path: Routes.acceptInvite,
+      builder: (context, state) {
+        final q = state.uri.queryParameters;
+        return AcceptInvitePage(
+          email: q['email'],
+          firstname: q['firstname'],
+          lastname: q['lastname'],
         );
       },
     ),

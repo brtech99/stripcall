@@ -4,6 +4,7 @@ class Routes {
   static const home = '/';
   static const login = '/auth/login';
   static const register = '/auth/register';
+  static const acceptInvite = '/auth/accept-invite';
   static const settings = '/settings';
   static const forgotPassword = '/forgot-password';
   static const selectEvent = '/select-event';
