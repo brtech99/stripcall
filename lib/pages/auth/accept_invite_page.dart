@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/supabase_manager.dart';
 import '../../utils/debug_utils.dart';
 import '../../routes.dart';
+import '../../config/app_download_links.dart';
 import '../../theme/theme.dart';
 import '../../widgets/adaptive/adaptive.dart';
 
@@ -35,6 +40,7 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
   bool _obscurePassword = true;
   String? _error;
   bool _alreadyRegistered = false;
+  bool _joined = false;
 
   String get _email => (widget.email ?? '').trim();
   bool get _hasValidInvite => _email.contains('@');
@@ -81,13 +87,19 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
         throw Exception(err);
       }
 
-      // Account exists and is confirmed — sign in and enter the app.
+      // Account exists and is confirmed — sign in.
       await SupabaseManager().auth.signInWithPassword(
         email: _email,
         password: password,
       );
       if (!mounted) return;
-      context.go('/');
+      // On the web we steer them to download the native app rather than dropping
+      // them into the web app. On native, just enter the app.
+      if (kIsWeb) {
+        setState(() => _joined = true);
+      } else {
+        context.go('/');
+      }
     } catch (e) {
       debugLogError('Error accepting invite', e);
       if (!mounted) return;
@@ -101,17 +113,113 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget content = _joined
+        ? _buildDownload(context)
+        : (_hasValidInvite ? _buildForm(context) : _buildBadLink(context));
     return AppScaffold(
-      title: 'Join your crew',
+      title: _joined ? "You're in" : 'Join your crew',
       body: SingleChildScrollView(
         padding: AppSpacing.screenPadding,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: _hasValidInvite ? _buildForm(context) : _buildBadLink(context),
+            child: content,
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _open(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $url')),
+        );
+      }
+    }
+  }
+
+  Widget _buildDownload(BuildContext context) {
+    final platform = defaultTargetPlatform;
+    final isMobileIos = platform == TargetPlatform.iOS;
+    final isMobileAndroid = platform == TargetPlatform.android;
+
+    final children = <Widget>[
+      AppSpacing.verticalLg,
+      Icon(Icons.check_circle, size: 48, color: AppColors.statusSuccess),
+      AppSpacing.verticalMd,
+      Text(
+        _fullName.isNotEmpty ? "You're all set, $_fullName!" : "You're all set!",
+        style: AppTypography.titleMedium(context),
+        textAlign: TextAlign.center,
+      ),
+      AppSpacing.verticalSm,
+      Text(
+        'For the best experience, get the StripCall app:',
+        style: AppTypography.bodyMedium(context),
+        textAlign: TextAlign.center,
+      ),
+      AppSpacing.verticalLg,
+    ];
+
+    if (isMobileIos) {
+      children.add(AppButton(
+        onPressed: () => _open(AppDownloadLinks.iosTestFlight),
+        expand: true,
+        child: const Text('Get it on TestFlight'),
+      ));
+    } else if (isMobileAndroid) {
+      children.add(AppButton(
+        onPressed: () => _open(AppDownloadLinks.androidFirebase),
+        expand: true,
+        child: const Text('Download for Android'),
+      ));
+    } else {
+      // Desktop: QR codes to scan with a phone, plus tappable links.
+      children.add(
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.lg,
+          runSpacing: AppSpacing.lg,
+          children: [
+            _qrColumn(context, 'iOS (TestFlight)', AppDownloadLinks.iosTestFlight),
+            _qrColumn(context, 'Android', AppDownloadLinks.androidFirebase),
+          ],
+        ),
+      );
+    }
+
+    children.addAll([
+      AppSpacing.verticalLg,
+      Center(
+        child: TextButton(
+          key: const ValueKey('accept_invite_continue_web_button'),
+          onPressed: () => context.go('/'),
+          child: const Text('Continue in browser'),
+        ),
+      ),
+    ]);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
+
+  Widget _qrColumn(BuildContext context, String label, String url) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          color: Colors.white,
+          child: QrImageView(data: url, size: 150),
+        ),
+        AppSpacing.verticalXs,
+        TextButton(
+          onPressed: () => _open(url),
+          child: Text(label),
+        ),
+      ],
     );
   }
 
