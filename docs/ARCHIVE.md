@@ -11,7 +11,7 @@ down, and everything needed to resume.
 
 | Component | Where | State at archival | Billing |
 |---|---|---|---|
-| Primary database + auth + edge functions | Supabase Cloud, project ref `wpytorahphbnzgikowgz` | **Left running** | Ongoing — cancel/pause in Supabase dashboard if desired |
+| Primary database + auth + edge functions | Supabase Cloud, project ref `wpytorahphbnzgikowgz` (us-east-2, Postgres 17.6) | **Left running; keep-alive disabled 2026-08-17** — expected to auto-pause for inactivity (see "Supabase archive" below) | Free-plan project; paused projects incur no cost |
 | Failover site (self-hosted Supabase) | Hetzner Cloud, server `ubuntu-4gb-ash-1`, Ashburn, IP `178.156.249.78`, DNS `supabase.stripcall.us` | **Powered off 2026-08-17** (see below) | ⚠️ A powered-off Hetzner server still bills. To stop billing: snapshot (optional) then **delete the server in the Hetzner Cloud console**. |
 | Web app hosting | Hostinger, https://stripcall.us/app (FTP deploy) | **Left running** | Ongoing Hostinger plan |
 | SMS | Twilio — Armorer +17542276679, Medical +13127577223, Natloff +16504803067 | **Left active** | Ongoing per-number fees — release numbers in Twilio console to stop (⚠️ released numbers are hard to get back) |
@@ -54,6 +54,47 @@ upgrade pg_dump wherever backups run.**
 The secondary DB dump is much smaller than prod (49K vs 944K) because auth
 sync had been failing since March and dual-write only covers app writes; it is
 kept only in case reconciliation questions come up.
+
+## Supabase archive (added 2026-08-17)
+
+The GitHub Action `keep-supabase-alive.yml` (pinged the DB Mon/Thu to prevent
+free-plan pausing) had already been auto-disabled by GitHub for repository
+inactivity; on 2026-08-17 its schedule trigger was also removed from the
+workflow file so it cannot silently re-activate. Only `workflow_dispatch`
+remains — the old cron is preserved in a comment.
+
+**Expected behavior now:** Supabase pauses Free-plan projects after ~7 days of
+low activity (warning email first, to the project owner). A paused project can
+be restored with **one click in the dashboard for 90 days**, returning it to
+its exact previous state — data, edge functions, secrets, auth config. After
+90 days the one-click restore expires, but the dashboard still offers the
+backup file for download, restorable to a new project or locally
+(`supabase db start --from-backup`). Pausing also stops the deployed web app
+and inbound Twilio SMS from working (fine while archived).
+
+**Our own archive is sufficient to rebuild from scratch** even if the Supabase
+project is eventually deleted:
+
+- **Database**: the final dump (★ above) covers `auth`, `public`, `storage`,
+  `cron`, `vault`, `realtime`, and migration-history schemas.
+- **Storage**: zero objects existed at archive time — nothing to save.
+- **Edge functions**: all 19 deployed functions verified identical in name to
+  `supabase/functions/` in the repo; redeploy with
+  `supabase functions deploy <name> --no-verify-jwt`.
+- **Auth configuration**: exported to
+  `hetzner-archive-2026-08-17/supabase_auth_config.json` (242 settings, incl.
+  site_url `https://stripcall.us/app` and custom SMTP via `smtp.resend.com`
+  for auth emails). Project metadata in `supabase_project_info.json`.
+- **Edge function secrets**: values are NOT exportable from Supabase (names +
+  digests only). Recover them from: `scripts/config/secrets.sh` (Supabase
+  keys/DB, Twilio, Hostinger FTP), `lib/firebase_options.dart` (FIREBASE_*
+  values), Firebase console → service accounts (`FCM_SERVICE_ACCOUNT_KEY` —
+  generate a new key), Resend dashboard (`RESEND_API_KEY` — or the vault row
+  in the DB dump).
+
+**If you want to keep the one-click restore option indefinitely:** wake the
+project before each 90-day window ends (dashboard visit or re-enable the
+keep-alive schedule), or accept rebuild-from-archive as the resume path.
 
 ## Code state
 

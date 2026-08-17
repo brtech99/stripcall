@@ -1,9 +1,12 @@
 
 name: Ping Supabase DB
+# Schedule removed 2026-08-17 (project archived — see docs/ARCHIVE.md).
+# The Supabase project is expected to pause for inactivity. To resume the
+# keep-alive, restore the schedule trigger below:
+#   schedule:
+#     - cron: "0 9 * * 1,4"   # 9 AM UTC every Mon & Thu
 on:
-  schedule:
-    - cron: "0 9 * * 1,4"   # 9 AM UTC every Mon & Thu
-  workflow_dispatch:         # lets you run it manually too
+  workflow_dispatch:         # manual runs only
 jobs:
   ping:
     runs-on: ubuntu-latest
