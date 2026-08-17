@@ -36,8 +36,27 @@ Location on the dev machine (NOT in git — contains user data and secrets):
 │   ├── monthly/, weekly/, auth_sync/, *.log
 ├── secondary_final_2026-08-17.sql.gz       # final dump of the Hetzner secondary DB (49K)
 ├── stripcall-backup.env          # /etc/stripcall-backup.env (DB credentials)
-└── opt-stripcall/                # backup/auth-sync/tournament scripts from the server
+├── opt-stripcall/                # backup/auth-sync/tournament scripts from the server
+├── supabase_auth_config.json     # exported auth settings (242 keys, incl. Resend SMTP)
+├── supabase_project_info.json    # project metadata (region, PG version)
+└── local-only-configs/           # gitignored files that existed ONLY on the dev machine:
+    ├── secrets.sh                #   all deploy/API credentials
+    ├── dot-env                   #   repo-root .env
+    ├── dot-firebaserc            #   Firebase project alias ("stripcall")
+    ├── google-services.json      #   Android Firebase config
+    └── GoogleService-Info.plist  #   iOS Firebase config
 ```
+
+> ⚠️ **This folder is the ONLY copy of the credentials and final backups.**
+> Copy it to at least one off-machine location (cloud drive / external disk).
+> Everything else (code, docs) is safe on GitHub, but losing this folder means
+> re-collecting credentials from provider dashboards and, if the Supabase
+> project is gone, losing the database contents.
+>
+> Not part of any archive (recover from the provider if needed): iOS signing
+> certificates (Apple Developer account / App Store Connect; Xcode can
+> regenerate). There is no Android release keystore — Android was never
+> released (no `android/key.properties` exists).
 
 The ★ file is a complete `pg_dump` of production including the **`auth` schema
 (users, identities, sessions) and all `public` tables** (71 tables). Verified
@@ -87,10 +106,10 @@ project is eventually deleted:
   for auth emails). Project metadata in `supabase_project_info.json`.
 - **Edge function secrets**: values are NOT exportable from Supabase (names +
   digests only). Recover them from: `scripts/config/secrets.sh` (Supabase
-  keys/DB, Twilio, Hostinger FTP), `lib/firebase_options.dart` (FIREBASE_*
-  values), Firebase console → service accounts (`FCM_SERVICE_ACCOUNT_KEY` —
-  generate a new key), Resend dashboard (`RESEND_API_KEY` — or the vault row
-  in the DB dump).
+  keys/DB, Twilio, Hostinger FTP), the archived Firebase config files
+  (`local-only-configs/`, see below — FIREBASE_* values), Firebase console →
+  service accounts (`FCM_SERVICE_ACCOUNT_KEY` — generate a new key), Resend
+  dashboard (`RESEND_API_KEY` — or the vault row in the DB dump).
 
 **If you want to keep the one-click restore option indefinitely:** wake the
 project before each 90-day window ends (dashboard visit or re-enable the
