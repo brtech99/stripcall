@@ -1,4 +1,5 @@
 import '../../models/problem_with_details.dart';
+import '../../models/problem_notification.dart';
 
 /// Immutable state container for the Problems Page.
 ///
@@ -9,6 +10,9 @@ class ProblemsPageState {
   final List<ProblemWithDetails> problems;
   final Map<int, List<Map<String, dynamic>>> responders;
   final Set<int> expandedProblems;
+
+  // Medical withdrawal notifications
+  final List<ProblemNotification> notifications;
 
   // Loading/error state
   final bool isLoading;
@@ -31,6 +35,7 @@ class ProblemsPageState {
     this.problems = const [],
     this.responders = const {},
     this.expandedProblems = const {},
+    this.notifications = const [],
     this.isLoading = true,
     this.error,
     this.isReferee = false,
@@ -61,6 +66,7 @@ class ProblemsPageState {
     List<ProblemWithDetails>? problems,
     Map<int, List<Map<String, dynamic>>>? responders,
     Set<int>? expandedProblems,
+    List<ProblemNotification>? notifications,
     bool? isLoading,
     String? error,
     bool clearError = false,
@@ -79,6 +85,7 @@ class ProblemsPageState {
       problems: problems ?? this.problems,
       responders: responders ?? this.responders,
       expandedProblems: expandedProblems ?? this.expandedProblems,
+      notifications: notifications ?? this.notifications,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
       isReferee: isReferee ?? this.isReferee,

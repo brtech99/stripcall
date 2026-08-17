@@ -186,8 +186,10 @@ class SupabaseManager {
           'SupabaseManager: primary insert on "$table" failed',
           e,
         );
-        _markPrimaryUnhealthy();
-        _queueTransaction('primary', table, 'insert', data);
+        if (_isConnectivityError(e)) {
+          _markPrimaryUnhealthy();
+          _queueTransaction('primary', table, 'insert', data);
+        }
       }
       rethrow;
     }
@@ -205,8 +207,10 @@ class SupabaseManager {
           'SupabaseManager: secondary insert on "$table" failed',
           e,
         );
-        _markSecondaryUnhealthy();
-        _queueTransaction('secondary', table, 'insert', data);
+        if (_isConnectivityError(e)) {
+          _markSecondaryUnhealthy();
+          _queueTransaction('secondary', table, 'insert', data);
+        }
       }
     }
   }
@@ -423,8 +427,10 @@ class SupabaseManager {
       result = await _primary.rpc(fn, params: params ?? {});
     } catch (e) {
       debugLogError('SupabaseManager: primary rpc "$fn" failed', e);
-      _markPrimaryUnhealthy();
-      _queueTransaction('primary', fn, 'rpc', params ?? {});
+      if (_isConnectivityError(e)) {
+        _markPrimaryUnhealthy();
+        _queueTransaction('primary', fn, 'rpc', params ?? {});
+      }
     }
 
     if (_secondary != null) {
@@ -432,8 +438,10 @@ class SupabaseManager {
         await _secondary!.rpc(fn, params: params ?? {});
       } catch (e) {
         debugLogError('SupabaseManager: secondary rpc "$fn" failed', e);
-        _markSecondaryUnhealthy();
-        _queueTransaction('secondary', fn, 'rpc', params ?? {});
+        if (_isConnectivityError(e)) {
+          _markSecondaryUnhealthy();
+          _queueTransaction('secondary', fn, 'rpc', params ?? {});
+        }
       }
     }
 
@@ -509,13 +517,21 @@ class SupabaseManager {
         'SupabaseManager: $target $operation on "$table" failed',
         e,
       );
+      // Only a genuine connectivity failure means the DB is down. Benign
+      // per-operation errors (RLS/constraint/validation) must not poison health
+      // or queue a doomed replay — just propagate them.
+      final isConnectivity = _isConnectivityError(e);
       if (target == 'primary') {
-        _markPrimaryUnhealthy();
-        _queueTransaction(target, table, operation, data, filters: filters);
+        if (isConnectivity) {
+          _markPrimaryUnhealthy();
+          _queueTransaction(target, table, operation, data, filters: filters);
+        }
         rethrow; // Primary errors must propagate to the caller
       } else {
-        _markSecondaryUnhealthy();
-        _queueTransaction(target, table, operation, data, filters: filters);
+        if (isConnectivity) {
+          _markSecondaryUnhealthy();
+          _queueTransaction(target, table, operation, data, filters: filters);
+        }
         return null; // Secondary errors are silent (failover design)
       }
     }
@@ -604,6 +620,15 @@ class SupabaseManager {
 
     _updateHealthStatus();
   }
+
+  /// Whether [e] indicates the database is genuinely unreachable, as opposed
+  /// to a per-operation rejection. A [PostgrestException] or [AuthException]
+  /// means the server RESPONDED (RLS, constraint, validation, expired token) —
+  /// the DB is up — so those must NOT flip health to "unavailable" or queue the
+  /// (doomed) operation for replay. Only timeouts / socket / unknown errors
+  /// count as connectivity failures.
+  static bool _isConnectivityError(Object e) =>
+      e is! PostgrestException && e is! AuthException;
 
   void _markPrimaryUnhealthy() {
     _primaryHealthy = false;

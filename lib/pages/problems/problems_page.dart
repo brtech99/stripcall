@@ -19,6 +19,10 @@ import 'resolve_problem_dialog.dart';
 import 'edit_symptom_dialog.dart';
 import 'problems_state.dart';
 import '../../widgets/help_walkthrough.dart';
+import '../../services/realtime_service.dart';
+import '../../widgets/snooze_page.dart';
+import '../../widgets/notification_card.dart';
+import '../../models/problem_notification.dart';
 
 /// Abstract interface for problem data operations.
 /// Used for dependency injection to enable unit testing.
@@ -29,6 +33,7 @@ abstract class ProblemsRepository {
   Future<List<Map<String, dynamic>>> loadAllCrewsForEvent(int eventId);
   Future<bool> isUserRefereeForCrew(int crewId);
   Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId);
+  Future<DateTime> getEventEndDateTime(int eventId);
   Future<List<ProblemWithDetails>> loadProblems({
     required int eventId,
     required String userId,
@@ -87,6 +92,16 @@ class DefaultProblemsRepository implements ProblemsRepository {
   @override
   Future<bool> isUserRefereeForCrew(int crewId) =>
       _service.isUserRefereeForCrew(crewId);
+
+  @override
+  Future<DateTime> getEventEndDateTime(int eventId) async {
+    final row = await SupabaseManager()
+        .from('events')
+        .select('enddatetime')
+        .eq('id', eventId)
+        .single();
+    return DateTime.parse(row['enddatetime'] as String);
+  }
 
   @override
   Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId) =>
@@ -200,7 +215,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
   final GlobalKey<CrewMessageWindowState> _crewMessageKey = GlobalKey();
 
   ProblemsPageState _state = const ProblemsPageState();
-  Timer? _updateTimer;
+  RealtimeService? _realtimeService;
+  bool _snoozed = false;
 
   @override
   void initState() {
@@ -211,7 +227,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   @override
   void dispose() {
-    _updateTimer?.cancel();
+    _realtimeService?.dispose();
     NotificationService().onForegroundMessage = null;
     super.dispose();
   }
@@ -221,6 +237,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     await _determineUserCrewInfo();
     await _loadCrewInfo();
     await _loadProblems();
+    await _loadNotifications();
 
     // Initialize watch bridge and wire up "On my way" from watch
     WatchService().initialize();
@@ -229,13 +246,37 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
     // Trigger immediate reload when FCM notification arrives (keeps watch in sync)
     NotificationService().onForegroundMessage = () {
-      if (mounted) _checkForUpdates();
+      if (mounted) {
+        _realtimeService?.recordActivity();
+        _checkForUpdates();
+      }
     };
 
-    _updateTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _checkForUpdates(),
-    );
+    // Start Realtime subscriptions + adaptive polling
+    try {
+      final eventEnd = await _repo.getEventEndDateTime(widget.eventId);
+      _realtimeService = RealtimeService(
+        eventId: widget.eventId,
+        crewId: _state.getActiveCrewId(widget.crewId),
+        isSuperUser: _state.isSuperUser,
+        onUpdate: () {
+          if (mounted) _checkForUpdates();
+        },
+        onEventEnded: () {
+          if (mounted) Navigator.of(context).pop();
+        },
+        onSnooze: () {
+          if (mounted) setState(() => _snoozed = true);
+        },
+      );
+      await _realtimeService!.start(eventEndDateTime: eventEnd);
+    } catch (e) {
+      debugLogError('RealtimeService init failed, using fallback timer', e);
+      // Fallback to simple 30s polling if Realtime fails
+      Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) _checkForUpdates();
+      });
+    }
 
     // Show help walkthrough on first visit
     if (mounted) {
@@ -246,6 +287,12 @@ class _ProblemsPageState extends State<ProblemsPage> {
         isCrewMember: isCrewMember,
       );
     }
+  }
+
+  void _resumeFromSnooze() {
+    _realtimeService?.resumeFromSnooze();
+    setState(() => _snoozed = false);
+    _checkForUpdates();
   }
 
   void _updateState(ProblemsPageState newState) {
@@ -351,6 +398,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       // Check for new crew messages (consolidated from CrewMessageWindow's 5s timer)
       _crewMessageKey.currentState?.checkForNewMessages();
       await _loadResponders();
+      await _loadNotifications();
 
       // Cleanup resolved problems older than 5 minutes
       _cleanupResolvedProblems();
@@ -502,6 +550,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       if (minutesSinceResolved >= 5) return;
     }
 
+    _realtimeService?.recordActivity();
     _updateState(_state.addProblem(problemWithDetails));
   }
 
@@ -567,6 +616,113 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
   }
 
+  Future<void> _loadNotifications() async {
+    if (!mounted) return;
+
+    // Only load notifications if the user is on a crew
+    final activeCrewId = _state.getActiveCrewId(widget.crewId);
+    if (activeCrewId == null) {
+      if (_state.notifications.isNotEmpty) {
+        _updateState(_state.copyWith(notifications: []));
+      }
+      return;
+    }
+
+    try {
+      // 1. Load unacknowledged notifications for THIS crew only
+      final notifResponse = await SupabaseManager()
+          .from('problem_notifications')
+          .select('''
+            id, problem, crew, acknowledged_by, acknowledged_at, created_at,
+            problem_data:problem(
+              strip, enddatetime,
+              actionby_data:actionby(supabase_id, firstname, lastname)
+            )
+          ''')
+          .eq('crew', activeCrewId)
+          .isFilter('acknowledged_by', null);
+
+      final notifList = List<Map<String, dynamic>>.from(notifResponse);
+      if (notifList.isEmpty) {
+        if (mounted) {
+          _updateState(_state.copyWith(notifications: []));
+        }
+        return;
+      }
+
+      // 2. Load withdrawal details for these problems
+      final problemIds = notifList
+          .map((n) => n['problem'] is int ? n['problem'] as int : int.parse(n['problem'].toString()))
+          .toSet()
+          .toList();
+
+      final withdrawalResponse = await SupabaseManager()
+          .from('medical_withdrawals')
+          .select('id, problem, fencer_name, membership_number, event_name, notes, created_at')
+          .inFilter('problem', problemIds);
+
+      // Build a map of problem ID -> withdrawal data
+      final withdrawalMap = <int, Map<String, dynamic>>{};
+      for (final w in withdrawalResponse) {
+        final pid = w['problem'] is int ? w['problem'] as int : int.parse(w['problem'].toString());
+        withdrawalMap[pid] = w;
+      }
+
+      // 3. Merge withdrawal data into notifications
+      for (final notif in notifList) {
+        final pid = notif['problem'] is int ? notif['problem'] as int : int.parse(notif['problem'].toString());
+        if (withdrawalMap.containsKey(pid)) {
+          notif['medical_withdrawals'] = withdrawalMap[pid];
+        }
+      }
+
+      if (mounted) {
+        final notifications = notifList
+            .map((json) => ProblemNotification.fromJson(json))
+            .toList();
+        _updateState(_state.copyWith(notifications: notifications));
+      }
+    } catch (e) {
+      debugLogError('Error loading notifications', e);
+      // On error, don't clear existing notifications
+    }
+  }
+
+  Future<void> _acknowledgeNotification(int notificationId) async {
+    try {
+      final userId = _repo.currentUserId;
+      if (userId == null) return;
+
+      await SupabaseManager().dualUpdate(
+        'problem_notifications',
+        {
+          'acknowledged_by': userId,
+          'acknowledged_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        filters: {'id': notificationId},
+      );
+
+      // Remove from local state immediately
+      final updated = _state.notifications
+          .where((n) => n.id != notificationId)
+          .toList();
+      _updateState(_state.copyWith(notifications: updated));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Withdrawal acknowledged')),
+        );
+      }
+    } catch (e) {
+      debugLogError('Error acknowledging notification', e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to acknowledge: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _showNewProblemDialog() async {
     final result = await showDialog<bool>(
       context: context,
@@ -578,6 +734,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
 
     if (result == true) {
+      _realtimeService?.recordActivity();
       _loadProblems();
     }
   }
@@ -594,6 +751,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
 
     if (result == true) {
+      _realtimeService?.recordActivity();
       _loadProblems();
     }
   }
@@ -601,6 +759,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _showEditSymptomDialog(ProblemWithDetails problem) async {
     final crewTypeId = await _repo.getCrewTypeId(problem.crewId);
     if (!mounted) return;
+
+    // The first message is the original report (e.g. the reporter's SMS text);
+    // surface it in the dialog so crews can triage without dismissing it.
+    final messages = problem.messages;
+    final firstMessage = (messages != null && messages.isNotEmpty)
+        ? messages.first['message'] as String?
+        : null;
 
     final result = await showDialog<bool>(
       context: context,
@@ -611,6 +776,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
         currentStrip: problem.strip,
         crewTypeId: crewTypeId,
         eventId: widget.eventId,
+        firstMessage: firstMessage,
       ),
     );
 
@@ -669,6 +835,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       final userId = _repo.currentUserId;
       if (userId == null) return;
 
+      _realtimeService?.recordActivity();
       await _repo.goOnMyWay(problemId, userId);
 
       // Update the local responders data immediately
@@ -707,6 +874,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     );
     _updateState(_state.copyWith(selectedCrewId: crewId, isLoading: true));
     await _loadProblems();
+    await _loadNotifications();
   }
 
   // ---------------------------------------------------------------------------
@@ -722,6 +890,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_snoozed) {
+      return SnoozePage(onResume: _resumeFromSnooze);
+    }
+
     final isApple = AppTheme.isApplePlatform(context);
 
     String appBarTitle;
@@ -858,7 +1030,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       );
     }
 
-    if (_state.problems.isEmpty) {
+    if (_state.problems.isEmpty && _state.notifications.isEmpty) {
       final isApple = AppTheme.isApplePlatform(context);
       return Column(
         children: [
@@ -885,8 +1057,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
     final isApple = AppTheme.isApplePlatform(context);
     final accentColor = AppColors.actionAccent(context);
 
-    final activeProblems = _state.problems.where((p) => !p.isResolved).toList();
-    final resolvedProblems = _state.problems.where((p) => p.isResolved).toList();
+    // Recently-resolved problems (< 5 min) stay in the active section with a
+    // green dot so the user sees the status change before they disappear.
+    final activeProblems = _state.problems.where((p) {
+      if (!p.isResolved) return true;
+      if (_state.showResolved) return false; // all resolved go to resolved section
+      final resolved = p.resolvedDateTimeParsed;
+      if (resolved == null) return false;
+      return DateTime.now().difference(resolved).inMinutes < 5;
+    }).toList();
+    final resolvedProblems = _state.problems.where((p) {
+      if (!p.isResolved) return false;
+      if (_state.showResolved) return true; // show all resolved
+      return false; // recently-resolved are in active section above
+    }).toList();
 
     // Build list items: header + active + toggle + (resolved header + resolved)
     final items = <Widget>[];
@@ -907,6 +1091,19 @@ class _ProblemsPageState extends State<ProblemsPage> {
         ),
       ),
     );
+
+    // Medical withdrawal notification cards (above active problems)
+    for (final notification in _state.notifications) {
+      items.add(
+        Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm - 2),
+          child: NotificationCard(
+            notification: notification,
+            onAcknowledge: () => _acknowledgeNotification(notification.id),
+          ),
+        ),
+      );
+    }
 
     // Active problem cards
     for (final problem in activeProblems) {

@@ -32,6 +32,13 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
   List<Map<String, dynamic>> _actions = [];
   int? _problemSymptomId;
 
+  // Medical withdrawal fields
+  bool _isMedicalWithdrawal = false;
+  final _fencerNameController = TextEditingController();
+  final _membershipNumberController = TextEditingController();
+  final _eventNameController = TextEditingController();
+  final _withdrawalNotesController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -41,20 +48,39 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
   @override
   void dispose() {
     _notesController.dispose();
+    _fencerNameController.dispose();
+    _membershipNumberController.dispose();
+    _eventNameController.dispose();
+    _withdrawalNotesController.dispose();
     super.dispose();
+  }
+
+  /// Check if the selected action's actionstring is "Approved"
+  bool get _isApprovedSelected {
+    if (_selectedAction == null || !_isMedicalWithdrawal) return false;
+    final action = _actions.firstWhere(
+      (a) => a['id'].toString() == _selectedAction,
+      orElse: () => {},
+    );
+    return action['actionstring'] == 'Approved';
   }
 
   Future<void> _loadProblemAndActions() async {
     try {
-      // First, get the problem details
+      // Get the problem details including symptom string
       final problemResponse = await SupabaseManager()
           .from('problem')
-          .select('symptom')
+          .select('symptom, symptom_detail:symptom(symptomstring)')
           .eq('id', widget.problemId)
           .single();
 
       final symptomId = problemResponse['symptom'] as int?;
       _problemSymptomId = symptomId;
+
+      // Check if this is a medical withdrawal problem
+      final symptomDetail = problemResponse['symptom_detail'] as Map<String, dynamic>?;
+      final symptomString = symptomDetail?['symptomstring'] as String?;
+      _isMedicalWithdrawal = symptomString == 'Medical Withdrawal Request';
 
       // Get actions filtered by symptom via shared lookup
       final actionsResponse = await LookupService.getActionsForSymptom(
@@ -84,6 +110,18 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
         _error = 'Please select a resolution';
       });
       return;
+    }
+
+    // Validate medical withdrawal form if approving
+    if (_isApprovedSelected) {
+      if (_fencerNameController.text.trim().isEmpty ||
+          _membershipNumberController.text.trim().isEmpty ||
+          _eventNameController.text.trim().isEmpty) {
+        setState(() {
+          _error = 'Please fill in fencer name, membership number, and event';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -119,6 +157,11 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
         },
         filters: {'id': widget.problemId},
       );
+
+      // If medical withdrawal approved, create withdrawal record and notifications
+      if (_isApprovedSelected) {
+        await _createMedicalWithdrawal(userId);
+      }
 
       // Capture values needed for notification before popping
       final resolverName =
@@ -167,6 +210,58 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
     }
   }
 
+  Future<void> _createMedicalWithdrawal(String userId) async {
+    // 1. Insert medical withdrawal record
+    await SupabaseManager().dualInsert('medical_withdrawals', {
+      'problem': widget.problemId,
+      'fencer_name': _fencerNameController.text.trim(),
+      'membership_number': _membershipNumberController.text.trim(),
+      'event_name': _eventNameController.text.trim(),
+      'notes': _withdrawalNotesController.text.trim(),
+    });
+
+    // 2. Find BC and NatlOff crews for this event
+    final crewsResponse = await SupabaseManager()
+        .from('crews')
+        .select('id, crew_type, crewtype:crewtypes(crewtype)')
+        .eq('event', widget.eventId);
+
+    final notifyCrews = <int>[];
+    for (final crew in crewsResponse) {
+      final crewTypeName = crew['crewtype']?['crewtype'] as String?;
+      if (crewTypeName == 'Bout Committee' || crewTypeName == 'Natloff') {
+        notifyCrews.add(crew['id'] as int);
+      }
+    }
+
+    // 3. Create problem_notifications for each crew
+    for (final notifyCrewId in notifyCrews) {
+      await SupabaseManager().dualInsert('problem_notifications', {
+        'problem': widget.problemId,
+        'crew': notifyCrewId,
+      });
+
+      // 4. Send push notification to each crew
+      final fencerName = _fencerNameController.text.trim();
+      NotificationService()
+          .sendCrewNotification(
+            title: 'Medical Withdrawal: $fencerName',
+            body: 'Medical withdrawal approved for $fencerName. Please acknowledge.',
+            crewId: notifyCrewId.toString(),
+            senderId: userId,
+            data: {
+              'type': 'medical_withdrawal',
+              'problemId': widget.problemId.toString(),
+              'crewId': notifyCrewId.toString(),
+            },
+          )
+          .catchError((e) {
+            debugLogError('Failed to send withdrawal notification', e);
+            return false;
+          });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -174,7 +269,7 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
       child: Dialog(
         key: const ValueKey('resolve_problem_dialog'),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
           child: Padding(
             padding: AppSpacing.screenPadding,
             child: Column(
@@ -182,7 +277,9 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Resolve Problem',
+                  _isMedicalWithdrawal
+                      ? 'Resolve Medical Withdrawal'
+                      : 'Resolve Problem',
                   style: AppTypography.titleLarge(context).copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -252,20 +349,78 @@ class _ResolveProblemDialogState extends State<ResolveProblemDialog> {
                             ),
                           ),
                         ),
-                        AppSpacing.verticalMd,
-                        Text(
-                          'Notes (Optional)',
-                          style: AppTypography.titleSmall(context).copyWith(
-                            fontWeight: FontWeight.w600,
+
+                        // Medical withdrawal form (shown when "Approved" is selected)
+                        if (_isApprovedSelected) ...[
+                          AppSpacing.verticalMd,
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Colors.orange.shade700,
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Withdrawal Details',
+                                  style: AppTypography.titleSmall(context).copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade700,
+                                  ),
+                                ),
+                                AppSpacing.verticalSm,
+                                AppTextField(
+                                  key: const ValueKey('resolve_fencer_name_field'),
+                                  controller: _fencerNameController,
+                                  hint: 'Fencer Name *',
+                                  maxLines: 1,
+                                ),
+                                AppSpacing.verticalSm,
+                                AppTextField(
+                                  key: const ValueKey('resolve_membership_number_field'),
+                                  controller: _membershipNumberController,
+                                  hint: 'Membership Number *',
+                                  maxLines: 1,
+                                ),
+                                AppSpacing.verticalSm,
+                                AppTextField(
+                                  key: const ValueKey('resolve_event_name_field'),
+                                  controller: _eventNameController,
+                                  hint: 'Event (e.g., Y10MF, Div 1 WS Team) *',
+                                  maxLines: 1,
+                                ),
+                                AppSpacing.verticalSm,
+                                AppTextField(
+                                  key: const ValueKey('resolve_withdrawal_notes_field'),
+                                  controller: _withdrawalNotesController,
+                                  hint: 'Notes (optional)',
+                                  maxLines: 2,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        AppSpacing.verticalSm,
-                        AppTextField(
-                          key: const ValueKey('resolve_problem_notes_field'),
-                          controller: _notesController,
-                          hint: 'Add any notes...',
-                          maxLines: 4,
-                        ),
+                        ],
+
+                        if (!_isApprovedSelected) ...[
+                          AppSpacing.verticalMd,
+                          Text(
+                            'Notes (Optional)',
+                            style: AppTypography.titleSmall(context).copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          AppSpacing.verticalSm,
+                          AppTextField(
+                            key: const ValueKey('resolve_problem_notes_field'),
+                            controller: _notesController,
+                            hint: 'Add any notes...',
+                            maxLines: 4,
+                          ),
+                        ],
                       ],
                     ),
                   ),

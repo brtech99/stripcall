@@ -112,6 +112,13 @@ class MockProblemsRepository implements ProblemsRepository {
   }
 
   @override
+  Future<DateTime> getEventEndDateTime(int eventId) async {
+    await _maybeDelay();
+    // Return end time far in the future so tests don't trigger event-ended
+    return DateTime.now().add(const Duration(days: 30));
+  }
+
+  @override
   Future<({int? crewId, String? crewName})> getUserCrewInfo(int eventId) async {
     await _maybeDelay();
     return (crewId: mockUserCrewId, crewName: mockUserCrewName);

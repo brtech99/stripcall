@@ -5,6 +5,7 @@ import '../../services/supabase_manager.dart';
 import '../../services/lookup_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/debug_utils.dart';
+import '../../widgets/original_report_callout.dart';
 
 class EditSymptomDialog extends StatefulWidget {
   final int problemId;
@@ -14,6 +15,10 @@ class EditSymptomDialog extends StatefulWidget {
   final int? crewTypeId;
   final int eventId;
 
+  /// The problem's first message (the original report, e.g. the SMS text).
+  /// Shown read-only so crews can triage without leaving the dialog.
+  final String? firstMessage;
+
   const EditSymptomDialog({
     super.key,
     required this.problemId,
@@ -22,6 +27,7 @@ class EditSymptomDialog extends StatefulWidget {
     this.currentSymptomString,
     this.currentStrip,
     this.crewTypeId,
+    this.firstMessage,
   });
 
   @override
@@ -512,6 +518,10 @@ class _EditSymptomDialogState extends State<EditSymptomDialog> {
                             color: AppColors.textSecondary(context),
                           ),
                         ),
+                        if ((widget.firstMessage?.trim() ?? '').isNotEmpty) ...[
+                          AppSpacing.verticalMd,
+                          OriginalReportCallout(text: widget.firstMessage),
+                        ],
                         AppSpacing.verticalMd,
                         _buildStripSelector(),
                         AppSpacing.verticalMd,

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../crews/name_finder_dialog.dart';
 import '../../services/supabase_manager.dart';
+import '../../routes.dart';
 import '../../models/event.dart';
 import '../../models/user.dart' as app_models;
 import '../../models/crew.dart';
@@ -19,7 +20,8 @@ abstract class ManageEventRepository {
   Future<bool> checkSuperUser();
   Future<List<Crew>> loadCrews(int eventId);
   Future<List<CrewType>> loadCrewTypes();
-  Future<void> saveEvent(Map<String, dynamic> data, {int? eventId});
+  /// Save event. Returns the event ID (new or existing).
+  Future<int> saveEvent(Map<String, dynamic> data, {int? eventId});
   Future<List<Map<String, dynamic>>> checkSmsOverlap(
     DateTime start,
     DateTime end,
@@ -61,15 +63,18 @@ class DefaultManageEventRepository implements ManageEventRepository {
   }
 
   @override
-  Future<void> saveEvent(Map<String, dynamic> data, {int? eventId}) async {
+  @override
+  Future<int> saveEvent(Map<String, dynamic> data, {int? eventId}) async {
     if (eventId == null) {
-      await SupabaseManager().dualInsert('events', data);
+      final result = await SupabaseManager().dualInsert('events', data);
+      return (result.first['id'] as num).toInt();
     } else {
       await SupabaseManager().dualUpdate(
         'events',
         data,
         filters: {'id': eventId},
       );
+      return eventId;
     }
   }
 
@@ -390,12 +395,20 @@ class _ManageEventPageState extends State<ManageEventPage> {
         if (userId != null) {
           eventData['organizer'] = userId;
         }
-        await _repo.saveEvent(eventData);
+        final newEventId = await _repo.saveEvent(eventData);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Event created successfully')),
+            const SnackBar(content: Text('Event created! Now add your crews.')),
           );
-          context.pop();
+          // Replace current page with edit mode for the new event
+          final newEvent = Event.fromJson({
+            ...eventData,
+            'id': newEventId,
+          });
+          context.pushReplacement(
+            Routes.manageEvent,
+            extra: newEvent,
+          );
         }
       } else {
         await _repo.saveEvent(eventData, eventId: widget.event!.id);

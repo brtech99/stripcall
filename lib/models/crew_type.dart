@@ -1,10 +1,12 @@
 class CrewType {
   final int id;
   final String crewType;
+  final bool receivesProblems;
 
   const CrewType({
     required this.id,
     required this.crewType,
+    this.receivesProblems = true,
   });
 
   /// Create a CrewType from a JSON map (typically from Supabase)
@@ -12,6 +14,7 @@ class CrewType {
     return CrewType(
       id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
       crewType: json['crewtype'] ?? '',
+      receivesProblems: json['receives_problems'] ?? true,
     );
   }
 
@@ -20,6 +23,7 @@ class CrewType {
     return {
       'id': id,
       'crewtype': crewType,
+      'receives_problems': receivesProblems,
     };
   }
 
@@ -27,10 +31,12 @@ class CrewType {
   CrewType copyWith({
     int? id,
     String? crewType,
+    bool? receivesProblems,
   }) {
     return CrewType(
       id: id ?? this.id,
       crewType: crewType ?? this.crewType,
+      receivesProblems: receivesProblems ?? this.receivesProblems,
     );
   }
 

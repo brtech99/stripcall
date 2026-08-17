@@ -50,12 +50,16 @@ class _NewProblemDialogState extends State<NewProblemDialog> {
     try {
       final response = await SupabaseManager()
           .from('crews')
-          .select('id, crewtype:crewtypes(crewtype)')
+          .select('id, crewtype:crewtypes(crewtype, receives_problems)')
           .eq('event', widget.eventId);
 
       if (mounted) {
+        // Filter out crews whose crew type does not receive problems (e.g., Bout Committee)
+        final allCrews = List<Map<String, dynamic>>.from(response);
         setState(() {
-          _crews = List<Map<String, dynamic>>.from(response);
+          _crews = allCrews
+              .where((c) => c['crewtype']?['receives_problems'] != false)
+              .toList();
         });
 
         if (_crews.isEmpty) {

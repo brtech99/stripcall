@@ -348,6 +348,26 @@ void main() {
       expect(manager.pendingTransactionCount, 1);
     });
 
+    test('does NOT mark primary unhealthy on a benign PostgrestException',
+        () async {
+      // RLS denial / constraint / validation errors mean the server RESPONDED
+      // (DB is up). These must not poison health or queue for replay — the
+      // error should just propagate to the caller.
+      when(mockPrimary.from('problem'))
+          .thenThrow(PostgrestException(message: 'permission denied', code: '42501'));
+      initPrimaryOnly();
+
+      try {
+        await manager.dualInsert('problem', {'strip': '5'});
+      } catch (_) {}
+
+      expect(manager.primaryHealthy, true,
+          reason: 'a PostgREST 4xx means the DB is reachable, not down');
+      expect(manager.pendingTransactionCount, 0,
+          reason: 'benign rejection must not be queued for replay');
+      expect(manager.healthStatus.value, HealthStatus.allHealthy);
+    });
+
     test('secondary marked unhealthy via setter', () {
       // Direct secondary failure testing through dual-write methods requires
       // primary to succeed (complex mock chain). Verify the marking mechanism

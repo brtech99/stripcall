@@ -294,6 +294,10 @@ async function sendFCMNotification(
               },
               sound: "default",
               badge: 1,
+              // Time-Sensitive so alerts break through Focus and are not
+              // quieted; requires the time-sensitive entitlement on the iOS
+              // app (Runner.entitlements) to take effect.
+              "interruption-level": "time-sensitive",
               ...(data?.problemId ? { "category": "PROBLEM_CATEGORY" } : {}),
             },
             ...(data || {}),

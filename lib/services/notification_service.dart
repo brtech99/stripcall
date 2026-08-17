@@ -117,6 +117,20 @@ class NotificationService {
         }
       }
 
+      // Present notifications (banner + sound) while the app is in the
+      // foreground on iOS, instead of silently swallowing them.
+      if (!kIsWeb) {
+        try {
+          await _firebaseMessaging.setForegroundNotificationPresentationOptions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+        } catch (e) {
+          debugLogError('Could not set foreground presentation options', e);
+        }
+      }
+
       // Get FCM token
       try {
         debugLog('Requesting FCM token...');
@@ -236,13 +250,19 @@ class NotificationService {
 
       await _localNotifications.initialize(settings: initSettings);
 
-      // Create notification channel for Android (iOS doesn't use channels)
+      // Create notification channel for Android (iOS doesn't use channels).
+      // NOTE: Android notification channels are IMMUTABLE once created — later
+      // code can't change a channel's importance/sound. We use a fresh channel
+      // id ('stripcall_alerts') so users who first ran a build with a silent or
+      // low-importance channel still get a correctly-configured one. Keep this
+      // id in sync with the manifest's default_notification_channel_id and the
+      // background handler below.
       if (platform.isAndroid()) {
         try {
           const androidChannel = AndroidNotificationChannel(
-            'stripcall_channel',
-            'StripCall Notifications',
-            description: 'Notifications for StripCall app',
+            'stripcall_alerts',
+            'StripCall Alerts',
+            description: 'Alerts for StripCall problems and messages',
             importance: Importance.high,
             playSound: true,
             enableVibration: true,
@@ -254,7 +274,13 @@ class NotificationService {
               >();
 
           if (androidPlugin != null) {
+            // Remove the old (possibly silent / locked) channel.
+            await androidPlugin.deleteNotificationChannel(
+              channelId: 'stripcall_channel',
+            );
             await androidPlugin.createNotificationChannel(androidChannel);
+            // Android 13+ requires an explicit runtime notification permission.
+            await androidPlugin.requestNotificationsPermission();
           }
         } catch (e) {
           debugLogError('Error creating Android notification channel', e);
@@ -562,11 +588,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Show local notification for background messages
   if (message.notification != null) {
     const androidDetails = AndroidNotificationDetails(
-      'stripcall_channel',
-      'StripCall Notifications',
-      channelDescription: 'Notifications for StripCall app',
+      'stripcall_alerts',
+      'StripCall Alerts',
+      channelDescription: 'Alerts for StripCall problems and messages',
       importance: Importance.high,
       priority: Priority.high,
+      playSound: true,
     );
 
     const iosDetails = DarwinNotificationDetails(
